@@ -1,4 +1,4 @@
-import { getUserProfile, UserProfile } from "./db";
+import { UserProfile } from "./db";
 
 export interface AIAnalysisResult {
   role: string;
@@ -17,11 +17,8 @@ export interface AIAnalysisResult {
   };
 }
 
-export const analyzeJobPost = (text: string): AIAnalysisResult => {
+export const analyzeJobPost = (text: string, profile: UserProfile): AIAnalysisResult => {
   const cleanText = text.trim();
-  
-  // Fetch active candidate profile dynamically!
-  const profile = getUserProfile();
 
   // 1. Extract Role (Heuristics)
   let role = "Frontend Engineer";

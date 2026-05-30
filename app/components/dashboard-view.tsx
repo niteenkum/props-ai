@@ -30,15 +30,14 @@ import {
   X
 } from "lucide-react";
 import { 
-  getJobPosts, 
-  addJobPost, 
-  updateJobPost, 
-  deleteJobPost, 
-  getUserProfile,
-  saveUserProfile,
-  JobPost,
-  UserProfile
-} from "../utils/db";
+  getJobPostsAction, 
+  addJobPostAction, 
+  updateJobPostAction, 
+  deleteJobPostAction, 
+  getUserProfileAction,
+  saveUserProfileAction
+} from "../actions/db-actions";
+import { JobPost, UserProfile } from "../utils/db";
 import { analyzeJobPost } from "../utils/ai-engine";
 import { 
   Drawer, 
@@ -54,9 +53,10 @@ interface DashboardViewProps {
   onLogout: () => void;
   theme: "dark" | "light";
   toggleTheme: () => void;
+  userEmail: string;
 }
 
-export default function DashboardView({ onLogout, theme, toggleTheme }: DashboardViewProps) {
+export default function DashboardView({ onLogout, theme, toggleTheme, userEmail }: DashboardViewProps) {
   const [activeTab, setActiveTab] = useState<"dashboard" | "new" | "profile">("dashboard");
   const [jobs, setJobs] = useState<JobPost[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -89,14 +89,20 @@ export default function DashboardView({ onLogout, theme, toggleTheme }: Dashboar
   const [newSkillText, setNewSkillText] = useState("");
 
   // Load jobs and profile from local DB
-  const loadWorkspaceData = () => {
-    setJobs(getJobPosts());
-    setProfile(getUserProfile());
+  const loadWorkspaceData = async () => {
+    try {
+      const dbJobs = await getJobPostsAction();
+      const dbProfile = await getUserProfileAction(userEmail);
+      setJobs(dbJobs);
+      setProfile(dbProfile);
+    } catch (error) {
+      console.error("Failed to load workspace data:", error);
+    }
   };
 
   useEffect(() => {
     loadWorkspaceData();
-  }, []);
+  }, [userEmail]);
 
   // Live Heuristics Parsing for Paste View
   const liveHeuristics = useMemo(() => {
@@ -190,8 +196,8 @@ export default function DashboardView({ onLogout, theme, toggleTheme }: Dashboar
         clearInterval(interval);
         
         // Finalize analysis
-        const analysis = analyzeJobPost(pasteText);
-        const newJob = addJobPost({
+        const analysis = analyzeJobPost(pasteText, profile!);
+        addJobPostAction({
           role: analysis.role,
           company: analysis.company,
           originalText: pasteText,
@@ -202,20 +208,23 @@ export default function DashboardView({ onLogout, theme, toggleTheme }: Dashboar
           tags: analysis.tags,
           notes: analysis.notes,
           generatedTemplates: analysis.generatedTemplates
+        }).then((newJob) => {
+          // Reset & Refresh states
+          setPasteText("");
+          setIsGenerating(false);
+          loadWorkspaceData().then(() => {
+            // Return to dashboard and auto-open the new job drawer
+            setActiveTab("dashboard");
+            setSelectedJob(newJob);
+            setNotesText(newJob.notes || "");
+            setDrawerActiveTab("templates");
+            setTemplateActiveTab("coldEmail");
+            setIsDrawerOpen(true);
+          });
+        }).catch((err) => {
+          console.error("Failed to add job post:", err);
+          setIsGenerating(false);
         });
-
-        // Reset & Refresh states
-        setPasteText("");
-        setIsGenerating(false);
-        loadWorkspaceData();
-        
-        // Return to dashboard and auto-open the new job drawer
-        setActiveTab("dashboard");
-        setSelectedJob(newJob);
-        setNotesText(newJob.notes || "");
-        setDrawerActiveTab("templates");
-        setTemplateActiveTab("coldEmail");
-        setIsDrawerOpen(true);
       }
     }, 600);
   };
@@ -239,55 +248,57 @@ export default function DashboardView({ onLogout, theme, toggleTheme }: Dashboar
   };
 
   // Save notes updates
-  const handleSaveNotes = () => {
+  const handleSaveNotes = async () => {
     if (!selectedJob) return;
     const updated = { ...selectedJob, notes: notesText };
-    updateJobPost(updated);
+    await updateJobPostAction(updated);
     setSelectedJob(updated);
-    loadWorkspaceData();
+    await loadWorkspaceData();
   };
 
   // Update job status from drawer
-  const handleStatusChange = (status: JobPost["status"]) => {
+  const handleStatusChange = async (status: JobPost["status"]) => {
     if (!selectedJob) return;
     const updated = { ...selectedJob, status };
-    updateJobPost(updated);
+    await updateJobPostAction(updated);
     setSelectedJob(updated);
-    loadWorkspaceData();
+    await loadWorkspaceData();
   };
 
   // Delete Job Action
-  const handleDeleteJob = (id: string) => {
+  const handleDeleteJob = async (id: string) => {
     if (confirm("Are you sure you want to delete this job scan?")) {
-      deleteJobPost(id);
+      await deleteJobPostAction(id);
       setIsDrawerOpen(false);
       setSelectedJob(null);
-      loadWorkspaceData();
+      await loadWorkspaceData();
     }
   };
 
   // --- PROFILE VIEW EDIT ACTIONS ---
   
   // Save User Profile to DB
-  const handleSaveProfile = (e?: React.FormEvent) => {
+  const handleSaveProfile = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!profile) return;
 
     setProfileSaving(true);
     setProfileSaveSuccess(false);
 
-    // Simulated embedding alignment delay
-    setTimeout(() => {
-      saveUserProfile(profile);
+    try {
+      await saveUserProfileAction(profile);
       setProfileSaving(false);
       setProfileSaveSuccess(true);
-      loadWorkspaceData();
+      await loadWorkspaceData();
       
       // Auto dismiss success toast after 3s
       setTimeout(() => {
         setProfileSaveSuccess(false);
       }, 3000);
-    }, 1200);
+    } catch (error) {
+      console.error("Failed to save profile:", error);
+      setProfileSaving(false);
+    }
   };
 
   // Simulated Resume Upload
@@ -331,9 +342,13 @@ export default function DashboardView({ onLogout, theme, toggleTheme }: Dashboar
         };
 
         setProfile(updatedProfile);
-        saveUserProfile(updatedProfile);
-        setIsUploadingResume(false);
-        loadWorkspaceData();
+        saveUserProfileAction(updatedProfile).then(() => {
+          setIsUploadingResume(false);
+          loadWorkspaceData();
+        }).catch((err) => {
+          console.error("Failed to save resume profile:", err);
+          setIsUploadingResume(false);
+        });
 
         // Trigger success notification
         setProfileSaveSuccess(true);
@@ -1260,14 +1275,17 @@ Ping me if this sounds like you, or share it with someone who might be a good fi
                       </p>
                       <button
                         onClick={() => {
-                          const analysis = analyzeJobPost(selectedJob.originalText);
+                          const analysis = analyzeJobPost(selectedJob.originalText, profile!);
                           const updated = {
                             ...selectedJob,
                             generatedTemplates: analysis.generatedTemplates
                           };
                           setSelectedJob(updated);
-                          updateJobPost(updated);
-                          loadWorkspaceData();
+                          updateJobPostAction(updated).then(() => {
+                            loadWorkspaceData();
+                          }).catch((err) => {
+                            console.error("Failed to regenerate templates:", err);
+                          });
                         }}
                         className="px-4 py-2 rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/20 text-xs font-semibold hover:bg-indigo-500/20 cursor-pointer"
                       >
