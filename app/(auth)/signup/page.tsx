@@ -4,9 +4,10 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import {
   Sparkles, Eye, EyeOff, Lock, Mail, Loader2, User, Briefcase, Globe,
-  ArrowRight, ArrowLeft, Search, X, ChevronDown, ShieldCheck, RotateCcw, Check,
+  ArrowRight, ArrowLeft, Search, X, ChevronDown, ShieldCheck, RotateCcw, Check, Sun, Moon,
 } from "lucide-react";
 import { useSignupForm } from "../../hooks/useSignupForm";
+import { useTheme } from "../../components/theme-provider";
 
 const GithubIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -34,9 +35,29 @@ const catColors: Record<string, { bg: string; border: string; text: string; dot:
   General:   { bg: "#f5f5f5", border: "#e0e0e0", text: "#555",    dot: "#999"    },
 };
 
+const getCatColor = (category: string, isDark: boolean) => {
+  const defaults = catColors[category] || catColors.General;
+  if (!isDark) return defaults;
+  
+  const darkVariants: Record<string, { bg: string; border: string; text: string; dot: string }> = {
+    Frontend:  { bg: "rgba(59, 130, 246, 0.15)", border: "rgba(59, 130, 246, 0.3)", text: "#60a5fa", dot: "#3b82f6" },
+    Backend:   { bg: "rgba(34, 197, 94, 0.15)",  border: "rgba(34, 197, 94, 0.3)",  text: "#4ade80", dot: "#22c55e" },
+    Mobile:    { bg: "rgba(249, 115, 22, 0.15)",  border: "rgba(249, 115, 22, 0.3)",  text: "#fb923c", dot: "#f97316" },
+    Database:  { bg: "rgba(168, 85, 247, 0.15)",  border: "rgba(168, 85, 247, 0.3)",  text: "#c084fc", dot: "#a855f7" },
+    DevOps:    { bg: "rgba(14, 165, 233, 0.15)",  border: "rgba(14, 165, 233, 0.3)",  text: "#38bdf8", dot: "#0ea5e9" },
+    "AI/ML":   { bg: "rgba(245, 158, 11, 0.15)",  border: "rgba(245, 158, 11, 0.3)",  text: "#fbbf24", dot: "#f59e0b" },
+    Design:    { bg: "rgba(236, 72, 153, 0.15)",  border: "rgba(236, 72, 153, 0.3)",  text: "#f472b6", dot: "#ec4899" },
+    Testing:   { bg: "rgba(132, 204, 22, 0.15)",  border: "rgba(132, 204, 22, 0.3)",  text: "#a3e635", dot: "#84cc16" },
+    General:   { bg: "rgba(255, 255, 255, 0.05)", border: "rgba(255, 255, 255, 0.1)", text: "#ccc",    dot: "#999"    },
+  };
+  return darkVariants[category] || darkVariants.General;
+};
+
 export default function SignupPage() {
   const router = useRouter();
   const f = useSignupForm();
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
 
   const isOtp = f.step === "otp";
 
@@ -45,64 +66,65 @@ export default function SignupPage() {
       <style>{`
         .sp-page {
           min-height: 100vh; display: flex; align-items: flex-start; justify-content: center;
-          background: #f5f5f5; padding: 48px 16px 32px;
+          background: var(--background); padding: 48px 16px 32px;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          transition: background 0.3s ease, color 0.3s ease;
         }
         @media (min-width: 640px) { .sp-page { align-items: center; padding: 40px 24px; } }
         .sp-back {
           position: fixed; top: 20px; left: 20px; display: flex; align-items: center; gap: 5px;
-          color: #aaa; font-size: 13px; font-weight: 500; background: none; border: none;
+          color: var(--muted-foreground); font-size: 13px; font-weight: 500; background: none; border: none;
           cursor: pointer; z-index: 50; transition: color 0.2s;
         }
-        .sp-back:hover { color: #111; }
+        .sp-back:hover { color: var(--foreground); }
         .sp-card {
-          width: 100%; background: #fff; border-radius: 20px;
-          border: 1px solid #e8e8e8; box-shadow: 0 8px 36px rgba(0,0,0,0.07);
-          padding: 32px 24px; max-width: 440px; transition: max-width 0.3s ease;
+          width: 100%; background: var(--card); border-radius: 20px;
+          border: 1px solid var(--border); box-shadow: var(--card-shadow);
+          padding: 32px 24px; max-width: 440px; transition: all 0.3s ease;
         }
         @media (min-width: 640px) { .sp-card { padding: 36px 32px; } }
         .sp-card.wide { max-width: 440px; }
         @media (min-width: 768px) { .sp-card.wide { max-width: 720px; } }
         .sp-brand { text-align: center; margin-bottom: 24px; }
         .sp-logo {
-          width: 44px; height: 44px; border-radius: 12px; background: #111;
+          width: 44px; height: 44px; border-radius: 12px; background: var(--primary);
           display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;
         }
-        .sp-brand h1 { font-size: 22px; font-weight: 700; color: #111; margin: 0; }
-        .sp-brand p  { font-size: 13px; color: #aaa; margin: 4px 0 0; }
+        .sp-brand h1 { font-size: 22px; font-weight: 700; color: var(--foreground); margin: 0; }
+        .sp-brand p  { font-size: 13px; color: var(--muted-foreground); margin: 4px 0 0; }
         .sp-error {
           margin-bottom: 16px; padding: 10px 14px; border-radius: 10px;
           background: #fef2f2; border: 1px solid #fecaca; color: #dc2626;
           font-size: 12px; text-align: center; font-weight: 500;
         }
         .sp-field { display: flex; flex-direction: column; gap: 5px; }
-        .sp-field label { font-size: 12px; font-weight: 600; color: #888; }
+        .sp-field label { font-size: 12px; font-weight: 600; color: var(--muted-foreground); }
         .sp-fw { position: relative; }
         .sp-fi {
           position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-          width: 15px; height: 15px; color: #c0c0c0; pointer-events: none;
+          width: 15px; height: 15px; color: var(--muted-foreground); opacity: 0.6; pointer-events: none;
         }
         .sp-input {
           width: 100%; box-sizing: border-box; padding: 12px 12px 12px 38px;
-          border-radius: 10px; border: 1.5px solid #e8e8e8; background: #f8f8f8;
-          color: #111; font-size: 14px; outline: none; transition: all 0.2s;
+          border-radius: 10px; border: 1.5px solid var(--border); background: var(--input);
+          color: var(--foreground); font-size: 14px; outline: none; transition: all 0.2s;
           font-family: inherit; -webkit-appearance: none;
         }
-        .sp-input:focus { border-color: #111; background: #fff; box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
-        .sp-input::placeholder { color: #c0c0c0; }
+        .sp-input:focus { border-color: var(--foreground); background: var(--card); box-shadow: 0 0 0 3px var(--border); }
+        .sp-input::placeholder { color: var(--muted-foreground); opacity: 0.5; }
         .sp-input.pr { padding-right: 40px; }
         .sp-pwtoggle {
           position: absolute; right: 11px; top: 50%; transform: translateY(-50%);
-          background: none; border: none; cursor: pointer; color: #ccc; padding: 4px; display: flex;
+          background: none; border: none; cursor: pointer; color: var(--muted-foreground); opacity: 0.6; padding: 4px; display: flex;
         }
-        .sp-pwtoggle:hover { color: #888; }
+        .sp-pwtoggle:hover { opacity: 1; color: var(--foreground); }
         .sp-btn {
           width: 100%; padding: 13px 0; border-radius: 11px; border: none;
-          background: #111; color: #fff; font-size: 14px; font-weight: 600;
+          background: var(--primary); color: var(--primary-foreground); font-size: 14px; font-weight: 600;
           cursor: pointer; display: flex; align-items: center; justify-content: center;
           gap: 7px; transition: all 0.2s; font-family: inherit; -webkit-appearance: none;
         }
-        .sp-btn:hover:not(:disabled) { background: #333; }
+        .sp-btn:hover:not(:disabled) { opacity: 0.85; }
         .sp-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .sp-cols {
           display: flex; flex-direction: column; gap: 14px;
@@ -112,11 +134,11 @@ export default function SignupPage() {
         /* Skills */
         .sp-skills-trigger {
           display: flex; align-items: center; justify-content: space-between;
-          padding: 12px 14px; border-radius: 10px; border: 1.5px solid #e8e8e8;
-          background: #f8f8f8; cursor: pointer; transition: all 0.2s; user-select: none;
+          padding: 12px 14px; border-radius: 10px; border: 1.5px solid var(--border);
+          background: var(--input); cursor: pointer; transition: all 0.2s; user-select: none;
         }
-        .sp-skills-trigger:hover { border-color: #ccc; background: #f3f3f3; }
-        .sp-skills-trigger.open { border-color: #111; background: #fff; box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
+        .sp-skills-trigger:hover { border-color: var(--muted-foreground); background: var(--accent); }
+        .sp-skills-trigger.open { border-color: var(--foreground); background: var(--card); box-shadow: 0 0 0 3px var(--border); }
         .sp-chip {
           display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px;
           border-radius: 8px; font-size: 12px; font-weight: 500; border: 1.5px solid;
@@ -126,15 +148,15 @@ export default function SignupPage() {
         @media (min-width: 400px) { .sp-otp-grid { gap: 10px; } }
         .sp-otp-box {
           width: 44px; height: 54px; text-align: center; font-size: 22px; font-weight: 800;
-          border-radius: 12px; border: 2px solid #e0e0e0; background: #fafafa;
-          color: #111; outline: none; transition: all 0.15s; -webkit-appearance: none;
+          border-radius: 12px; border: 2px solid var(--border); background: var(--input);
+          color: var(--foreground); outline: none; transition: all 0.15s; -webkit-appearance: none;
           font-family: inherit;
         }
-        .sp-otp-box:focus { border-color: #111; background: #fff; box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
+        .sp-otp-box:focus { border-color: var(--foreground); background: var(--card); box-shadow: 0 0 0 3px var(--border); }
         @media (min-width: 400px) { .sp-otp-box { width: 52px; height: 60px; font-size: 24px; } }
-        .sp-switch { text-align: center; margin-top: 20px; font-size: 13px; color: #aaa; }
+        .sp-switch { text-align: center; margin-top: 20px; font-size: 13px; color: var(--muted-foreground); }
         .sp-switch button {
-          background: none; border: none; color: #111; font-weight: 700;
+          background: none; border: none; color: var(--foreground); font-weight: 700;
           cursor: pointer; font-size: 13px; text-decoration: underline; text-underline-offset: 3px;
         }
         @keyframes sp-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -147,13 +169,44 @@ export default function SignupPage() {
           Back
         </button>
 
+        {/* Floating Theme Toggle */}
+        <button
+          onClick={toggleTheme}
+          style={{
+            position: "fixed",
+            top: 20,
+            right: 20,
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            border: "1px solid var(--border)",
+            background: "var(--card)",
+            color: "var(--foreground)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            zIndex: 50,
+            transition: "all 0.2s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = "var(--input)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "var(--card)"; }}
+          aria-label="Toggle theme"
+        >
+          {theme === "light" ? (
+            <Moon style={{ width: 16, height: 16 }} />
+          ) : (
+            <Sun style={{ width: 16, height: 16 }} />
+          )}
+        </button>
+
         <div className={`sp-card ${!isOtp ? "wide" : ""}`}>
           {/* Brand */}
           <div className="sp-brand">
             <div className="sp-logo">
-              <Sparkles style={{ width: 20, height: 20, color: "#fff" }} />
+              <Sparkles style={{ width: 20, height: 20, color: "var(--primary-foreground)" }} />
             </div>
-            <h1>Prop<span style={{ color: "#888" }}>AI</span></h1>
+            <h1>Prop<span style={{ color: "var(--muted-foreground)" }}>AI</span></h1>
             <p>{isOtp ? "Check your inbox" : "Create your account"}</p>
           </div>
 
@@ -235,9 +288,9 @@ export default function SignupPage() {
               {/* ── Skills Picker ─────────────────────────────────────────── */}
               <div style={{ marginTop: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "#888" }}>Your IT Skills</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted-foreground)" }}>Your IT Skills</span>
                   {f.selectedIds.size > 0 && (
-                    <span style={{ fontSize: 11, fontWeight: 500, background: "#f0f0f0", color: "#888", padding: "2px 8px", borderRadius: 20 }}>
+                    <span style={{ fontSize: 11, fontWeight: 500, background: "var(--input)", color: "var(--muted-foreground)", border: "1px solid var(--border)", padding: "2px 8px", borderRadius: 20 }}>
                       {f.selectedIds.size} selected
                     </span>
                   )}
@@ -247,7 +300,7 @@ export default function SignupPage() {
                 {f.selectedSkills.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
                     {f.selectedSkills.map(s => {
-                      const c = catColors[s.category] || catColors.General;
+                      const c = getCatColor(s.category, isDark);
                       return (
                         <span key={s.id} className="sp-chip" style={{ background: c.bg, borderColor: c.border, color: c.text }}>
                           <span style={{ width: 5, height: 5, borderRadius: "50%", background: c.dot, display: "inline-block" }} />
@@ -269,12 +322,12 @@ export default function SignupPage() {
                     onClick={() => f.showDropdown ? f.setShowDropdown(false) : f.openDropdown()}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <Search style={{ width: 15, height: 15, color: "#ccc", flexShrink: 0 }} />
-                      <span style={{ fontSize: 13, color: "#bbb" }}>
+                      <Search style={{ width: 15, height: 15, color: "var(--muted-foreground)", opacity: 0.6, flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, color: "var(--muted-foreground)", opacity: 0.8 }}>
                         {f.skillsLoading ? "Loading skills..." : f.selectedIds.size > 0 ? "Add more skills..." : "Search and select your skills..."}
                       </span>
                     </div>
-                    <ChevronDown style={{ width: 15, height: 15, color: "#ccc", flexShrink: 0, transition: "transform 0.2s", transform: f.showDropdown ? "rotate(180deg)" : "none" }} />
+                    <ChevronDown style={{ width: 15, height: 15, color: "var(--muted-foreground)", opacity: 0.6, flexShrink: 0, transition: "transform 0.2s", transform: f.showDropdown ? "rotate(180deg)" : "none" }} />
                   </div>
 
                   {f.showDropdown && f.triggerRect && (
@@ -288,34 +341,34 @@ export default function SignupPage() {
                           position: "fixed", zIndex: 200,
                           width: f.triggerRect.width, left: f.triggerRect.left,
                           ...(f.dropUp ? { bottom: window.innerHeight - f.triggerRect.top + 6 } : { top: f.triggerRect.bottom + 6 }),
-                          background: "#fff", border: "1.5px solid #e8e8e8", borderRadius: 14,
-                          boxShadow: "0 16px 48px rgba(0,0,0,0.14)",
+                          background: "var(--card)", border: "1.5px solid var(--border)", borderRadius: 14,
+                          boxShadow: "var(--card-shadow)",
                           display: "flex", flexDirection: "column", maxHeight: 340, overflow: "hidden",
                         }}
                         onClick={e => e.stopPropagation()}
                       >
                         {/* Search */}
-                        <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid #f0f0f0" }}>
+                        <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid var(--border)" }}>
                           <div style={{ position: "relative" }}>
-                            <Search style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, color: "#ccc" }} />
+                            <Search style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, color: "var(--muted-foreground)", opacity: 0.6 }} />
                             <input
                               autoFocus type="text"
                               value={f.skillSearch} onChange={e => f.setSkillSearch(e.target.value)}
                               placeholder="Search skills..."
-                              style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px 9px 34px", border: "1.5px solid #eee", borderRadius: 9, fontSize: 13, outline: "none", background: "#fafafa", color: "#333", fontFamily: "inherit" }}
-                              onFocus={e => { e.target.style.borderColor = "#ccc"; e.target.style.background = "#fff"; }}
-                              onBlur={e => { e.target.style.borderColor = "#eee"; e.target.style.background = "#fafafa"; }}
+                              style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px 9px 34px", border: "1.5px solid var(--border)", borderRadius: 9, fontSize: 13, outline: "none", background: "var(--input)", color: "var(--foreground)", fontFamily: "inherit" }}
+                              onFocus={e => { e.target.style.borderColor = "var(--foreground)"; e.target.style.background = "var(--card)"; }}
+                              onBlur={e => { e.target.style.borderColor = "var(--border)"; e.target.style.background = "var(--input)"; }}
                             />
                           </div>
                         </div>
 
                         {/* Category pills */}
-                        <div style={{ display: "flex", gap: 6, padding: "8px 12px", borderBottom: "1px solid #f0f0f0", overflowX: "auto", scrollbarWidth: "none", flexShrink: 0 }}>
+                        <div style={{ display: "flex", gap: 6, padding: "8px 12px", borderBottom: "1px solid var(--border)", overflowX: "auto", scrollbarWidth: "none", flexShrink: 0 }}>
                           {[null, ...f.categories].map(cat => {
                             const active = f.activeCategory === cat;
                             return (
                               <button key={cat ?? "all"} type="button" onClick={() => f.setActiveCategory(cat)}
-                                style={{ flexShrink: 0, padding: "4px 13px", borderRadius: 20, fontSize: 12, fontWeight: 600, border: `1.5px solid ${active ? "#111" : "#e8e8e8"}`, background: active ? "#111" : "#fff", color: active ? "#fff" : "#777", cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}>
+                                style={{ flexShrink: 0, padding: "4px 13px", borderRadius: 20, fontSize: 12, fontWeight: 600, border: `1.5px solid ${active ? "var(--foreground)" : "var(--border)"}`, background: active ? "var(--foreground)" : "var(--card)", color: active ? "var(--card)" : "var(--muted-foreground)", cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}>
                                 {cat ?? "All"}
                               </button>
                             );
@@ -325,21 +378,21 @@ export default function SignupPage() {
                         {/* Skills list */}
                         <div style={{ overflowY: "auto", flex: 1, padding: 6 }}>
                           {f.filteredSkills.length === 0 && (
-                            <p style={{ textAlign: "center", color: "#bbb", fontSize: 13, padding: 20, margin: 0 }}>
+                            <p style={{ textAlign: "center", color: "var(--muted-foreground)", fontSize: 13, padding: 20, margin: 0 }}>
                               {f.skillSearch ? `No results for "${f.skillSearch}"` : "All skills selected!"}
                             </p>
                           )}
                           {f.filteredSkills.map(skill => {
-                            const c = catColors[skill.category] || catColors.General;
+                            const c = getCatColor(skill.category, isDark);
                             return (
                               <button key={skill.id} type="button" onClick={() => f.toggleSkill(skill.id)}
                                 style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 10px", borderRadius: 9, border: "none", background: "transparent", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}
-                                onMouseEnter={e => { e.currentTarget.style.background = "#f5f5f5"; }}
+                                onMouseEnter={e => { e.currentTarget.style.background = "var(--input)"; }}
                                 onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                               >
                                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                   <span style={{ width: 7, height: 7, borderRadius: "50%", background: c.dot, flexShrink: 0, display: "inline-block" }} />
-                                  <span style={{ fontSize: 13, color: "#333", fontWeight: 500 }}>{skill.name}</span>
+                                  <span style={{ fontSize: 13, color: "var(--foreground)", fontWeight: 500 }}>{skill.name}</span>
                                 </div>
                                 <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 5, textTransform: "uppercase", letterSpacing: "0.3px", flexShrink: 0, background: c.bg, color: c.text, border: `1px solid ${c.border}` }}>
                                   {skill.category}
@@ -371,13 +424,13 @@ export default function SignupPage() {
           {isOtp && (
             <form onSubmit={f.handleOtpSubmit}>
               <div style={{ textAlign: "center", marginBottom: 24 }}>
-                <div style={{ width: 60, height: 60, borderRadius: 16, background: "#f5f5f5", border: "1px solid #eee", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
-                  <ShieldCheck style={{ width: 28, height: 28, color: "#555" }} />
+                <div style={{ width: 60, height: 60, borderRadius: 16, background: "var(--input)", border: "1px solid var(--border)", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                  <ShieldCheck style={{ width: 28, height: 28, color: "var(--foreground)" }} />
                 </div>
-                <p style={{ fontSize: 14, color: "#555", lineHeight: 1.7, margin: 0 }}>
+                <p style={{ fontSize: 14, color: "var(--muted-foreground)", lineHeight: 1.7, margin: 0 }}>
                   We emailed a 6-digit code to
                 </p>
-                <p style={{ fontSize: 14, fontWeight: 700, color: "#111", margin: "2px 0 0" }}>{f.email}</p>
+                <p style={{ fontSize: 14, fontWeight: 700, color: "var(--foreground)", margin: "2px 0 0" }}>{f.email}</p>
               </div>
 
               <div className="sp-otp-grid">
@@ -390,7 +443,7 @@ export default function SignupPage() {
                     onChange={e => f.handleOtpChange(idx, e.target.value)}
                     onKeyDown={e => { if (e.key === "Backspace" && !f.otp[idx] && idx > 0) f.otpRefs.current[idx - 1]?.focus(); }}
                     onPaste={idx === 0 ? f.handleOtpPaste : undefined}
-                    style={{ borderColor: digit ? "#111" : undefined, background: digit ? "#f8f8f8" : undefined }}
+                    style={{ borderColor: digit ? "var(--foreground)" : undefined, background: digit ? "var(--input)" : undefined }}
                   />
                 ))}
               </div>
@@ -404,11 +457,11 @@ export default function SignupPage() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 18 }}>
                 <button type="button"
                   onClick={() => { f.setStep("form"); f.setError(""); }}
-                  style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", color: "#aaa", fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
+                  style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", color: "var(--muted-foreground)", fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
                   <ArrowLeft style={{ width: 13, height: 13 }} /> Edit details
                 </button>
                 <button type="button" onClick={f.handleResend} disabled={f.resendCooldown > 0}
-                  style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", color: f.resendCooldown > 0 ? "#ccc" : "#111", fontSize: 12, fontWeight: 600, cursor: f.resendCooldown > 0 ? "not-allowed" : "pointer", textDecoration: f.resendCooldown > 0 ? "none" : "underline", textUnderlineOffset: 3 }}>
+                  style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", color: f.resendCooldown > 0 ? "var(--border)" : "var(--foreground)", fontSize: 12, fontWeight: 600, cursor: f.resendCooldown > 0 ? "not-allowed" : "pointer", textDecoration: f.resendCooldown > 0 ? "none" : "underline", textUnderlineOffset: 3 }}>
                   <RotateCcw style={{ width: 12, height: 12 }} />
                   {f.resendCooldown > 0 ? `Resend in ${f.resendCooldown}s` : "Resend code"}
                 </button>

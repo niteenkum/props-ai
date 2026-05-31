@@ -2,83 +2,86 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Eye, EyeOff, Lock, Mail, Loader2, ArrowRight, ArrowLeft } from "lucide-react";
+import { Sparkles, Eye, EyeOff, Lock, Mail, Loader2, ArrowRight, ArrowLeft, Sun, Moon } from "lucide-react";
 import { useLoginForm } from "../../hooks/useLoginForm";
+import { useTheme } from "../../components/theme-provider";
 
 export default function LoginPage() {
   const router = useRouter();
   const f = useLoginForm();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <>
       <style>{`
         .lp-page {
           min-height: 100vh; display: flex; align-items: center; justify-content: center;
-          background: #f5f5f5; padding: 24px 16px;
+          background: var(--background); padding: 24px 16px;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          transition: background 0.3s ease, color 0.3s ease;
         }
         .lp-back {
           position: fixed; top: 20px; left: 20px; display: flex; align-items: center; gap: 5px;
-          color: #aaa; font-size: 13px; font-weight: 500; background: none; border: none;
+          color: var(--muted-foreground); font-size: 13px; font-weight: 500; background: none; border: none;
           cursor: pointer; z-index: 50; transition: color 0.2s;
         }
-        .lp-back:hover { color: #111; }
+        .lp-back:hover { color: var(--foreground); }
         .lp-card {
-          width: 100%; max-width: 420px; background: #fff; border-radius: 20px;
-          border: 1px solid #e8e8e8; box-shadow: 0 8px 36px rgba(0,0,0,0.07);
-          padding: 36px 32px;
+          width: 100%; max-width: 420px; background: var(--card); border-radius: 20px;
+          border: 1px solid var(--border); box-shadow: var(--card-shadow);
+          padding: 36px 32px; transition: all 0.3s ease;
         }
         .lp-brand { text-align: center; margin-bottom: 28px; }
         .lp-logo {
-          width: 44px; height: 44px; border-radius: 12px; background: #111;
+          width: 44px; height: 44px; border-radius: 12px; background: var(--primary);
           display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;
         }
-        .lp-brand h1 { font-size: 22px; font-weight: 700; color: #111; margin: 0; }
-        .lp-brand p  { font-size: 13px; color: #aaa; margin: 4px 0 0; }
+        .lp-brand h1 { font-size: 22px; font-weight: 700; color: var(--foreground); margin: 0; }
+        .lp-brand p  { font-size: 13px; color: var(--muted-foreground); margin: 4px 0 0; }
         .lp-error {
           margin-bottom: 16px; padding: 10px 14px; border-radius: 10px;
           background: #fef2f2; border: 1px solid #fecaca; color: #dc2626;
           font-size: 12px; text-align: center; font-weight: 500;
         }
         .lp-field { display: flex; flex-direction: column; gap: 5px; }
-        .lp-field label { font-size: 12px; font-weight: 600; color: #888; }
+        .lp-field label { font-size: 12px; font-weight: 600; color: var(--muted-foreground); }
         .lp-fw { position: relative; }
         .lp-fi {
           position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-          width: 15px; height: 15px; color: #c0c0c0; pointer-events: none;
+          width: 15px; height: 15px; color: var(--muted-foreground); opacity: 0.6; pointer-events: none;
         }
         .lp-input {
           width: 100%; box-sizing: border-box; padding: 12px 12px 12px 38px;
-          border-radius: 10px; border: 1.5px solid #e8e8e8; background: #f8f8f8;
-          color: #111; font-size: 14px; outline: none; transition: all 0.2s;
+          border-radius: 10px; border: 1.5px solid var(--border); background: var(--input);
+          color: var(--foreground); font-size: 14px; outline: none; transition: all 0.2s;
           font-family: inherit; -webkit-appearance: none;
         }
-        .lp-input:focus { border-color: #111; background: #fff; box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
-        .lp-input::placeholder { color: #c0c0c0; }
+        .lp-input:focus { border-color: var(--foreground); background: var(--card); box-shadow: 0 0 0 3px var(--border); }
+        .lp-input::placeholder { color: var(--muted-foreground); opacity: 0.5; }
         .lp-input.pr { padding-right: 40px; }
         .lp-pwtoggle {
           position: absolute; right: 11px; top: 50%; transform: translateY(-50%);
-          background: none; border: none; cursor: pointer; color: #ccc; padding: 4px; display: flex;
+          background: none; border: none; cursor: pointer; color: var(--muted-foreground); opacity: 0.6; padding: 4px; display: flex;
         }
-        .lp-pwtoggle:hover { color: #888; }
+        .lp-pwtoggle:hover { opacity: 1; color: var(--foreground); }
         .lp-btn {
           width: 100%; padding: 13px 0; border-radius: 11px; border: none;
-          background: #111; color: #fff; font-size: 14px; font-weight: 600;
+          background: var(--primary); color: var(--primary-foreground); font-size: 14px; font-weight: 600;
           cursor: pointer; display: flex; align-items: center; justify-content: center;
           gap: 7px; transition: all 0.2s; font-family: inherit; -webkit-appearance: none;
         }
-        .lp-btn:hover:not(:disabled) { background: #333; }
+        .lp-btn:hover:not(:disabled) { opacity: 0.85; }
         .lp-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .lp-switch { text-align: center; margin-top: 20px; font-size: 13px; color: #aaa; }
+        .lp-switch { text-align: center; margin-top: 20px; font-size: 13px; color: var(--muted-foreground); }
         .lp-switch button {
-          background: none; border: none; color: #111; font-weight: 700;
+          background: none; border: none; color: var(--foreground); font-weight: 700;
           cursor: pointer; font-size: 13px; text-decoration: underline; text-underline-offset: 3px;
         }
         .lp-divider {
           display: flex; align-items: center; gap: 12px; margin: 20px 0;
-          color: #ddd; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
+          color: var(--muted-foreground); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
         }
-        .lp-divider span { flex: 1; height: 1px; background: #eee; }
+        .lp-divider span { flex: 1; height: 1px; background: var(--border); }
         @keyframes lp-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .lp-spin { animation: lp-spin 0.8s linear infinite; }
       `}</style>
@@ -89,13 +92,44 @@ export default function LoginPage() {
           Back
         </button>
 
+        {/* Floating Theme Toggle */}
+        <button
+          onClick={toggleTheme}
+          style={{
+            position: "fixed",
+            top: 20,
+            right: 20,
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            border: "1px solid var(--border)",
+            background: "var(--card)",
+            color: "var(--foreground)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            zIndex: 50,
+            transition: "all 0.2s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = "var(--input)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "var(--card)"; }}
+          aria-label="Toggle theme"
+        >
+          {theme === "light" ? (
+            <Moon style={{ width: 16, height: 16 }} />
+          ) : (
+            <Sun style={{ width: 16, height: 16 }} />
+          )}
+        </button>
+
         <div className="lp-card">
           {/* Brand */}
           <div className="lp-brand">
             <div className="lp-logo">
-              <Sparkles style={{ width: 20, height: 20, color: "#fff" }} />
+              <Sparkles style={{ width: 20, height: 20, color: "var(--primary-foreground)" }} />
             </div>
-            <h1>Prop<span style={{ color: "#888" }}>AI</span></h1>
+            <h1>Prop<span style={{ color: "var(--muted-foreground)" }}>AI</span></h1>
             <p>Sign in to your workspace</p>
           </div>
 

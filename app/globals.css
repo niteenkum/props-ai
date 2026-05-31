@@ -1,30 +1,65 @@
 @import "tailwindcss";
 
 :root {
-  /* Grey / White Theme — matching landing page */
-  --background: #f5f5f5;
-  --foreground: #111111;
+  /* Light Theme */
+  --background: #f7f7f7;
+  --foreground: #0f0f0f;
   --card: #ffffff;
-  --card-foreground: #111111;
+  --card-foreground: #0f0f0f;
   --popover: #ffffff;
-  --popover-foreground: #111111;
+  --popover-foreground: #0f0f0f;
 
-  --primary: #111111;
+  --primary: #0f0f0f;
   --primary-foreground: #ffffff;
 
   --secondary: #555555;
   --secondary-foreground: #ffffff;
 
-  --muted: #fafafa;
+  --muted: #f2f2f2;
   --muted-foreground: #888888;
 
-  --accent: #f0f0f0;
-  --accent-foreground: #111111;
+  --accent: #efefef;
+  --accent-foreground: #0f0f0f;
 
-  --border: #eeeeee;
+  --border: #e8e8e8;
   --input: #f5f5f5;
-  --ring: #111111;
+  --ring: #0f0f0f;
   --radius: 0.75rem;
+
+  /* Custom helper variables */
+  --navbar-bg: rgba(255, 255, 255, 0.9);
+  --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  --hero-bg-image: url('/hero-bg.png');
+}
+
+[data-theme="dark"] {
+  /* True Deep Dark Theme */
+  --background: #050505;
+  --foreground: #f0f0f0;
+  --card: #0d0d0d;
+  --card-foreground: #f0f0f0;
+  --popover: #0d0d0d;
+  --popover-foreground: #f0f0f0;
+
+  --primary: #f0f0f0;
+  --primary-foreground: #050505;
+
+  --secondary: #888888;
+  --secondary-foreground: #050505;
+
+  --muted: #141414;
+  --muted-foreground: #5a5a5a;
+
+  --accent: #1a1a1a;
+  --accent-foreground: #f0f0f0;
+
+  --border: #1e1e1e;
+  --input: #0f0f0f;
+  --ring: #f0f0f0;
+
+  --navbar-bg: rgba(5, 5, 5, 0.92);
+  --card-shadow: 0 4px 40px rgba(0, 0, 0, 0.8);
+  --hero-bg-image: url('/hero-bg-dark.png');
 }
 
 @theme {
@@ -81,6 +116,10 @@
   to { opacity: 0; }
 }
 
+*, *::before, *::after {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.15s ease, box-shadow 0.25s ease;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);
@@ -89,13 +128,13 @@ body {
 
 /* Clean card surface */
 .glass {
-  background: #ffffff;
-  border: 1px solid #eee;
+  background: var(--card);
+  border: 1px solid var(--border);
   transition: box-shadow 0.2s ease;
 }
 
 .glass:hover {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--card-shadow);
 }
 
 /* Custom Scrollbar */
@@ -109,10 +148,11 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #ddd;
+  background: var(--border);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #ccc;
+  background: var(--muted-foreground);
 }
+

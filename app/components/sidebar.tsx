@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { LayoutDashboard, FilePlus2, LogOut, Sparkles, User } from "lucide-react";
+import { LayoutDashboard, FilePlus2, LogOut, Sparkles, User, Sun, Moon } from "lucide-react";
+import { useTheme } from "./theme-provider";
 
 interface SidebarProps {
   activeTab: "dashboard" | "new" | "profile";
@@ -18,6 +19,9 @@ export default function Sidebar({
   userName = "Niteen Kumar",
   userRole = "React Specialist",
 }: SidebarProps) {
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
+
   const initials = userName
     .split(" ")
     .map(n => n[0])
@@ -42,10 +46,11 @@ export default function Sidebar({
         flexDirection: "column",
         justifyContent: "space-between",
         padding: "20px 14px",
-        background: "#fff",
-        border: "1px solid #eee",
+        background: "var(--card)",
+        border: "1px solid var(--border)",
         borderRadius: 16,
-        boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
+        boxShadow: "var(--card-shadow)",
+        transition: "background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease",
       }}
     >
       {/* Top Section */}
@@ -57,19 +62,19 @@ export default function Sidebar({
               width: 36,
               height: 36,
               borderRadius: 10,
-              background: "#111",
+              background: "var(--primary)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Sparkles style={{ width: 17, height: 17, color: "#fff" }} />
+            <Sparkles style={{ width: 17, height: 17, color: "var(--primary-foreground)" }} />
           </div>
           <div>
-            <h1 style={{ fontSize: 17, fontWeight: 700, color: "#111", lineHeight: 1.2 }}>
-              Prop<span style={{ color: "#888" }}>AI</span>
+            <h1 style={{ fontSize: 17, fontWeight: 700, color: "var(--foreground)", lineHeight: 1.2 }}>
+              Prop<span style={{ color: "var(--muted-foreground)" }}>AI</span>
             </h1>
-            <p style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: 2, color: "#ccc", fontWeight: 600, margin: 0 }}>
+            <p style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: 2, color: "var(--muted-foreground)", opacity: 0.7, fontWeight: 600, margin: 0 }}>
               Proposal Organizer
             </p>
           </div>
@@ -90,8 +95,8 @@ export default function Sidebar({
                   padding: "10px 12px",
                   borderRadius: 10,
                   border: "none",
-                  background: isActive ? "#f5f5f5" : "transparent",
-                  color: isActive ? "#111" : "#888",
+                  background: isActive ? "var(--accent)" : "transparent",
+                  color: isActive ? "var(--foreground)" : "var(--muted-foreground)",
                   fontSize: 13,
                   fontWeight: isActive ? 600 : 500,
                   cursor: "pointer",
@@ -102,14 +107,14 @@ export default function Sidebar({
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) {
-                    e.currentTarget.style.background = "#fafafa";
-                    e.currentTarget.style.color = "#555";
+                    e.currentTarget.style.background = "var(--input)";
+                    e.currentTarget.style.color = "var(--foreground)";
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isActive) {
                     e.currentTarget.style.background = "transparent";
-                    e.currentTarget.style.color = "#888";
+                    e.currentTarget.style.color = "var(--muted-foreground)";
                   }
                 }}
               >
@@ -122,7 +127,7 @@ export default function Sidebar({
                       bottom: "25%",
                       width: 3,
                       borderRadius: "0 4px 4px 0",
-                      background: "#111",
+                      background: "var(--primary)",
                     }}
                   />
                 )}
@@ -135,7 +140,43 @@ export default function Sidebar({
       </div>
 
       {/* Bottom Section */}
-      <div style={{ borderTop: "1px solid #f0f0f0", paddingTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* Theme Toggle Button */}
+        <button
+          onClick={toggleTheme}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "10px 12px",
+            borderRadius: 10,
+            border: "none",
+            background: "transparent",
+            color: "var(--muted-foreground)",
+            fontSize: 13,
+            fontWeight: 500,
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+            width: "100%",
+            textAlign: "left",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "var(--input)";
+            e.currentTarget.style.color = "var(--foreground)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "transparent";
+            e.currentTarget.style.color = "var(--muted-foreground)";
+          }}
+        >
+          {theme === "light" ? (
+            <Moon style={{ width: 18, height: 18, flexShrink: 0 }} />
+          ) : (
+            <Sun style={{ width: 18, height: 18, flexShrink: 0 }} />
+          )}
+          <span>{theme === "light" ? "Dark Mode" : "Light Mode"}</span>
+        </button>
+
         {/* User Card */}
         <button
           onClick={() => setActiveTab("profile")}
@@ -146,22 +187,22 @@ export default function Sidebar({
             padding: "8px 10px",
             borderRadius: 10,
             border: "none",
-            background: activeTab === "profile" ? "#f5f5f5" : "#fafafa",
+            background: activeTab === "profile" ? "var(--accent)" : "var(--input)",
             cursor: "pointer",
             transition: "all 0.15s ease",
             width: "100%",
             textAlign: "left",
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "#f0f0f0"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = activeTab === "profile" ? "#f5f5f5" : "#fafafa"; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = activeTab === "profile" ? "var(--accent)" : "var(--input)"; }}
         >
           <div
             style={{
               width: 36,
               height: 36,
               borderRadius: "50%",
-              background: "#111",
-              color: "#fff",
+              background: "var(--primary)",
+              color: "var(--primary-foreground)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -181,13 +222,13 @@ export default function Sidebar({
                 height: 10,
                 borderRadius: "50%",
                 background: "#22c55e",
-                border: "2px solid #fff",
+                border: "2px solid var(--card)",
               }}
             />
           </div>
           <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: 12, fontWeight: 600, color: "#111", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userName}</p>
-            <p style={{ fontSize: 10, color: "#aaa", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userRole}</p>
+            <p style={{ fontSize: 12, fontWeight: 600, color: "var(--foreground)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userName}</p>
+            <p style={{ fontSize: 10, color: "var(--muted-foreground)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userRole}</p>
           </div>
         </button>
 
@@ -202,7 +243,7 @@ export default function Sidebar({
             borderRadius: 10,
             border: "none",
             background: "transparent",
-            color: "#ccc",
+            color: "var(--muted-foreground)",
             fontSize: 13,
             fontWeight: 500,
             cursor: "pointer",
@@ -210,8 +251,14 @@ export default function Sidebar({
             width: "100%",
             textAlign: "left",
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; e.currentTarget.style.background = "#fef2f2"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = "#ccc"; e.currentTarget.style.background = "transparent"; }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = "#ef4444";
+            e.currentTarget.style.background = isDark ? "rgba(239, 68, 68, 0.1)" : "#fef2f2";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = "var(--muted-foreground)";
+            e.currentTarget.style.background = "transparent";
+          }}
         >
           <LogOut style={{ width: 16, height: 16 }} />
           <span>Sign Out</span>
