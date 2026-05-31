@@ -1,8 +1,7 @@
 "use client";
 
 import React from "react";
-import { LayoutDashboard, FilePlus2, Settings, LogOut, Sparkles, User, Sun, Moon } from "lucide-react";
-import { clsx } from "clsx";
+import { LayoutDashboard, FilePlus2, LogOut, Sparkles, User } from "lucide-react";
 
 interface SidebarProps {
   activeTab: "dashboard" | "new" | "profile";
@@ -10,8 +9,6 @@ interface SidebarProps {
   onLogout: () => void;
   userName?: string;
   userRole?: string;
-  theme: "dark" | "light";
-  toggleTheme: () => void;
 }
 
 export default function Sidebar({
@@ -20,10 +17,7 @@ export default function Sidebar({
   onLogout,
   userName = "Niteen Kumar",
   userRole = "React Specialist",
-  theme,
-  toggleTheme
 }: SidebarProps) {
-  // Get initial letters for avatar
   const initials = userName
     .split(" ")
     .map(n => n[0])
@@ -31,134 +25,195 @@ export default function Sidebar({
     .slice(0, 2)
     .toUpperCase() || "NK";
 
+  const navItems: { key: "dashboard" | "new" | "profile"; label: string; icon: typeof LayoutDashboard }[] = [
+    { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { key: "new", label: "New Scan / Paste", icon: FilePlus2 },
+    { key: "profile", label: "Candidate Profile", icon: User },
+  ];
+
   return (
-    <aside className="w-72 h-[calc(100vh-2rem)] sticky top-4 flex flex-col p-4 bg-card/65 backdrop-blur-md border border-border rounded-2xl shadow-xl justify-between transition-colors duration-300">
-      {/* Brand Header */}
-      <div className="space-y-8">
-        <div className="flex items-center space-x-3 px-2 py-1">
-          <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-500 to-cyan-400 shadow-[0_0_15px_rgba(99,102,241,0.4)]">
-            <Sparkles className="h-5 w-5 text-white" />
+    <aside
+      style={{
+        width: 240,
+        minHeight: "calc(100vh - 32px)",
+        position: "sticky",
+        top: 16,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        padding: "20px 14px",
+        background: "#fff",
+        border: "1px solid #eee",
+        borderRadius: 16,
+        boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
+      }}
+    >
+      {/* Top Section */}
+      <div>
+        {/* Brand */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "2px 8px", marginBottom: 32 }}>
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              background: "#111",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Sparkles style={{ width: 17, height: 17, color: "#fff" }} />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center">
-              Prop<span className="text-primary">AI</span>
+            <h1 style={{ fontSize: 17, fontWeight: 700, color: "#111", lineHeight: 1.2 }}>
+              Prop<span style={{ color: "#888" }}>AI</span>
             </h1>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">
+            <p style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: 2, color: "#ccc", fontWeight: 600, margin: 0 }}>
               Proposal Organizer
             </p>
           </div>
         </div>
 
-        {/* Navigation Items */}
-        <nav className="space-y-1.5">
-          <button
-            onClick={() => setActiveTab("dashboard")}
-            className={clsx(
-              "w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 relative group cursor-pointer",
-              activeTab === "dashboard"
-                ? "bg-primary/10 text-primary border border-primary/20"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted border border-transparent"
-            )}
-          >
-            {activeTab === "dashboard" && (
-              <span className="absolute left-0 top-1/4 bottom-1/4 w-1 bg-primary rounded-r-md" />
-            )}
-            <LayoutDashboard className="h-5 w-5" />
-            <span>Dashboard</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("new")}
-            className={clsx(
-              "w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 relative group cursor-pointer",
-              activeTab === "new"
-                ? "bg-primary/10 text-primary border border-primary/20"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted border border-transparent"
-            )}
-          >
-            {activeTab === "new" && (
-              <span className="absolute left-0 top-1/4 bottom-1/4 w-1 bg-primary rounded-r-md" />
-            )}
-            <FilePlus2 className="h-5 w-5" />
-            <span>New Scan / Paste</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("profile")}
-            className={clsx(
-              "w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 relative group cursor-pointer",
-              activeTab === "profile"
-                ? "bg-primary/10 text-primary border border-primary/20"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted border border-transparent"
-            )}
-          >
-            {activeTab === "profile" && (
-              <span className="absolute left-0 top-1/4 bottom-1/4 w-1 bg-primary rounded-r-md" />
-            )}
-            <User className="h-5 w-5" />
-            <span>Candidate Profile</span>
-          </button>
-
-          {/* Dynamic Theme Toggle Action Button */}
-          <button
-            onClick={toggleTheme}
-            className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted border border-transparent transition-all duration-200 cursor-pointer"
-          >
-            {theme === "dark" ? (
-              <>
-                <Sun className="h-5 w-5 text-amber-400" />
-                <span>Light Mode</span>
-              </>
-            ) : (
-              <>
-                <Moon className="h-5 w-5 text-indigo-500" />
-                <span>Dark Mode</span>
-              </>
-            )}
-          </button>
-
-          <div className="pt-4 mt-4 border-t border-border">
-            <p className="px-4 text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-2">
-              System Configuration
-            </p>
-            <button
-              disabled
-              className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-600 light:text-slate-300 cursor-not-allowed border border-transparent"
-            >
-              <Settings className="h-5 w-5" />
-              <span>AI Templates (Locked)</span>
-            </button>
-          </div>
+        {/* Nav Items */}
+        <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {navItems.map(({ key, label, icon: Icon }) => {
+            const isActive = activeTab === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "none",
+                  background: isActive ? "#f5f5f5" : "transparent",
+                  color: isActive ? "#111" : "#888",
+                  fontSize: 13,
+                  fontWeight: isActive ? 600 : 500,
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  position: "relative",
+                  width: "100%",
+                  textAlign: "left",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = "#fafafa";
+                    e.currentTarget.style.color = "#555";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "#888";
+                  }
+                }}
+              >
+                {isActive && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      top: "25%",
+                      bottom: "25%",
+                      width: 3,
+                      borderRadius: "0 4px 4px 0",
+                      background: "#111",
+                    }}
+                  />
+                )}
+                <Icon style={{ width: 18, height: 18, flexShrink: 0 }} />
+                <span>{label}</span>
+              </button>
+            );
+          })}
         </nav>
       </div>
 
-      {/* User Session Footer */}
-      <div className="space-y-4 pt-4 border-t border-border">
-        <div 
+      {/* Bottom Section */}
+      <div style={{ borderTop: "1px solid #f0f0f0", paddingTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* User Card */}
+        <button
           onClick={() => setActiveTab("profile")}
-          className={clsx(
-            "flex items-center space-x-3 p-2 rounded-xl transition-all duration-200 cursor-pointer border border-transparent hover:bg-muted",
-            activeTab === "profile" 
-              ? "bg-muted border-border" 
-              : "bg-muted/50"
-          )}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "8px 10px",
+            borderRadius: 10,
+            border: "none",
+            background: activeTab === "profile" ? "#f5f5f5" : "#fafafa",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+            width: "100%",
+            textAlign: "left",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "#f0f0f0"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = activeTab === "profile" ? "#f5f5f5" : "#fafafa"; }}
         >
-          {/* Aura Avatar */}
-          <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-cyan-500 text-white font-bold text-sm shadow-[0_0_10px_rgba(99,102,241,0.2)]">
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              background: "#111",
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 13,
+              fontWeight: 700,
+              flexShrink: 0,
+              position: "relative",
+            }}
+          >
             {initials}
-            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-card bg-emerald-500" />
+            <span
+              style={{
+                position: "absolute",
+                bottom: 0,
+                right: 0,
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                background: "#22c55e",
+                border: "2px solid #fff",
+              }}
+            />
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-foreground truncate">{userName}</p>
-            <p className="text-[10px] text-muted-foreground truncate">{userRole}</p>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: 12, fontWeight: 600, color: "#111", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userName}</p>
+            <p style={{ fontSize: 10, color: "#aaa", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userRole}</p>
           </div>
-        </div>
+        </button>
 
+        {/* Sign Out */}
         <button
           onClick={onLogout}
-          className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/15 transition-all duration-200 cursor-pointer"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "10px 12px",
+            borderRadius: 10,
+            border: "none",
+            background: "transparent",
+            color: "#ccc",
+            fontSize: 13,
+            fontWeight: 500,
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+            width: "100%",
+            textAlign: "left",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; e.currentTarget.style.background = "#fef2f2"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "#ccc"; e.currentTarget.style.background = "transparent"; }}
         >
-          <LogOut className="h-5 w-5" />
+          <LogOut style={{ width: 16, height: 16 }} />
           <span>Sign Out</span>
         </button>
       </div>

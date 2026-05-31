@@ -1,56 +1,30 @@
 @import "tailwindcss";
 
 :root {
-  /* Default Dark Midnight Theme variables */
-  --background: #030712;
-  --foreground: #f3f4f6;
-  --card: #0b1329;
-  --card-foreground: #f3f4f6;
-  --popover: #090f1e;
-  --popover-foreground: #f3f4f6;
-  
-  --primary: #6366f1; /* Indigo-500 */
-  --primary-foreground: #ffffff;
-  
-  --secondary: #0ea5e9; /* Sky-500 */
-  --secondary-foreground: #ffffff;
-  
-  --muted: #1e293b;
-  --muted-foreground: #94a3b8;
-  
-  --accent: #2a3b5a;
-  --accent-foreground: #f3f4f6;
-  
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.05);
-  --ring: #6366f1;
-  --radius: 0.75rem;
-}
-
-/* Light Theme Variables */
-.light {
-  --background: #f8fafc; /* slate-50 */
-  --foreground: #0f172a; /* slate-900 */
+  /* Grey / White Theme — matching landing page */
+  --background: #f5f5f5;
+  --foreground: #111111;
   --card: #ffffff;
-  --card-foreground: #0f172a;
+  --card-foreground: #111111;
   --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  
-  --primary: #4f46e5; /* Indigo-600 */
+  --popover-foreground: #111111;
+
+  --primary: #111111;
   --primary-foreground: #ffffff;
-  
-  --secondary: #0284c7; /* Sky-600 */
+
+  --secondary: #555555;
   --secondary-foreground: #ffffff;
-  
-  --muted: #f1f5f9; /* slate-100 */
-  --muted-foreground: #64748b; /* slate-500 */
-  
-  --accent: #e2e8f0; /* slate-200 */
-  --accent-foreground: #0f172a;
-  
-  --border: rgba(15, 23, 42, 0.08);
-  --input: rgba(15, 23, 42, 0.04);
-  --ring: #4f46e5;
+
+  --muted: #fafafa;
+  --muted-foreground: #888888;
+
+  --accent: #f0f0f0;
+  --accent-foreground: #111111;
+
+  --border: #eeeeee;
+  --input: #f5f5f5;
+  --ring: #111111;
+  --radius: 0.75rem;
 }
 
 @theme {
@@ -68,19 +42,17 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  
-  --font-sans: var(--font-geist-sans), sans-serif;
+
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: var(--font-geist-mono), monospace;
-  
+
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
-  
+
   --animate-in: animate-in 0.2s ease-out;
   --animate-out: animate-out 0.2s ease-in;
   --animate-fade-in: fade-in 0.2s ease-out;
@@ -112,35 +84,18 @@
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), sans-serif;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* Glassmorphism custom classes - Dark Mode */
+/* Clean card surface */
 .glass {
-  background: rgba(11, 19, 41, 0.65);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+  background: #ffffff;
+  border: 1px solid #eee;
+  transition: box-shadow 0.2s ease;
 }
 
-.glass-accent {
-  background: rgba(99, 102, 241, 0.08);
-  border: 1px solid rgba(99, 102, 241, 0.15);
-  transition: background-color 0.3s ease, border-color 0.3s ease;
-}
-
-/* Glassmorphism custom classes - Light Mode */
-.light .glass {
-  background: rgba(255, 255, 255, 0.75);
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.02);
-}
-
-.light .glass-accent {
-  background: rgba(79, 70, 229, 0.04);
-  border: 1px solid rgba(79, 70, 229, 0.08);
+.glass:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
 }
 
 /* Custom Scrollbar */
@@ -150,66 +105,14 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.light ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.02);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: #ddd;
   border-radius: 4px;
 }
 
-.light ::-webkit-scrollbar-thumb {
-  background: rgba(15, 23, 42, 0.1);
-}
-
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.light ::-webkit-scrollbar-thumb:hover {
-  background: rgba(15, 23, 42, 0.18);
-}
-
-/* Aura Background effects - Dark Mode */
-.bg-glow-orb-1 {
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
-}
-
-.bg-glow-orb-2 {
-  background: radial-gradient(circle, rgba(14, 165, 233, 0.12) 0%, rgba(0, 0, 0, 0) 70%);
-}
-
-.bg-glow-orb-3 {
-  background: radial-gradient(circle, rgba(168, 85, 247, 0.1) 0%, rgba(0, 0, 0, 0) 70%);
-}
-
-/* Aura Background effects - Light Mode */
-.light .bg-glow-orb-1 {
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.07) 0%, rgba(255, 255, 255, 0) 70%);
-}
-
-.light .bg-glow-orb-2 {
-  background: radial-gradient(circle, rgba(14, 165, 233, 0.05) 0%, rgba(255, 255, 255, 0) 70%);
-}
-
-.light .bg-glow-orb-3 {
-  background: radial-gradient(circle, rgba(168, 85, 247, 0.04) 0%, rgba(255, 255, 255, 0) 70%);
-}
-
-/* Shiny gradient animation */
-@keyframes shine-anim {
-  0% { background-position: 200% center; }
-  100% { background-position: -200% center; }
-}
-
-.gradient-text-shine {
-  background: linear-gradient(120deg, #818cf8 0%, #38bdf8 25%, #c084fc 50%, #818cf8 100%);
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: shine-anim 6s linear infinite;
+  background: #ccc;
 }
