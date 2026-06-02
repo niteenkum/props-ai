@@ -129,21 +129,9 @@ export async function generateAllTemplates(
 
   const types: TemplateType[] = ["coldEmail", "proposal", "linkedin", "coverLetter"];
 
-  console.log(`[AI Service] Generating all 4 templates via ${provider.name}...`);
+  console.log(`\n📝 [generateAllTemplates] Starting sequential generation via ${provider.name}`);
+  console.log(`   Parsed data: role=${parsed.role}, company=${parsed.company}`);
   const start = Date.now();
-
-  // Run all 4 in parallel for speed
-  const results = await Promise.all(
-    types.map(async (type) => {
-      try {
-        const content = await generateTemplate(type, jobText, profile, parsed);
-        return { type, content };
-      } catch (error) {
-        console.error(`[AI Service] Failed to generate ${type}:`, error);
-        return { type, content: `[Generation failed for ${type}. Please try again.]` };
-      }
-    })
-  );
 
   const templates: GeneratedTemplates = {
     coldEmail: "",
@@ -152,11 +140,52 @@ export async function generateAllTemplates(
     coverLetter: "",
   };
 
-  for (const { type, content } of results) {
-    templates[type] = content;
+  // Generate sequentially with stagger + retry to avoid API rate limits
+  for (let i = 0; i < types.length; i++) {
+    const type = types[i];
+    let attempts = 0;
+    const maxAttempts = 2;
+
+    console.log(`\n   [${i + 1}/${types.length}] 🔄 Generating "${type}"...`);
+
+    while (attempts < maxAttempts) {
+      try {
+        const tStart = Date.now();
+        const content = await generateTemplate(type, jobText, profile, parsed);
+        const elapsed = Date.now() - tStart;
+        templates[type] = content;
+        console.log(`   [${i + 1}/${types.length}] ✅ "${type}" generated in ${elapsed}ms (${content.length} chars)`);
+        break; // success — move to next template
+      } catch (error: any) {
+        attempts++;
+        const errMsg = error?.message || String(error);
+        const isRateLimit = errMsg.includes("429") || errMsg.toLowerCase().includes("rate");
+        const isSafety = errMsg.toLowerCase().includes("safety") || errMsg.toLowerCase().includes("block");
+
+        console.error(`   [${i + 1}/${types.length}] ❌ "${type}" FAILED (attempt ${attempts}/${maxAttempts})`);
+        console.error(`      Error: ${errMsg}`);
+        if (isRateLimit) console.error(`      🚫 RATE LIMIT detected`);
+        if (isSafety)    console.error(`      🛡️  SAFETY BLOCK detected`);
+
+        if (attempts < maxAttempts) {
+          const delay = isRateLimit ? 3000 : 1000;
+          console.log(`      ⏳ Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          console.error(`      💀 Max retries reached — marking "${type}" as FAILED`);
+          templates[type] = `[Generation failed for ${type}. Please try again.]`;
+        }
+      }
+    }
+
+    // Small stagger between templates to avoid rate limits
+    if (i < types.length - 1) {
+      console.log(`   ⏸️  Stagger pause (400ms)...`);
+      await new Promise(resolve => setTimeout(resolve, 400));
+    }
   }
 
-  console.log(`[AI Service] All 4 templates generated in ${Date.now() - start}ms`);
+  console.log(`\n📝 [generateAllTemplates] DONE in ${Date.now() - start}ms`);
   return templates;
 }
 

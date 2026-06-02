@@ -1,39 +1,41 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { LayoutDashboard, FilePlus2, LogOut, Sparkles, User, Sun, Moon } from "lucide-react";
 import { useTheme } from "./theme-provider";
 
 interface SidebarProps {
-  activeTab: "dashboard" | "new" | "profile";
-  setActiveTab: (tab: "dashboard" | "new" | "profile") => void;
   onLogout: () => void;
   userName?: string;
   userRole?: string;
 }
 
+const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; exact?: boolean }[] = [
+  { href: "/dashboard",         label: "Dashboard",        icon: LayoutDashboard, exact: true },
+  { href: "/dashboard/new",     label: "New Scan / Paste", icon: FilePlus2 },
+  { href: "/dashboard/profile", label: "Candidate Profile", icon: User },
+];
+
 export default function Sidebar({
-  activeTab,
-  setActiveTab,
   onLogout,
-  userName = "Niteen Kumar",
-  userRole = "React Specialist",
+  userName = "Your Profile",
+  userRole = "Proposal Specialist",
 }: SidebarProps) {
   const { theme, toggleTheme } = useTheme();
-  const isDark = theme === "dark";
+  const isDark   = theme === "dark";
+  const pathname = usePathname();
+
+  const isActive = (href: string, exact?: boolean) =>
+    exact ? pathname === href : pathname.startsWith(href);
 
   const initials = userName
     .split(" ")
     .map(n => n[0])
     .join("")
     .slice(0, 2)
-    .toUpperCase() || "NK";
-
-  const navItems: { key: "dashboard" | "new" | "profile"; label: string; icon: typeof LayoutDashboard }[] = [
-    { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { key: "new", label: "New Scan / Paste", icon: FilePlus2 },
-    { key: "profile", label: "Candidate Profile", icon: User },
-  ];
+    .toUpperCase() || "PA";
 
   return (
     <aside
@@ -50,22 +52,17 @@ export default function Sidebar({
         border: "1px solid var(--border)",
         borderRadius: 16,
         boxShadow: "var(--card-shadow)",
-        transition: "background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease",
       }}
     >
-      {/* Top Section */}
+      {/* ── Top Section ── */}
       <div>
         {/* Brand */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "2px 8px", marginBottom: 32 }}>
           <div
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: 10,
+              width: 36, height: 36, borderRadius: 10,
               background: "var(--primary)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
             <Sparkles style={{ width: 17, height: 17, color: "var(--primary-foreground)" }} />
@@ -82,183 +79,127 @@ export default function Sidebar({
 
         {/* Nav Items */}
         <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          {navItems.map(({ key, label, icon: Icon }) => {
-            const isActive = activeTab === key;
+          {NAV_ITEMS.map(({ href, label, icon: Icon, exact }) => {
+            const active = isActive(href, exact);
             return (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key)}
+              <Link
+                key={href}
+                href={href}
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: 10,
                   padding: "10px 12px",
                   borderRadius: 10,
-                  border: "none",
-                  background: isActive ? "var(--accent)" : "transparent",
-                  color: isActive ? "var(--foreground)" : "var(--muted-foreground)",
+                  background: active ? "var(--accent)" : "transparent",
+                  color: active ? "var(--foreground)" : "var(--muted-foreground)",
                   fontSize: 13,
-                  fontWeight: isActive ? 600 : 500,
-                  cursor: "pointer",
-                  transition: "all 0.15s ease",
+                  fontWeight: active ? 600 : 500,
+                  textDecoration: "none",
                   position: "relative",
-                  width: "100%",
-                  textAlign: "left",
+                  transition: "background 0.15s ease, color 0.15s ease",
                 }}
-                onMouseEnter={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.background = "var(--input)";
-                    e.currentTarget.style.color = "var(--foreground)";
+                onMouseEnter={e => {
+                  if (!active) {
+                    (e.currentTarget as HTMLElement).style.background = "var(--input)";
+                    (e.currentTarget as HTMLElement).style.color = "var(--foreground)";
                   }
                 }}
-                onMouseLeave={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.background = "transparent";
-                    e.currentTarget.style.color = "var(--muted-foreground)";
+                onMouseLeave={e => {
+                  if (!active) {
+                    (e.currentTarget as HTMLElement).style.background = "transparent";
+                    (e.currentTarget as HTMLElement).style.color = "var(--muted-foreground)";
                   }
                 }}
               >
-                {isActive && (
+                {active && (
                   <span
                     style={{
-                      position: "absolute",
-                      left: 0,
-                      top: "25%",
-                      bottom: "25%",
-                      width: 3,
-                      borderRadius: "0 4px 4px 0",
+                      position: "absolute", left: 0, top: "25%", bottom: "25%",
+                      width: 3, borderRadius: "0 4px 4px 0",
                       background: "var(--primary)",
                     }}
                   />
                 )}
                 <Icon style={{ width: 18, height: 18, flexShrink: 0 }} />
                 <span>{label}</span>
-              </button>
+              </Link>
             );
           })}
         </nav>
       </div>
 
-      {/* Bottom Section */}
+      {/* ── Bottom Section ── */}
       <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-        {/* Theme Toggle Button */}
+        {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "none",
-            background: "transparent",
-            color: "var(--muted-foreground)",
-            fontSize: 13,
-            fontWeight: 500,
-            cursor: "pointer",
-            transition: "all 0.15s ease",
-            width: "100%",
-            textAlign: "left",
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "10px 12px", borderRadius: 10,
+            border: "none", background: "transparent",
+            color: "var(--muted-foreground)", fontSize: 13, fontWeight: 500,
+            cursor: "pointer", width: "100%", textAlign: "left",
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "var(--input)";
-            e.currentTarget.style.color = "var(--foreground)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.color = "var(--muted-foreground)";
-          }}
+          onMouseEnter={e => { e.currentTarget.style.background = "var(--input)"; e.currentTarget.style.color = "var(--foreground)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted-foreground)"; }}
         >
-          {theme === "light" ? (
-            <Moon style={{ width: 18, height: 18, flexShrink: 0 }} />
-          ) : (
-            <Sun style={{ width: 18, height: 18, flexShrink: 0 }} />
-          )}
+          {theme === "light"
+            ? <Moon style={{ width: 18, height: 18, flexShrink: 0 }} />
+            : <Sun  style={{ width: 18, height: 18, flexShrink: 0 }} />}
           <span>{theme === "light" ? "Dark Mode" : "Light Mode"}</span>
         </button>
 
-        {/* User Card */}
-        <button
-          onClick={() => setActiveTab("profile")}
+        {/* User Card → links to profile */}
+        <Link
+          href="/dashboard/profile"
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "8px 10px",
-            borderRadius: 10,
-            border: "none",
-            background: activeTab === "profile" ? "var(--accent)" : "var(--input)",
-            cursor: "pointer",
-            transition: "all 0.15s ease",
-            width: "100%",
-            textAlign: "left",
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "8px 10px", borderRadius: 10, textDecoration: "none",
+            background: isActive("/dashboard/profile") ? "var(--accent)" : "var(--input)",
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = activeTab === "profile" ? "var(--accent)" : "var(--input)"; }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--accent)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = isActive("/dashboard/profile") ? "var(--accent)" : "var(--input)"; }}
         >
           <div
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
-              background: "var(--primary)",
-              color: "var(--primary-foreground)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 13,
-              fontWeight: 700,
-              flexShrink: 0,
-              position: "relative",
+              width: 36, height: 36, borderRadius: "50%",
+              background: "var(--primary)", color: "var(--primary-foreground)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 13, fontWeight: 700, flexShrink: 0, position: "relative",
             }}
           >
             {initials}
             <span
               style={{
-                position: "absolute",
-                bottom: 0,
-                right: 0,
-                width: 10,
-                height: 10,
-                borderRadius: "50%",
-                background: "#22c55e",
-                border: "2px solid var(--card)",
+                position: "absolute", bottom: 0, right: 0,
+                width: 10, height: 10, borderRadius: "50%",
+                background: "#22c55e", border: "2px solid var(--card)",
               }}
             />
           </div>
           <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: 12, fontWeight: 600, color: "var(--foreground)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userName}</p>
-            <p style={{ fontSize: 10, color: "var(--muted-foreground)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userRole}</p>
+            <p style={{ fontSize: 12, fontWeight: 600, color: "var(--foreground)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {userName}
+            </p>
+            <p style={{ fontSize: 10, color: "var(--muted-foreground)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {userRole}
+            </p>
           </div>
-        </button>
+        </Link>
 
         {/* Sign Out */}
         <button
           onClick={onLogout}
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "none",
-            background: "transparent",
-            color: "var(--muted-foreground)",
-            fontSize: 13,
-            fontWeight: 500,
-            cursor: "pointer",
-            transition: "all 0.15s ease",
-            width: "100%",
-            textAlign: "left",
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "10px 12px", borderRadius: 10,
+            border: "none", background: "transparent",
+            color: "var(--muted-foreground)", fontSize: 13, fontWeight: 500,
+            cursor: "pointer", width: "100%", textAlign: "left",
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = "#ef4444";
-            e.currentTarget.style.background = isDark ? "rgba(239, 68, 68, 0.1)" : "#fef2f2";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = "var(--muted-foreground)";
-            e.currentTarget.style.background = "transparent";
-          }}
+          onMouseEnter={e => { e.currentTarget.style.color = "#ef4444"; e.currentTarget.style.background = isDark ? "rgba(239, 68, 68, 0.1)" : "#fef2f2"; }}
+          onMouseLeave={e => { e.currentTarget.style.color = "var(--muted-foreground)"; e.currentTarget.style.background = "transparent"; }}
         >
           <LogOut style={{ width: 16, height: 16 }} />
           <span>Sign Out</span>

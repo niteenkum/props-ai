@@ -10,7 +10,7 @@ export class GeminiProvider implements AIProviderAdapter {
 
   constructor(apiKey: string, model?: string) {
     this.apiKey = apiKey;
-    this.model = model || "gemini-2.0-flash";
+    this.model = model || "gemini-2.5-flash";
   }
 
   async generate(options: GenerateOptions): Promise<string> {
@@ -44,16 +44,33 @@ export class GeminiProvider implements AIProviderAdapter {
 
     if (!response.ok) {
       const errorBody = await response.text();
-      console.error(`[Gemini] API error ${response.status}:`, errorBody);
-      throw new Error(`Gemini API error (${response.status}): ${errorBody}`);
+      const status = response.status;
+      console.error(`[Gemini] API error ${status}:`, errorBody);
+
+      if (status === 429) {
+        throw new Error(`Gemini 429 rate limit exceeded. Please wait and try again.`);
+      }
+      throw new Error(`Gemini API error (${status}): ${errorBody.slice(0, 300)}`);
     }
 
     const data = await response.json();
 
-    // Extract text from response
+    // Check for safety blocks (Gemini can return 200 but with blocked content)
     const candidates = data.candidates;
     if (!candidates || candidates.length === 0) {
+      const blockReason = data.promptFeedback?.blockReason;
+      if (blockReason) {
+        console.error(`[Gemini] Content blocked — reason: ${blockReason}`);
+        throw new Error(`[Gemini] Content blocked by safety filter: ${blockReason}`);
+      }
       throw new Error("[Gemini] No candidates returned in response");
+    }
+
+    // Check if the candidate was blocked mid-generation
+    const finishReason = candidates[0]?.finishReason;
+    if (finishReason === "SAFETY") {
+      console.error("[Gemini] Response blocked by safety filter");
+      throw new Error("[Gemini] Response blocked by safety filter");
     }
 
     const parts = candidates[0]?.content?.parts;
@@ -64,3 +81,4 @@ export class GeminiProvider implements AIProviderAdapter {
     return parts.map((p: any) => p.text || "").join("").trim();
   }
 }
+

@@ -99,6 +99,20 @@ export async function getJobPostsAction(): Promise<JobPost[]> {
   }
 }
 
+// 1b. Find existing jobs by contact email (for duplicate detection)
+export async function getJobsByEmailAction(email: string): Promise<JobPost[]> {
+  try {
+    const dbJobs = await prisma.jobPost.findMany({
+      where: { contactEmail: { equals: email, mode: "insensitive" } },
+      orderBy: { postedDate: "desc" },
+    });
+    return dbJobs.map(mapDbJob);
+  } catch (error) {
+    console.error("Error in getJobsByEmailAction:", error);
+    return [];
+  }
+}
+
 // 2. Add a new job post scan
 export async function addJobPostAction(job: Omit<JobPost, "id" | "postedDate" | "status">): Promise<JobPost> {
   try {
