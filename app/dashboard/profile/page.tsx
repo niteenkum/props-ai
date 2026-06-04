@@ -7,11 +7,12 @@ import {
   Sparkles, AlertCircle, Link2, GitBranch, Globe,
   ChevronDown, ChevronUp, ExternalLink, Mail, Briefcase,
   Code2, Zap, ArrowUpRight, CheckCircle2, Laptop, Edit2,
-  GraduationCap as EduIcon
+  GraduationCap as EduIcon, ScanLine, PackagePlus, RefreshCw
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useProfile } from "../../hooks/useProfile";
 import { useTheme } from "../../components/theme-provider";
+import { scanPortfolioAction, type ScannedProject } from "../../actions/portfolio-actions";
 
 // ─── Skill category configurations ──────────────────────────────────────────
 const LANG_KEYWORDS   = ["javascript","typescript","python","dart","swift","kotlin","java","go","rust","c++","c#","php","ruby","html","css"];
@@ -113,6 +114,17 @@ export default function ProfilePage() {
   const [newModalLinkLabel, setNewModalLinkLabel]   = React.useState("GitHub");
   const [newModalLinkUrl, setNewModalLinkUrl]       = React.useState("");
 
+  // ─── Portfolio Scanner State ───
+  const [isScanning, setIsScanning]                     = React.useState(false);
+  const [scanError, setScanError]                       = React.useState<string | null>(null);
+  const [scanStep, setScanStep]                         = React.useState("");
+  const [isScanReviewOpen, setIsScanReviewOpen]         = React.useState(false);
+  const [scannedProjects, setScannedProjects]           = React.useState<ScannedProject[]>([]);
+  const [scanPageTitle, setScanPageTitle]               = React.useState("");
+  const [scanPagesScanned, setScanPagesScanned]         = React.useState<string[]>([]);
+  const [selectedScanIdxs, setSelectedScanIdxs]         = React.useState<Set<number>>(new Set());
+  const [isSavingScan, setIsSavingScan]                 = React.useState(false);
+
   if (!isReady || !p.profile) return null;
 
   const hasResume       = !!p.profile.resumeFileName;
@@ -193,6 +205,82 @@ export default function ProfilePage() {
   const handleDeleteModalLink = (lIdx: number) => {
     setModalProjectLinks(prev => prev.filter((_, i) => i !== lIdx));
   };
+
+  // ─── Portfolio Scanner Handler ───
+  const handleScanPortfolio = async () => {
+    const url = p.profile?.portfolioUrl?.trim();
+    if (!url) {
+      setScanError("Please enter your Portfolio URL first.");
+      return;
+    }
+    setIsScanning(true);
+    setScanError(null);
+    setScanStep("Fetching homepage...");
+
+    try {
+      setScanStep("Crawling sub-pages & project links...");
+
+      // Small delay so the UI update is visible before the heavy work
+      await new Promise(r => setTimeout(r, 80));
+
+      setScanStep("Analyzing all pages with Gemini AI...");
+      const result = await scanPortfolioAction(url, userEmail);
+
+      if (!result.success || !result.projects?.length) {
+        setScanError(result.error || "No projects could be extracted from the portfolio.");
+        setIsScanning(false);
+        return;
+      }
+
+      setScannedProjects(result.projects);
+      setScanPageTitle(result.pageTitle || url);
+      setScanPagesScanned(result.pagesScanned || [url]);
+      // Pre-select all scanned projects
+      setSelectedScanIdxs(new Set(result.projects.map((_, i) => i)));
+      setIsScanReviewOpen(true);
+    } catch (err: any) {
+      setScanError(err?.message || "Unexpected error during portfolio scan.");
+    } finally {
+      setIsScanning(false);
+      setScanStep("");
+    }
+  };
+
+
+  const handleApplyScanResults = async (mode: "add" | "replace") => {
+    if (!p.profile) return;
+    const chosen = scannedProjects.filter((_, i) => selectedScanIdxs.has(i));
+    if (!chosen.length) return;
+
+    const existing = mode === "replace" ? [] : [...p.profile.projects];
+    // Merge: avoid exact name duplicates
+    const existingNames = new Set(existing.map((proj) => proj.name.toLowerCase()));
+    const toAdd = chosen.filter((c) => !existingNames.has(c.name.toLowerCase()));
+    const merged = [...existing, ...toAdd];
+
+    const updatedProfile = { ...p.profile, projects: merged };
+
+    // 1. Update local state so the UI reflects immediately
+    p.setProfile(updatedProfile);
+
+    // 2. Persist to DB right away — no need to click Save separately
+    setIsSavingScan(true);
+    try {
+      const { saveUserProfileAction } = await import("../../actions/db-actions");
+      await saveUserProfileAction(updatedProfile, userEmail);
+      // Keep hasChanges clean — treat saved state as the new baseline
+      p.setOriginalProfile(JSON.parse(JSON.stringify(updatedProfile)));
+      console.log(`[Portfolio Scanner] Projects saved to DB (${merged.length} projects, mode=${mode})`);
+    } catch (err) {
+      console.error("[Portfolio Scanner] Failed to save scanned projects to DB:", err);
+    } finally {
+      setIsSavingScan(false);
+    }
+
+    setIsScanReviewOpen(false);
+    setScannedProjects([]);
+  };
+
 
   // Render Section Header for Bento cards
   const sectionHead = (
@@ -826,14 +914,77 @@ export default function ProfilePage() {
               
               <div style={{ height: 1, background: "var(--border)", margin: "8px 0" }} />
 
-              <FieldInput
-                label="Portfolio URL"
-                value={p.profile.portfolioUrl}
-                type="url"
-                onChange={v => p.setProfile({ ...p.profile!, portfolioUrl: v })}
-                icon={<Globe style={{ width: 13, height: 13 }} />}
-                placeholder="https://johndoe.dev"
-              />
+              {/* Portfolio URL with Scan button */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, width: "100%" }}>
+                <SectionLabel>Portfolio URL</SectionLabel>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div style={{ position: "relative", flex: 1 }}>
+                    <div style={{
+                      position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
+                      color: "var(--muted-foreground)", opacity: 0.5, pointerEvents: "none",
+                      display: "flex", alignItems: "center",
+                    }}>
+                      <Globe style={{ width: 13, height: 13 }} />
+                    </div>
+                    <input
+                      type="url"
+                      value={p.profile.portfolioUrl || ""}
+                      onChange={e => p.setProfile({ ...p.profile!, portfolioUrl: e.target.value })}
+                      placeholder="https://johndoe.dev"
+                      className="glow-input"
+                      style={{ paddingLeft: 40 }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleScanPortfolio}
+                    disabled={isScanning || !p.profile.portfolioUrl?.trim()}
+                    title={isScanning ? scanStep : "Scan Portfolio with AI"}
+                    className="btn-scan-portfolio"
+                    style={{
+                      display: "flex", alignItems: "center", gap: 6,
+                      padding: "10px 16px", borderRadius: 10, border: "none",
+                      background: isScanning
+                        ? isDark ? "rgba(99,102,241,0.1)" : "rgba(99,102,241,0.05)"
+                        : "linear-gradient(135deg, #818cf8, #6366f1)",
+                      color: isScanning ? "#818cf8" : "#fff",
+                      fontSize: 12, fontWeight: 800, cursor: isScanning ? "not-allowed" : "pointer",
+                      transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                      boxShadow: isScanning ? "none" : "0 4px 12px rgba(99,102,241,0.3)",
+                      whiteSpace: "nowrap", flexShrink: 0,
+                      opacity: !p.profile.portfolioUrl?.trim() ? 0.5 : 1,
+                    }}
+                  >
+                    {isScanning
+                      ? <Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} />
+                      : <ScanLine style={{ width: 14, height: 14 }} />
+                    }
+                    {isScanning ? "Scanning..." : "Scan"}
+                  </button>
+                </div>
+
+                {/* Scan loading step */}
+                {isScanning && scanStep && (
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: 6, marginTop: 4,
+                    fontSize: 11, color: "#818cf8", fontStyle: "italic",
+                  }}>
+                    <Sparkles style={{ width: 11, height: 11 }} />
+                    {scanStep}
+                  </div>
+                )}
+
+                {/* Scan error */}
+                {scanError && !isScanning && (
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: 6, marginTop: 4,
+                    fontSize: 11, color: isDark ? "#f87171" : "#dc2626",
+                  }}>
+                    <AlertCircle style={{ width: 11, height: 11 }} />
+                    {scanError}
+                  </div>
+                )}
+              </div>
               <FieldInput
                 label="GitHub URL"
                 value={p.profile.githubUrl}
@@ -1184,6 +1335,230 @@ export default function ProfilePage() {
 
         </div>
       </div>
+
+      {/* ═══ Portfolio Scan Review Modal ═══ */}
+      {isScanReviewOpen && (
+        <div className="modal-overlay" onClick={() => setIsScanReviewOpen(false)}>
+          <div className="modal-content" style={{ width: 640 }} onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div style={{
+              padding: "20px 24px", borderBottom: "1px solid var(--border)",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+            }}>
+              <div>
+                <h3 style={{ fontSize: 18, fontWeight: 900, color: "var(--foreground)", margin: "0 0 4px", letterSpacing: -0.4 }}>
+                  Portfolio Scan Results
+                </h3>
+                <p style={{ fontSize: 12, color: "var(--muted-foreground)", margin: 0, fontWeight: 600 }}>
+                  {scanPageTitle} — {scannedProjects.length} project{scannedProjects.length !== 1 ? "s" : ""} found across {scanPagesScanned.length} page{scanPagesScanned.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <button
+                onClick={() => setIsScanReviewOpen(false)}
+                style={{
+                  background: "none", border: "none", color: "var(--muted-foreground)",
+                  cursor: "pointer", padding: 6, borderRadius: 8, display: "flex", transition: "all 0.2s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.color = "var(--foreground)"; e.currentTarget.style.background = "var(--border)"; }}
+                onMouseLeave={e => { e.currentTarget.style.color = "var(--muted-foreground)"; e.currentTarget.style.background = "none"; }}
+              >
+                <X style={{ width: 16, height: 16 }} />
+              </button>
+            </div>
+
+            {/* Scanned Projects List */}
+            <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 12, maxHeight: "55vh", overflowY: "auto" }}>
+              {/* Select all / deselect all */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <span style={{ fontSize: 11, color: "var(--muted-foreground)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>
+                  Select projects to import
+                </span>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedScanIdxs(new Set(scannedProjects.map((_, i) => i)))}
+                    style={{ background: "none", border: "none", fontSize: 11, color: "#818cf8", cursor: "pointer", fontWeight: 700, padding: 0 }}
+                  >
+                    Select All
+                  </button>
+                  <span style={{ color: "var(--border)" }}>|</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedScanIdxs(new Set())}
+                    style={{ background: "none", border: "none", fontSize: 11, color: "var(--muted-foreground)", cursor: "pointer", fontWeight: 700, padding: 0 }}
+                  >
+                    Deselect All
+                  </button>
+                </div>
+              </div>
+
+              {scannedProjects.map((proj, idx) => {
+                const isSelected = selectedScanIdxs.has(idx);
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      setSelectedScanIdxs(prev => {
+                        const next = new Set(prev);
+                        if (next.has(idx)) next.delete(idx); else next.add(idx);
+                        return next;
+                      });
+                    }}
+                    style={{
+                      padding: 16, borderRadius: 14, cursor: "pointer",
+                      border: `1.5px solid ${isSelected
+                        ? "rgba(99,102,241,0.5)"
+                        : "var(--border)"}`,
+                      background: isSelected
+                        ? isDark ? "rgba(99,102,241,0.06)" : "rgba(99,102,241,0.02)"
+                        : isDark ? "rgba(255,255,255,0.01)" : "#fafafa",
+                      transition: "all 0.2s ease",
+                      display: "flex", gap: 14, alignItems: "flex-start",
+                    }}
+                  >
+                    {/* Checkbox visual */}
+                    <div style={{
+                      width: 18, height: 18, borderRadius: 5, flexShrink: 0, marginTop: 2,
+                      border: `2px solid ${isSelected ? "#818cf8" : "var(--border)"}`,
+                      background: isSelected ? "#818cf8" : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      transition: "all 0.2s",
+                    }}>
+                      {isSelected && <Check style={{ width: 11, height: 11, color: "#fff" }} />}
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--foreground)", margin: "0 0 6px", letterSpacing: -0.2 }}>
+                        {proj.name}
+                      </h4>
+
+                      {/* Tech chips */}
+                      {proj.tech.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
+                          {proj.tech.map(tag => {
+                            const cat = getSkillCat(tag);
+                            const c = SKILL_COLORS[cat];
+                            return (
+                              <span key={tag} style={{
+                                fontSize: 10, padding: "2px 7px", borderRadius: 5,
+                                background: isDark ? c.darkBg : c.bg, color: c.color,
+                                border: `1px solid ${isDark ? c.darkBorder : c.border}`, fontWeight: 700,
+                              }}>{tag}</span>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      <p style={{ fontSize: 12, color: "var(--muted-foreground)", margin: "0 0 8px", lineHeight: 1.5 }}>
+                        {proj.description || "No description extracted."}
+                      </p>
+
+                      {/* Links */}
+                      {proj.links.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {proj.links.map((lnk, li) => (
+                            <a
+                              key={li}
+                              href={lnk.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              style={{
+                                display: "inline-flex", alignItems: "center", gap: 4,
+                                fontSize: 10, padding: "3px 8px", borderRadius: 6,
+                                background: isDark ? "rgba(255,255,255,0.03)" : "#f3f4f6",
+                                border: "1px solid var(--border)",
+                                color: lnk.label.toLowerCase() === "github" ? "#818cf8" : "var(--muted-foreground)",
+                                textDecoration: "none", fontWeight: 700,
+                              }}
+                            >
+                              <ExternalLink style={{ width: 9, height: 9 }} />
+                              {lnk.label}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer Actions */}
+            <div style={{
+              padding: "16px 24px", borderTop: "1px solid var(--border)",
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap",
+            }}>
+              <span style={{ fontSize: 11, color: "var(--muted-foreground)", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                {isSavingScan
+                  ? <><Loader2 style={{ width: 12, height: 12, animation: "spin 1s linear infinite", color: "#818cf8" }} /> Saving to database...</>
+                  : <>{selectedScanIdxs.size} of {scannedProjects.length} selected</>
+                }
+              </span>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  type="button"
+                  disabled={isSavingScan}
+                  onClick={() => setIsScanReviewOpen(false)}
+                  style={{
+                    padding: "9px 18px", borderRadius: 10,
+                    border: "1px solid var(--border)", background: "transparent",
+                    color: "var(--foreground)", fontSize: 13, fontWeight: 700,
+                    cursor: isSavingScan ? "not-allowed" : "pointer", transition: "all 0.2s",
+                    opacity: isSavingScan ? 0.5 : 1,
+                  }}
+                  onMouseEnter={e => { if (!isSavingScan) e.currentTarget.style.background = "var(--input)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={selectedScanIdxs.size === 0 || isSavingScan}
+                  onClick={() => handleApplyScanResults("add")}
+                  style={{
+                    padding: "9px 18px", borderRadius: 10,
+                    border: `1px solid ${(selectedScanIdxs.size === 0 || isSavingScan) ? "var(--border)" : "rgba(99,102,241,0.4)"}`,
+                    background: (selectedScanIdxs.size === 0 || isSavingScan)
+                      ? "var(--input)" : isDark ? "rgba(99,102,241,0.08)" : "rgba(99,102,241,0.04)",
+                    color: (selectedScanIdxs.size === 0 || isSavingScan) ? "var(--muted-foreground)" : "#818cf8",
+                    fontSize: 13, fontWeight: 700,
+                    cursor: (selectedScanIdxs.size === 0 || isSavingScan) ? "not-allowed" : "pointer",
+                    transition: "all 0.2s", display: "flex", alignItems: "center", gap: 6,
+                  }}
+                >
+                  <PackagePlus style={{ width: 14, height: 14 }} />
+                  Add to Existing
+                </button>
+                <button
+                  type="button"
+                  disabled={selectedScanIdxs.size === 0 || isSavingScan}
+                  onClick={() => handleApplyScanResults("replace")}
+                  style={{
+                    padding: "9px 18px", borderRadius: 10, border: "none",
+                    background: (selectedScanIdxs.size === 0 || isSavingScan)
+                      ? "var(--border)" : "linear-gradient(135deg, #818cf8, #6366f1)",
+                    color: (selectedScanIdxs.size === 0 || isSavingScan) ? "var(--muted-foreground)" : "#fff",
+                    fontSize: 13, fontWeight: 800,
+                    cursor: (selectedScanIdxs.size === 0 || isSavingScan) ? "not-allowed" : "pointer",
+                    transition: "all 0.2s",
+                    boxShadow: (selectedScanIdxs.size === 0 || isSavingScan) ? "none" : "0 4px 12px rgba(99,102,241,0.25)",
+                    display: "flex", alignItems: "center", gap: 6,
+                  }}
+                >
+                  {isSavingScan
+                    ? <Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} />
+                    : <RefreshCw style={{ width: 14, height: 14 }} />
+                  }
+                  {isSavingScan ? "Saving..." : "Replace All Projects"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* ═══ Glassmorphic Project Edit/Add Modal ═══ */}
       {isProjectModalOpen && (
