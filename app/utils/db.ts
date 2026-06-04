@@ -28,8 +28,9 @@ export interface UserProfile {
   githubUrl: string;
   linkedinUrl: string;
   education: { degree: string; school: string; year: string }[];
-  projects: { name: string; tech: string[]; description: string }[];
+  projects: { name: string; tech: string[]; description: string; links?: { label: string; url: string }[] }[];
   resumeFileName?: string;
+  resumeText?: string; // Raw extracted text stored in DB, used by Gemini
 }
 
 const DEFAULT_PROFILE: UserProfile = {
@@ -48,12 +49,19 @@ const DEFAULT_PROFILE: UserProfile = {
     {
       name: "PropAI (Proposal Organizer)",
       tech: ["Next.js", "React 19", "Tailwind CSS v4", "Radix UI"],
-      description: "Architected a premium midnight-themed job outreach assistant with dynamic parsing capabilities."
+      description: "Architected a premium midnight-themed job outreach assistant with dynamic parsing capabilities.",
+      links: [
+        { label: "Web", url: "https://propsai.dev" },
+        { label: "GitHub", url: "https://github.com/niteenkumar/props-ai" }
+      ]
     },
     {
       name: "Flee360 Platform",
       tech: ["React.js", "Radix UI", "Tailwind CSS"],
-      description: "Co-developed an enterprise fleet management dashboard with highly-reusable rounded card sidebar menus."
+      description: "Co-developed an enterprise fleet management dashboard with highly-reusable rounded card sidebar menus.",
+      links: [
+        { label: "Demo", url: "https://flee360.com" }
+      ]
     }
   ]
 };

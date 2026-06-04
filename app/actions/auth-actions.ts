@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "../utils/prisma";
-import { UserStatus } from "@/prisma/client/client";
+import { UserStatus } from "@prisma/client";
 import { sendEmail, buildOtpEmail } from "../utils/email";
 
 export interface AuthResult {
@@ -120,7 +120,11 @@ export async function verifyOtpAndSignUpAction(data: {
     // Provision user profile
     await prisma.userProfile.create({
       data: {
-        id: data.email,
+        user: {
+          connect: {
+            id: user.id,
+          },
+        },
         name: data.name,
         role: data.role || "Developer",
         email: data.email,
@@ -129,7 +133,6 @@ export async function verifyOtpAndSignUpAction(data: {
         githubUrl: data.githubUrl || "",
         linkedinUrl: data.linkedinUrl || "",
         education: [] as any,
-        projects: [] as any,
       },
     });
 

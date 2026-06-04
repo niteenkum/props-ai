@@ -8,6 +8,10 @@ export interface GenerateOptions {
   userPrompt: string;
   temperature?: number;   // 0.0 - 1.0, default 0.7
   maxTokens?: number;     // max output tokens, default 2048
+  // Logging metadata (optional, not sent to AI)
+  apiType?:   string;
+  jobPostId?: string;
+  userEmail?: string;
 }
 
 export interface AIProviderAdapter {

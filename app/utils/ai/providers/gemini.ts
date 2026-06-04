@@ -2,6 +2,7 @@
 // Uses the Gemini REST API directly — no SDK needed
 
 import { AIProviderAdapter, GenerateOptions } from "../types";
+import { logAiUsage, AiApiType, AiCategory, categoryForApiType } from "../usage-logger";
 
 export class GeminiProvider implements AIProviderAdapter {
   readonly name = "gemini" as const;
@@ -36,16 +37,38 @@ export class GeminiProvider implements AIProviderAdapter {
       };
     }
 
+    const callStart = Date.now();
+
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
 
+    const durationMs = Date.now() - callStart;
+
     if (!response.ok) {
       const errorBody = await response.text();
       const status = response.status;
       console.error(`[Gemini] API error ${status}:`, errorBody);
+
+      // Log the failed call
+      if (options.apiType) {
+        const apiType = options.apiType as AiApiType;
+        await logAiUsage({
+          apiType,
+          category:    categoryForApiType(apiType),
+          model:       this.model,
+          provider:    "gemini",
+          jobPostId:   options.jobPostId,
+          userEmail:   options.userEmail,
+          inputTokens:  0,
+          outputTokens: 0,
+          durationMs,
+          success:     false,
+          errorMessage: `HTTP ${status}: ${errorBody.slice(0, 200)}`,
+        });
+      }
 
       if (status === 429) {
         throw new Error(`Gemini 429 rate limit exceeded. Please wait and try again.`);
@@ -78,7 +101,27 @@ export class GeminiProvider implements AIProviderAdapter {
       throw new Error("[Gemini] No content parts in response");
     }
 
+    // ─── Log token usage ──────────────────────────────────────────────────
+    if (options.apiType) {
+      const usageMeta  = data.usageMetadata || {};
+      const inputTokens  = usageMeta.promptTokenCount     || 0;
+      const outputTokens = usageMeta.candidatesTokenCount || 0;
+      const apiType = options.apiType as AiApiType;
+
+      await logAiUsage({
+        apiType,
+        category:    categoryForApiType(apiType),
+        model:       this.model,
+        provider:    "gemini",
+        jobPostId:   options.jobPostId,
+        userEmail:   options.userEmail,
+        inputTokens,
+        outputTokens,
+        durationMs,
+        success:     true,
+      }).catch(() => {/* ignore logging errors */});
+    }
+
     return parts.map((p: any) => p.text || "").join("").trim();
   }
 }
-

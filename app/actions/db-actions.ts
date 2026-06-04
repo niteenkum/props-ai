@@ -2,7 +2,7 @@
 
 import { prisma } from "../utils/prisma";
 import { JobPost, UserProfile } from "../utils/db";
-import { JobStatus } from "@/prisma/client/client";
+import { JobStatus } from "@prisma/client";
 
 // Helper to map DB JobPost to UI JobPost type
 function mapDbJob(job: any): JobPost {
@@ -29,7 +29,7 @@ function mapDbJob(job: any): JobPost {
 }
 
 // Helper to map DB UserProfile to UI UserProfile type
-function mapDbProfile(profile: any): UserProfile {
+function mapDbProfile(profile: any, projects: any[] = []): UserProfile {
   return {
     name: profile.name,
     role: profile.role,
@@ -39,8 +39,14 @@ function mapDbProfile(profile: any): UserProfile {
     githubUrl: profile.githubUrl,
     linkedinUrl: profile.linkedinUrl,
     resumeFileName: profile.resumeFileName ?? undefined,
+    resumeText: profile.resumeText ?? undefined,
     education: profile.education as { degree: string; school: string; year: string }[],
-    projects: profile.projects as { name: string; tech: string[]; description: string }[],
+    projects: projects.map((p: any) => ({
+      name: p.name,
+      tech: p.tech,
+      description: p.description,
+      links: p.links || [],
+    })),
   };
 }
 
@@ -184,40 +190,43 @@ export async function deleteJobPostAction(id: string): Promise<void> {
 // 5. Get candidate profile (auto seeds standard defaults if not present)
 export async function getUserProfileAction(userEmail?: string): Promise<UserProfile> {
   try {
-    const queryEmail = userEmail || "niteen.kumar@devstudio.com";
+    const queryEmail = userEmail || "niteen.kumar014@gmail.com";
     
-    // 1. Try to find user profile by unique email
-    let dbProfile = await prisma.userProfile.findFirst({
-      where: { email: queryEmail }
+    // Find User along with relational profile and projects
+    let user = await prisma.user.findUnique({
+      where: { email: queryEmail },
+      include: {
+        profile: true,
+        projects: true
+      }
     });
 
-    // 2. If it's the default, try looking by the old ID
-    if (!dbProfile && (queryEmail === "niteen.kumar@devstudio.com" || queryEmail === DEFAULT_PROFILE.email)) {
-      dbProfile = await prisma.userProfile.findUnique({
-        where: { id: "default-profile" }
+    // Fallback: search profile directly (for legacy compatibility)
+    if (!user) {
+      const legacyProfile = await prisma.userProfile.findFirst({
+        where: { email: queryEmail }
+      });
+      if (legacyProfile) {
+        user = await prisma.user.findUnique({
+          where: { id: legacyProfile.userId },
+          include: { profile: true, projects: true }
+        });
+      }
+    }
+
+    // Default Seed Fallback if Niteen Kumar
+    if (!user && queryEmail === "niteen.kumar014@gmail.com") {
+      user = await prisma.user.findUnique({
+        where: { email: "niteen.kumar014@gmail.com" },
+        include: { profile: true, projects: true }
       });
     }
 
-    if (!dbProfile) {
-      // Seed with default profile customized for this user
-      const newProfile = await prisma.userProfile.create({
-        data: {
-          id: userEmail || "default-profile",
-          name: userEmail ? userEmail.split("@")[0] : DEFAULT_PROFILE.name,
-          role: userEmail ? "Software Engineer" : DEFAULT_PROFILE.role,
-          email: queryEmail,
-          skills: DEFAULT_PROFILE.skills,
-          portfolioUrl: DEFAULT_PROFILE.portfolioUrl,
-          githubUrl: DEFAULT_PROFILE.githubUrl,
-          linkedinUrl: DEFAULT_PROFILE.linkedinUrl,
-          resumeFileName: DEFAULT_PROFILE.resumeFileName || null,
-          education: DEFAULT_PROFILE.education as any,
-          projects: DEFAULT_PROFILE.projects as any,
-        },
-      });
-      return mapDbProfile(newProfile);
+    if (!user || !user.profile) {
+      return DEFAULT_PROFILE;
     }
-    return mapDbProfile(dbProfile);
+
+    return mapDbProfile(user.profile, user.projects);
   } catch (error) {
     console.error("Error in getUserProfileAction:", error);
     return DEFAULT_PROFILE;
@@ -225,42 +234,62 @@ export async function getUserProfileAction(userEmail?: string): Promise<UserProf
 }
 
 // 6. Save/update candidate profile
-export async function saveUserProfileAction(profile: UserProfile): Promise<void> {
+export async function saveUserProfileAction(profile: UserProfile, userEmail?: string): Promise<void> {
   try {
-    const existing = await prisma.userProfile.findFirst({
-      where: { email: profile.email }
-    });
-    
-    const profileId = existing?.id || profile.email || "default-profile";
+    const targetEmail = userEmail || profile.email || "niteen.kumar014@gmail.com";
 
-    await prisma.userProfile.upsert({
-      where: { id: profileId },
-      update: {
-        name: profile.name,
-        role: profile.role,
-        email: profile.email,
-        skills: profile.skills,
-        portfolioUrl: profile.portfolioUrl,
-        githubUrl: profile.githubUrl,
-        linkedinUrl: profile.linkedinUrl,
-        resumeFileName: profile.resumeFileName || null,
-        education: profile.education as any,
-        projects: profile.projects as any,
-      },
-      create: {
-        id: profileId,
-        name: profile.name,
-        role: profile.role,
-        email: profile.email,
-        skills: profile.skills,
-        portfolioUrl: profile.portfolioUrl,
-        githubUrl: profile.githubUrl,
-        linkedinUrl: profile.linkedinUrl,
-        resumeFileName: profile.resumeFileName || null,
-        education: profile.education as any,
-        projects: profile.projects as any,
-      },
+    // Find User by email
+    const user = await prisma.user.findUnique({
+      where: { email: targetEmail }
     });
+
+    if (!user) {
+      throw new Error(`User not found for email ${targetEmail}`);
+    }
+
+    await prisma.$transaction([
+      prisma.userProfile.upsert({
+        where: { userId: user.id },
+        update: {
+          name: profile.name,
+          role: profile.role,
+          email: profile.email,
+          skills: profile.skills,
+          portfolioUrl: profile.portfolioUrl,
+          githubUrl: profile.githubUrl,
+          linkedinUrl: profile.linkedinUrl,
+          resumeFileName: profile.resumeFileName || null,
+          resumeText: profile.resumeText || null,
+          education: profile.education as any,
+        },
+        create: {
+          userId: user.id,
+          name: profile.name,
+          role: profile.role,
+          email: profile.email,
+          skills: profile.skills,
+          portfolioUrl: profile.portfolioUrl,
+          githubUrl: profile.githubUrl,
+          linkedinUrl: profile.linkedinUrl,
+          resumeFileName: profile.resumeFileName || null,
+          resumeText: profile.resumeText || null,
+          education: profile.education as any,
+        },
+      }),
+      // Synchronize projects: delete old and create new
+      prisma.project.deleteMany({
+        where: { userId: user.id }
+      }),
+      prisma.project.createMany({
+        data: (profile.projects || []).map((proj) => ({
+          userId: user.id,
+          name: proj.name,
+          tech: proj.tech,
+          description: proj.description,
+          links: proj.links || [],
+        }))
+      })
+    ]);
   } catch (error) {
     console.error("Error in saveUserProfileAction:", error);
     throw error;

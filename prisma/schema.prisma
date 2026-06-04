@@ -3,8 +3,7 @@ datasource db {
 }
 
 generator client {
-  provider = "prisma-client"
-  output   = "./client"
+  provider = "prisma-client-js"
 }
 
 enum UserStatus {
@@ -13,14 +12,16 @@ enum UserStatus {
 }
 
 model User {
-  id        String     @id @default(uuid())
-  email     String     @unique
+  id        String       @id @default(uuid())
+  email     String       @unique
   password  String
   name      String
-  role      String     @default("Developer")
-  status    UserStatus @default(PENDING)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  role      String       @default("Developer")
+  status    UserStatus   @default(PENDING)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  profile   UserProfile?
+  projects  Project[]
 }
 
 enum JobStatus {
@@ -51,7 +52,9 @@ model JobPost {
 }
 
 model UserProfile {
-  id             String   @id @default("default-profile")
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name           String
   role           String
   email          String
@@ -60,8 +63,18 @@ model UserProfile {
   githubUrl      String
   linkedinUrl    String
   resumeFileName String?
+  resumeText     String?  @db.Text // Raw extracted resume text stored in DB
   education      Json     // Array of { degree, school, year }
-  projects       Json     // Array of { name, tech: string[], description }
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  tech        String[]
+  description String   @db.Text
+  links       Json?    // Array of { label, url }
 }
 
 model Skill {
@@ -80,4 +93,41 @@ model EmailOtp {
   createdAt DateTime @default(now())
 
   @@index([email])
+}
+
+// ─── AI Usage Expense Log ──────────────────────────────────────────────────
+// Every Gemini API call is logged here with token counts and computed cost.
+model AiUsageLog {
+  id              String   @id @default(uuid())
+  
+  // What triggered this call
+  apiType         String   // "pdf_parse" | "job_analysis" | "content_cold_email" | "content_proposal" | "content_linkedin" | "content_cover_letter"
+  category        String   // "pdf_reading" | "content_writing" | "formalizing" | "job_analysis"
+  model           String   // e.g. "gemini-2.5-flash"
+  provider        String   @default("gemini")
+  
+  // Context
+  jobPostId       String?  // if triggered by a job post
+  userEmail       String?  // which user triggered it
+
+  // Token metrics (from Gemini usageMetadata)
+  inputTokens     Int      @default(0)
+  outputTokens    Int      @default(0)
+  totalTokens     Int      @default(0)
+  
+  // Cost (USD) — computed using Gemini Flash pricing
+  inputCostUsd    Float    @default(0)
+  outputCostUsd   Float    @default(0)
+  totalCostUsd    Float    @default(0)
+
+  // Response metadata
+  durationMs      Int      @default(0)  // latency in milliseconds
+  success         Boolean  @default(true)
+  errorMessage    String?
+
+  createdAt       DateTime @default(now())
+
+  @@index([apiType])
+  @@index([createdAt])
+  @@index([userEmail])
 }

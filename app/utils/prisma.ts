@@ -1,6 +1,7 @@
 import { Pool } from "pg";
+// Trigger reload of updated Prisma Client schema
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@/prisma/client/client";
+import { PrismaClient } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;

@@ -103,11 +103,19 @@ export async function generateTemplate(
   console.log(`[AI Service] Generating ${type} template via ${provider.name}...`);
   const start = Date.now();
 
+  const apiTypeMap: Record<string, string> = {
+    coldEmail:   "content_cold_email",
+    proposal:    "content_proposal",
+    linkedin:    "content_linkedin",
+    coverLetter: "content_cover_letter",
+  };
+
   const result = await provider.generate({
     systemPrompt,
     userPrompt,
     temperature: 0.7,
     maxTokens: type === "linkedin" ? 512 : 2048,
+    apiType: apiTypeMap[type],
   });
 
   console.log(`[AI Service] Generated ${type} in ${Date.now() - start}ms (${result.length} chars)`);
@@ -207,6 +215,7 @@ export async function analyzeJobWithAI(
       userPrompt,
       temperature: 0.3, // low temperature for structured extraction
       maxTokens: 1024,
+      apiType: "job_analysis",
     });
 
     // Try to parse JSON from the response
