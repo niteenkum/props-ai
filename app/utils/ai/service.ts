@@ -55,7 +55,7 @@ function createProvider(): AIProviderAdapter | null {
 // Singleton-ish: create once per server lifecycle
 let _provider: AIProviderAdapter | null | undefined;
 
-function getProvider(): AIProviderAdapter | null {
+export function getProvider(): AIProviderAdapter | null {
   if (_provider === undefined) {
     _provider = createProvider();
     if (_provider) {
@@ -82,6 +82,91 @@ export function isAIAvailable(): boolean {
 export function getActiveProviderName(): AIProviderName | null {
   const provider = getProvider();
   return provider?.name || null;
+}
+
+/**
+ * Get all configured (available) providers so the UI can show a model picker.
+ * Returns an array of provider names that have API keys set.
+ */
+export function getAvailableProviders(): AIProviderName[] {
+  const available: AIProviderName[] = [];
+  if (process.env.GEMINI_API_KEY)    available.push("gemini");
+  if (process.env.OPENAI_API_KEY)    available.push("openai");
+  if (process.env.ANTHROPIC_API_KEY) available.push("claude");
+  return available;
+}
+
+/**
+ * Create a one-off provider instance for a specific provider name.
+ * Used by generateProposalsAction to let the user pick their model.
+ */
+function createProviderByName(name: AIProviderName): AIProviderAdapter | null {
+  switch (name) {
+    case "gemini": {
+      const key = process.env.GEMINI_API_KEY;
+      if (!key) return null;
+      return new GeminiProvider(key, process.env.GEMINI_MODEL || undefined);
+    }
+    case "openai": {
+      const key = process.env.OPENAI_API_KEY;
+      if (!key) return null;
+      return new OpenAIProvider(key, process.env.OPENAI_MODEL || undefined, process.env.OPENAI_BASE_URL || undefined);
+    }
+    case "claude": {
+      const key = process.env.ANTHROPIC_API_KEY;
+      if (!key) return null;
+      return new ClaudeProvider(key, process.env.ANTHROPIC_MODEL || undefined);
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * Generate a single template using a SPECIFIC provider by name.
+ * Falls back to the default provider if the requested one isn't available.
+ */
+export async function generateForProvider(
+  providerName: AIProviderName | "auto",
+  type: string,
+  jobText: string,
+  profile: UserProfile,
+  parsed: ParsedJobData
+): Promise<string> {
+  const provider =
+    providerName === "auto"
+      ? getProvider()
+      : (createProviderByName(providerName as AIProviderName) ?? getProvider());
+
+  if (!provider) {
+    throw new Error("No AI provider available. Please configure an API key.");
+  }
+
+  const { buildPromptForTemplate } = await import("./prompts");
+  const { systemPrompt, userPrompt } = buildPromptForTemplate(type as any, jobText, profile, parsed);
+
+  console.log(`[AI Service] generateForProvider: type=${type} provider=${provider.name}`);
+  const start = Date.now();
+
+  const apiTypeMap: Record<string, string> = {
+    coldEmail:   "content_cold_email",
+    proposal:    "content_proposal",
+    linkedin:    "content_linkedin",
+    coverLetter: "content_cover_letter",
+    whatsapp:    "content_whatsapp",
+    freelancer:  "content_freelancer",
+  };
+
+  const result = await provider.generate({
+    systemPrompt,
+    userPrompt,
+    temperature: 0.7,
+    maxTokens: type === "linkedin" || type === "whatsapp" ? 512 : 2048,
+    apiType: apiTypeMap[type] || "content_proposal",
+  });
+
+  console.log(`[AI Service] Generated ${type} via ${provider.name} in ${Date.now() - start}ms (${result.length} chars)`);
+  return result;
 }
 
 /**

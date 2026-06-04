@@ -20,7 +20,7 @@ export function useDashboard(userEmail: string, pendingJobId?: string) {
   const [selectedJob, setSelectedJob]               = useState<JobPost | null>(null);
   const [isDrawerOpen, setIsDrawerOpen]             = useState(false);
   const [drawerActiveTab, setDrawerActiveTab]       = useState<"details" | "templates">("templates");
-  const [templateActiveTab, setTemplateActiveTab]   = useState<"coldEmail" | "proposal" | "linkedin" | "coverLetter">("coldEmail");
+  const [templateActiveTab, setTemplateActiveTab]   = useState<string>("coldEmail");
   const [copiedStates, setCopiedStates]             = useState<Record<string, boolean>>({});
   const [notesText, setNotesText]                   = useState("");
 
@@ -47,7 +47,10 @@ export function useDashboard(userEmail: string, pendingJobId?: string) {
       setSelectedJob(job);
       setNotesText(job.notes || "");
       setDrawerActiveTab("templates");
-      setTemplateActiveTab("coldEmail");
+      // Auto-select first tab that actually has content
+      const templates = job.generatedTemplates || {};
+      const firstAvailable = Object.entries(templates).find(([, v]) => v && !v.startsWith("[Generation failed"))?.[0];
+      setTemplateActiveTab(firstAvailable || "coldEmail");
       setIsDrawerOpen(true);
     }
   }, [pendingJobId, jobs]);
@@ -78,7 +81,10 @@ export function useDashboard(userEmail: string, pendingJobId?: string) {
     setSelectedJob(job);
     setNotesText(job.notes || "");
     setDrawerActiveTab("templates");
-    setTemplateActiveTab("coldEmail");
+    // Auto-select first tab that has content
+    const templates = job.generatedTemplates || {};
+    const firstAvailable = Object.entries(templates).find(([, v]) => v && !v.startsWith("[Generation failed"))?.[0];
+    setTemplateActiveTab(firstAvailable || "coldEmail");
     setIsDrawerOpen(true);
   };
 

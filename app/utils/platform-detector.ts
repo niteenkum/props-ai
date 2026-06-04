@@ -1,7 +1,7 @@
 // ─── Platform Detection + Email Extraction ──────────────────────────────────
 // Detects the source platform of a job post and extracts contact emails.
 
-export type Platform = "upwork" | "email" | "linkedin" | "generic";
+export type Platform = "upwork" | "email" | "linkedin" | "freelancer" | "whatsapp" | "generic";
 
 /**
  * Extract the first email address found in text.
@@ -19,6 +19,11 @@ export function extractEmailFromText(text: string): string | null {
 export function detectPlatform(text: string): Platform {
   const lower = text.toLowerCase();
 
+  // WhatsApp signals — phone number with no email, casual invite language
+  const hasPhoneNumber = /(?:at|contact|reach|call|whatsapp|ping)[:\-\s]+[+]?[\d][\d\s\-]{8,14}[\d]/i.test(text)
+    || /\b[6-9]\d{9}\b/.test(text); // Indian mobile numbers
+  const hasEmail = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(text);
+
   // Upwork signals
   if (
     lower.includes("upwork.com") ||
@@ -31,36 +36,55 @@ export function detectPlatform(text: string): Platform {
     return "upwork";
   }
 
-  // LinkedIn signals
+  // LinkedIn signals — require strong proof, not just the word "connect"
   if (
     lower.includes("linkedin.com") ||
-    lower.includes("linkedin") ||
     lower.includes("• 1st") ||
     lower.includes("• 2nd") ||
     lower.includes("• 3rd") ||
-    lower.includes("connect with") ||
-    /follow\n|follow\r/.test(lower)
+    lower.includes("• 1st+") ||
+    lower.includes("• 2nd+") ||
+    lower.includes("• 3rd+") ||
+    /\bfollow\b.*\n/.test(lower) ||
+    /\bconnections\b/.test(lower) ||
+    /\blinkedin\b/.test(lower)
   ) {
     return "linkedin";
   }
 
+  // Freelancer.com signals
+  if (
+    lower.includes("freelancer.com") ||
+    lower.includes("bid on this project")
+  ) {
+    return "freelancer";
+  }
+
+  // WhatsApp — has a phone number, no email, and casual phrasing
+  if (hasPhoneNumber && !hasEmail) {
+    return "whatsapp";
+  }
+
   // Direct email (has email address but no platform markers)
-  if (extractEmailFromText(text)) {
+  if (hasEmail) {
     return "email";
   }
 
   return "generic";
 }
 
+
 /**
  * Human-readable label for the platform.
  */
 export function platformLabel(platform: Platform): string {
   switch (platform) {
-    case "upwork":   return "Upwork";
-    case "email":    return "Direct Email";
-    case "linkedin": return "LinkedIn";
-    case "generic":  return "General";
+    case "upwork":     return "Upwork";
+    case "email":      return "Direct Email";
+    case "linkedin":   return "LinkedIn";
+    case "freelancer": return "Freelancer";
+    case "whatsapp":   return "WhatsApp";
+    case "generic":    return "General";
   }
 }
 
@@ -69,10 +93,12 @@ export function platformLabel(platform: Platform): string {
  */
 export function platformTemplates(platform: Platform): string[] {
   switch (platform) {
-    case "upwork":   return ["proposal"];
-    case "email":    return ["coldEmail"];
-    case "linkedin": return ["linkedin"];
-    case "generic":  return ["coldEmail", "proposal", "linkedin", "coverLetter"];
+    case "upwork":     return ["proposal"];
+    case "email":      return ["coldEmail"];
+    case "linkedin":   return ["linkedin"];
+    case "freelancer": return ["freelancer"];
+    case "whatsapp":   return ["whatsapp"];
+    case "generic":    return ["coldEmail", "proposal", "linkedin", "coverLetter"];
   }
 }
 

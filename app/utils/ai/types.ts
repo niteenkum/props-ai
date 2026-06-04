@@ -21,12 +21,7 @@ export interface AIProviderAdapter {
 
 export type TemplateType = "coldEmail" | "proposal" | "linkedin" | "coverLetter";
 
-export interface GeneratedTemplates {
-  coldEmail: string;
-  proposal: string;
-  linkedin: string;
-  coverLetter: string;
-}
+export type GeneratedTemplates = Record<string, string>;
 
 export interface ParsedJobData {
   role: string;

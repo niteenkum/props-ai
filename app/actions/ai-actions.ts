@@ -3,7 +3,7 @@
 // ─── AI Server Actions ─────────────────────────────────────────────────────
 // All AI calls happen server-side. No API keys leak to the client.
 
-import { isAIAvailable, generateAllTemplates, generateTemplate, analyzeJobWithAI, getActiveProviderName } from "../utils/ai/service";
+import { isAIAvailable, generateAllTemplates, generateTemplate, analyzeJobWithAI, getActiveProviderName, generateForProvider, getAvailableProviders } from "../utils/ai/service";
 import { analyzeJobPost } from "../utils/ai-engine";
 import { getUserProfileAction } from "./db-actions";
 import type { TemplateType, AIAnalysisResult } from "../utils/ai/types";
@@ -210,3 +210,205 @@ export async function compareDuplicatePostsAction(
   return result;
 }
 
+// ─── Get all available AI providers ────────────────────────────────────────
+
+export async function getAvailableProvidersAction(): Promise<{
+  providers: string[];
+  activeProvider: string | null;
+}> {
+  return {
+    providers:      getAvailableProviders(),
+    activeProvider: getActiveProviderName(),
+  };
+}
+
+// ─── Generate proposals for selected platforms via chosen model ─────────────
+
+export async function generateProposalsAction(
+  jobText: string,
+  platforms: string[],
+  providerName: "gemini" | "claude" | "openai" | "auto",
+  userEmail: string
+): Promise<{
+  success: boolean;
+  results?: Record<string, string>;
+  parsed?: {
+    role: string; company: string; contactName: string;
+    contactEmail: string; matchScore: number; tags: string[]; parsedSummary: string;
+  };
+  error?: string;
+  provider?: string;
+}> {
+  console.log(`\n[generateProposalsAction] platforms=${platforms.join(",")} provider=${providerName} user=${userEmail}`);
+
+  try {
+    const profile = await getUserProfileAction(userEmail);
+    if (!profile) {
+      return { success: false, error: "User profile not found. Please complete your profile first." };
+    }
+
+    const heuristic = analyzeJobPost(jobText, profile);
+    let parsed = {
+      role:          heuristic.role,
+      company:       heuristic.company,
+      contactName:   heuristic.contactName,
+      contactEmail:  heuristic.contactEmail,
+      matchScore:    heuristic.matchScore,
+      tags:          heuristic.tags,
+      parsedSummary: heuristic.parsedSummary,
+      notes:         heuristic.notes,
+    };
+
+    if (isAIAvailable()) {
+      try {
+        const aiParsed = await analyzeJobWithAI(jobText, profile);
+        if (aiParsed) {
+          parsed = {
+            ...parsed,
+            role:          aiParsed.role          || parsed.role,
+            company:       aiParsed.company       || parsed.company,
+            contactName:   aiParsed.contactName   || parsed.contactName,
+            contactEmail:  aiParsed.contactEmail  || parsed.contactEmail,
+            tags:          aiParsed.tags?.length   ? aiParsed.tags : parsed.tags,
+            parsedSummary: aiParsed.parsedSummary || parsed.parsedSummary,
+          };
+        }
+      } catch { /* ignore — use heuristic */ }
+    }
+
+    const results: Record<string, string> = {};
+
+    for (let i = 0; i < platforms.length; i++) {
+      const platform = platforms[i];
+      let attempts = 0;
+      console.log(`[generateProposalsAction] [${i+1}/${platforms.length}] Generating "${platform}"...`);
+
+      while (attempts < 2) {
+        try {
+          results[platform] = await generateForProvider(providerName, platform, jobText, profile, parsed);
+          break;
+        } catch (err: any) {
+          attempts++;
+          const msg = err?.message || String(err);
+          console.error(`[generateProposalsAction] "${platform}" attempt ${attempts} failed: ${msg}`);
+          if (attempts < 2) await new Promise(r => setTimeout(r, msg.includes("429") ? 3000 : 1000));
+          else results[platform] = `[Generation failed for ${platform}. Please try again.]`;
+        }
+      }
+      if (i < platforms.length - 1) await new Promise(r => setTimeout(r, 350));
+    }
+
+    console.log(`[generateProposalsAction] Done — ${Object.keys(results).length}/${platforms.length} generated.`);
+    return {
+      success: true,
+      results,
+      parsed: {
+        role: parsed.role, company: parsed.company, contactName: parsed.contactName,
+        contactEmail: parsed.contactEmail, matchScore: parsed.matchScore,
+        tags: parsed.tags, parsedSummary: parsed.parsedSummary,
+      },
+      provider: String(providerName),
+    };
+  } catch (err: any) {
+    console.error("[generateProposalsAction] Unexpected error:", err);
+    return { success: false, error: err?.message || "Unexpected error during generation." };
+  }
+}
+
+// ─── Live candidacy analysis via AI ────────────────────────────────────────
+// Called by the Live Analysis Engine panel while the user is typing.
+// Sends the full profile + job post to AI, returns a structured candidacy score.
+
+export async function analyzeJobCandidacyAction(
+  jobText: string,
+  userEmail: string
+): Promise<{
+  success: boolean;
+  score?: number;
+  role?: string;
+  company?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  explanation?: string;
+  matchedSkills?: string[];
+  missingSkills?: string[];
+  error?: string;
+}> {
+  if (!jobText.trim() || jobText.length < 30) {
+    return { success: false, error: "Job text too short" };
+  }
+
+  try {
+    const profile = await getUserProfileAction(userEmail);
+    if (!profile) return { success: false, error: "Profile not found" };
+
+    if (!isAIAvailable()) return { success: false, error: "No AI provider available" };
+
+    const { getProvider } = await import("../utils/ai/service");
+    const provider = getProvider();
+    if (!provider) return { success: false, error: "No provider" };
+
+    const projectSummaries = profile.projects.slice(0, 5).map(p =>
+      `• ${p.name}: ${p.description.slice(0, 100)} [${p.tech.slice(0, 4).join(", ")}]`
+    ).join("\n");
+
+    const systemPrompt = `You are a smart job-candidacy analyzer. Given a professional profile and a job post, analyze how well the candidate fits.
+
+CRITICAL: Output ONLY valid JSON. No markdown, no explanation, no code blocks.`;
+
+    const userPrompt = `Analyze this candidacy and return JSON.
+
+CANDIDATE:
+- Role: ${profile.role}
+- Skills: ${profile.skills.join(", ")}
+${profile.resumeText ? `- Summary: ${profile.resumeText.slice(0, 300)}` : ""}
+${projectSummaries ? `- Projects:\n${projectSummaries}` : ""}
+
+JOB POST:
+${jobText.slice(0, 1200)}
+
+RULES:
+- Look BEYOND exact keyword matches. "Web developer" job = match for React/Next.js/Node.js developer
+- "Full Stack" role matches someone with frontend + backend skills
+- Score 0 = completely wrong field, 50 = partial overlap, 85-100 = strong match
+- Extract phone numbers (like 8383873071) as contactPhone
+
+Return ONLY this JSON:
+{
+  "score": <0-100 integer>,
+  "role": "<job title>",
+  "company": "<company or 'Not specified'>",
+  "contactEmail": "<email or ''>",
+  "contactPhone": "<phone or ''>",
+  "explanation": "<1-2 honest sentences about fit>",
+  "matchedSkills": ["<candidate skill relevant to job>"],
+  "missingSkills": ["<skill job needs that candidate lacks>"]
+}`;
+
+    const raw = await provider.generate({
+      systemPrompt, userPrompt,
+      temperature: 0.2, maxTokens: 512, apiType: "candidacy_analysis",
+    });
+
+    let jsonStr = raw.trim();
+    if (jsonStr.startsWith("```")) {
+      jsonStr = jsonStr.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+    }
+
+    const p = JSON.parse(jsonStr);
+    return {
+      success: true,
+      score:         typeof p.score === "number" ? Math.min(Math.max(p.score, 0), 100) : 50,
+      role:          p.role          || "Unknown",
+      company:       p.company       || "Not specified",
+      contactEmail:  p.contactEmail  || "",
+      contactPhone:  p.contactPhone  || "",
+      explanation:   p.explanation   || "",
+      matchedSkills: Array.isArray(p.matchedSkills) ? p.matchedSkills : [],
+      missingSkills: Array.isArray(p.missingSkills)  ? p.missingSkills  : [],
+    };
+  } catch (err: any) {
+    console.error("[analyzeJobCandidacyAction] Failed:", err);
+    return { success: false, error: err?.message || "AI candidacy analysis failed" };
+  }
+}

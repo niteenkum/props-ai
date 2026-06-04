@@ -220,27 +220,49 @@ function OverviewContent() {
               {/* Templates tab */}
               {db.drawerActiveTab === "templates" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
-                  <div style={{ display: "flex", gap: 4, borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
-                    {[
-                      { key: "coldEmail",   label: "✉️ Cold Email" },
-                      { key: "proposal",    label: "💼 Freelance" },
-                      { key: "linkedin",    label: "🔗 LinkedIn" },
-                      { key: "coverLetter", label: "📄 Cover Letter" },
-                    ].map(t => (
-                      <button
-                        key={t.key}
-                        onClick={() => db.setTemplateActiveTab(t.key as typeof db.templateActiveTab)}
-                        style={{
-                          padding: "8px 14px 10px", fontSize: 12, fontWeight: 600,
-                          cursor: "pointer", background: "none", border: "none",
-                          borderBottom: db.templateActiveTab === t.key ? "2px solid var(--foreground)" : "2px solid transparent",
-                          color: db.templateActiveTab === t.key ? "var(--foreground)" : "var(--muted-foreground)",
-                        }}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
+                {/* Template tabs — dynamic based on what was actually generated */}
+                {(() => {
+                  const PLATFORM_META: Record<string, { label: string; icon: string }> = {
+                    coldEmail:   { label: "Cold Email",         icon: "✉️" },
+                    proposal:    { label: "Upwork Proposal",    icon: "🔵" },
+                    linkedin:    { label: "LinkedIn Message",   icon: "🔗" },
+                    coverLetter: { label: "Cover Letter",       icon: "📄" },
+                    whatsapp:    { label: "WhatsApp Message",   icon: "💬" },
+                    freelancer:  { label: "Freelancer Bid",     icon: "⚡" },
+                  };
+                  const templates = db.selectedJob.generatedTemplates || {};
+                  const availableTabs = Object.entries(templates)
+                    .filter(([, v]) => v && !v.startsWith("[Generation failed"))
+                    .map(([key]) => ({
+                      key,
+                      label: PLATFORM_META[key]?.label || key,
+                      icon:  PLATFORM_META[key]?.icon  || "📄",
+                    }));
+                  return (
+                    <div style={{ display: "flex", gap: 4, borderBottom: "1px solid var(--border)", paddingBottom: 8, flexWrap: "wrap" }}>
+                      {availableTabs.map(t => (
+                        <button
+                          key={t.key}
+                          onClick={() => db.setTemplateActiveTab(t.key as typeof db.templateActiveTab)}
+                          style={{
+                            padding: "8px 14px 10px", fontSize: 12, fontWeight: 600,
+                            cursor: "pointer", background: "none", border: "none",
+                            borderBottom: db.templateActiveTab === t.key ? "2px solid var(--foreground)" : "2px solid transparent",
+                            color: db.templateActiveTab === t.key ? "var(--foreground)" : "var(--muted-foreground)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {t.icon} {t.label}
+                        </button>
+                      ))}
+                      {availableTabs.length === 0 && (
+                        <span style={{ fontSize: 12, color: "var(--muted-foreground)", padding: "8px 0" }}>
+                          No templates generated yet
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
 
                   {db.selectedJob.generatedTemplates?.[db.templateActiveTab] ? (
                     <div style={{ flex: 1, minHeight: 320, background: "var(--input)", border: "1px solid var(--border)", borderRadius: 12, padding: 20, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>

@@ -11,12 +11,7 @@ export interface JobPost {
   tags: string[];
   status: 'Draft' | 'Generated' | 'Sent' | 'Interviewing' | 'Declined';
   notes?: string;
-  generatedTemplates?: {
-    coldEmail?: string;
-    proposal?: string;
-    linkedin?: string;
-    coverLetter?: string;
-  };
+  generatedTemplates?: Record<string, string | undefined>;
 }
 
 export interface UserProfile {
