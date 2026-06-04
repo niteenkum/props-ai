@@ -403,6 +403,7 @@ export default function NewScanPage() {
         parsedJobData={scanner.parsedJobData}
         activeResultTab={scanner.activeResultTab}
         onSetActiveTab={scanner.setActiveResultTab}
+        onEditProposal={scanner.handleEditProposal}
         isSavingJob={scanner.isSavingJob}
         onSaveAndClose={scanner.handleSaveAndClose}
         onRegenerate={() => scanner.handleCloseDrawer()}

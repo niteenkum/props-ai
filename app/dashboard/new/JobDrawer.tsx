@@ -34,6 +34,7 @@ interface JobDrawerProps {
   parsedJobData: { role: string; company: string; contactName: string; contactEmail: string; matchScore: number; tags: string[]; parsedSummary: string; } | null;
   activeResultTab: string;
   onSetActiveTab: (tab: string) => void;
+  onEditProposal: (tab: string, newText: string) => void;
   isSavingJob: boolean;
   onSaveAndClose: () => void;
   onRegenerate: () => void;
@@ -95,11 +96,12 @@ export default function JobDrawer({
   selectedPlatforms, onTogglePlatform,
   selectedModel, availableModels, onSelectModel,
   generationError, onGenerateProposals,
-  generatedProposals, parsedJobData, activeResultTab, onSetActiveTab,
+  generatedProposals, parsedJobData, activeResultTab, onSetActiveTab, onEditProposal,
   isSavingJob, onSaveAndClose, onRegenerate,
 }: JobDrawerProps) {
 
-  const DRAWER_W = 520;
+  // Half-screen: 50vw, clamped between 520px and 860px
+  const DRAWER_W = "clamp(520px, 50vw, 860px)";
 
   // ─── Overlay + Drawer shell ───────────────────────────────────────────────
   return (
@@ -127,7 +129,7 @@ export default function JobDrawer({
             : "linear-gradient(160deg, #fafafa 0%, #ffffff 100%)",
           borderLeft: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.1)"}`,
           boxShadow: "-8px 0 40px rgba(0,0,0,0.2)",
-          transform: isOpen ? "translateX(0)" : `translateX(${DRAWER_W}px)`,
+          transform: isOpen ? "translateX(0)" : "translateX(110%)",
           transition: "transform 0.35s cubic-bezier(0.32,0.72,0,1)",
           display: "flex", flexDirection: "column", overflow: "hidden",
         }}
@@ -560,20 +562,49 @@ export default function JobDrawer({
                 })}
               </div>
 
-              {/* Active platform content */}
+              {/* Active platform content — editable */}
               {activeResultTab && generatedProposals[activeResultTab] && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0 }}>
+                  {/* Toolbar */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5,
+                      color: "var(--muted-foreground)", opacity: 0.6,
+                    }}>
+                      ✏️ Editable — click to modify
+                    </span>
                     <CopyButton text={generatedProposals[activeResultTab]} isDark={isDark} />
                   </div>
-                  <div style={{
-                    padding: 16, borderRadius: 12,
-                    background: "var(--input)", border: "1px solid var(--border)",
-                    fontSize: 13, lineHeight: 1.75, color: "var(--foreground)",
-                    whiteSpace: "pre-wrap", maxHeight: 360, overflowY: "auto",
-                    fontFamily: "inherit",
-                  }}>
-                    {generatedProposals[activeResultTab]}
+                  {/* Editable textarea */}
+                  <textarea
+                    value={generatedProposals[activeResultTab]}
+                    onChange={e => onEditProposal(activeResultTab, e.target.value)}
+                    spellCheck={false}
+                    style={{
+                      flex: 1,
+                      minHeight: 340,
+                      width: "100%",
+                      padding: "14px 16px",
+                      borderRadius: 12,
+                      background: "var(--input)",
+                      border: `1px solid ${isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)"}`,
+                      fontSize: 13,
+                      lineHeight: 1.75,
+                      color: "var(--foreground)",
+                      fontFamily: "inherit",
+                      resize: "vertical",
+                      outline: "none",
+                      boxSizing: "border-box",
+                      transition: "border-color 0.2s",
+                    }}
+                    onFocus={e => { e.currentTarget.style.borderColor = "rgba(99,102,241,0.6)"; }}
+                    onBlur={e  => { e.currentTarget.style.borderColor = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)"; }}
+                  />
+                  {/* Character count */}
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <span style={{ fontSize: 10, color: "var(--muted-foreground)", opacity: 0.5, fontFamily: "monospace" }}>
+                      {generatedProposals[activeResultTab].length} chars
+                    </span>
                   </div>
                 </div>
               )}

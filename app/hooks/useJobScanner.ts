@@ -384,6 +384,11 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
     setParsedJobData(null);
   };
 
+  // ─── Edit a single generated proposal inline ──────────────────────────────
+  const handleEditProposal = (tab: string, newText: string) => {
+    setGeneratedProposals(prev => ({ ...prev, [tab]: newText }));
+  };
+
   // ─── Legacy form handler (kept for backward compat if needed) ─────────────
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -412,6 +417,7 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
     selectedModel, setSelectedModel,
     generatedProposals, parsedJobData,
     activeResultTab, setActiveResultTab,
+    handleEditProposal,
     isSavingJob, jobSavedId,
     // Handlers
     handleGenerate,
