@@ -131,3 +131,22 @@ model AiUsageLog {
   @@index([createdAt])
   @@index([userEmail])
 }
+
+// ─── Linked Mail Account ───────────────────────────────────────────────────
+// Stores OAuth tokens for a user's linked mail account (Zoho, later Gmail etc.)
+// One account per user (userEmail is unique).
+model MailAccount {
+  id            String   @id @default(uuid())
+  userEmail     String   @unique           // one linked account per PropAI user
+  provider      String   @default("zoho")  // "zoho" | "gmail" | "outlook"
+  accountEmail  String                     // the actual mailbox address linked
+  accessToken   String   @db.Text
+  refreshToken  String   @db.Text
+  expiresAt     DateTime                   // when the access token expires
+  zohoAccountId String?                    // Zoho internal account ID for API calls
+  apiBase       String?                    // Region-correct API base e.g. https://mail.zoho.in
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userEmail])
+}

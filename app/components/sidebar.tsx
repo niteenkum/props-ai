@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FilePlus2, LogOut, Sparkles, User, Sun, Moon, BarChart3 } from "lucide-react";
+import { LayoutDashboard, FilePlus2, LogOut, Sparkles, User, Sun, Moon, BarChart3, Mail } from "lucide-react";
 import { useTheme } from "./theme-provider";
 
 interface SidebarProps {
@@ -16,6 +16,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; ex
   { href: "/dashboard",         label: "Dashboard",        icon: LayoutDashboard, exact: true },
   { href: "/dashboard/new",     label: "New Scan / Paste", icon: FilePlus2 },
   { href: "/dashboard/profile", label: "Candidate Profile", icon: User },
+  { href: "/dashboard/mail",    label: "Mail Account",     icon: Mail },
   { href: "/dashboard/expense", label: "AI Expense",        icon: BarChart3 },
 ];
 
