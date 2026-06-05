@@ -484,7 +484,6 @@ export default function ProfilePage() {
 
       {/* ═══ Top-Level Status Banners ═══ */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
-        p.profileSaveSuccess
         {p.profileSaveSuccess && (
           <div style={{
             padding: "12px 18px", borderRadius: 12, animation: "fadeSlideIn 0.3s ease",
@@ -522,6 +521,67 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
+
+      {/* ═══ Sticky Save Bar (appears when there are unsaved changes) ═══ */}
+      {p.hasChanges && (
+        <div style={{
+          position: "fixed",
+          bottom: 24,
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 999,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "12px 20px",
+          borderRadius: 16,
+          background: isDark ? "rgba(17,17,27,0.95)" : "rgba(255,255,255,0.97)",
+          border: `1px solid ${isDark ? "rgba(99,102,241,0.3)" : "rgba(99,102,241,0.2)"}`,
+          boxShadow: isDark
+            ? "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(99,102,241,0.15)"
+            : "0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(99,102,241,0.1)",
+          backdropFilter: "blur(20px)",
+          animation: "fadeSlideIn 0.25s cubic-bezier(0.16,1,0.3,1)",
+        }}>
+          <div style={{
+            width: 8, height: 8, borderRadius: "50%",
+            background: "#f97316",
+            boxShadow: "0 0 0 3px rgba(249,115,22,0.2)",
+            flexShrink: 0,
+          }} />
+          <span style={{
+            fontSize: 13, fontWeight: 600,
+            color: isDark ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.7)",
+          }}>
+            You have unsaved changes
+          </span>
+          <button
+            onClick={p.handleSaveProfile}
+            disabled={p.profileSaving}
+            style={{
+              display: "flex", alignItems: "center", gap: 7,
+              padding: "8px 18px",
+              borderRadius: 10,
+              border: "none",
+              background: p.profileSaving
+                ? (isDark ? "rgba(99,102,241,0.4)" : "rgba(99,102,241,0.3)")
+                : "linear-gradient(135deg, #6366f1, #8b5cf6)",
+              color: "#fff",
+              fontSize: 13, fontWeight: 700,
+              cursor: p.profileSaving ? "not-allowed" : "pointer",
+              letterSpacing: 0.3,
+              transition: "all 0.2s ease",
+              boxShadow: p.profileSaving ? "none" : "0 4px 12px rgba(99,102,241,0.35)",
+            }}
+          >
+            {p.profileSaving ? (
+              <><Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} /> Saving...</>
+            ) : (
+              <><Save style={{ width: 14, height: 14 }} /> Save Profile</>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* ═══ Majestic Profile Banner (Hero Card) ═══ */}
       <div className="bento-card" style={{ padding: 0, marginBottom: 24, borderRadius: 24 }}>

@@ -133,10 +133,19 @@ export async function generateForProvider(
   profile: UserProfile,
   parsed: ParsedJobData
 ): Promise<string> {
-  const provider =
-    providerName === "auto"
-      ? getProvider()
-      : (createProviderByName(providerName as AIProviderName) ?? getProvider());
+  // ── For cold emails, prefer Claude — it writes the most human-sounding copy.
+  // If the user explicitly chose a provider, respect that. Only auto-upgrade on "auto".
+  let provider: AIProviderAdapter | null;
+  if (providerName === "auto" && type === "coldEmail" && process.env.ANTHROPIC_API_KEY) {
+    const claude = createProviderByName("claude");
+    provider = claude ?? getProvider();
+    if (claude) console.log(`[AI Service] coldEmail: auto-selecting Claude for best copy quality`);
+  } else {
+    provider =
+      providerName === "auto"
+        ? getProvider()
+        : (createProviderByName(providerName as AIProviderName) ?? getProvider());
+  }
 
   if (!provider) {
     throw new Error("No AI provider available. Please configure an API key.");
@@ -160,7 +169,7 @@ export async function generateForProvider(
   const result = await provider.generate({
     systemPrompt,
     userPrompt,
-    temperature: 0.7,
+    temperature: type === "coldEmail" ? 0.6 : 0.7,  // slightly lower temp for cold email = more focused
     maxTokens: type === "linkedin" || type === "whatsapp" ? 512 : 2048,
     apiType: apiTypeMap[type] || "content_proposal",
   });

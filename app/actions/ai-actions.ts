@@ -298,8 +298,23 @@ export async function generateProposalsAction(
           attempts++;
           const msg = err?.message || String(err);
           console.error(`[generateProposalsAction] "${platform}" attempt ${attempts} failed: ${msg}`);
-          if (attempts < 2) await new Promise(r => setTimeout(r, msg.includes("429") ? 3000 : 1000));
-          else results[platform] = `[Generation failed for ${platform}. Please try again.]`;
+          if (attempts < 2) {
+            // If Claude failed (bad key / model not on tier), fall back to Gemini
+            const isClaudeFail = msg.includes("Claude API error") &&
+              (providerName === "auto" || providerName === "claude");
+            if (isClaudeFail) {
+              console.warn(`[generateProposalsAction] Claude failed for "${platform}", falling back to Gemini`);
+              try {
+                results[platform] = await generateForProvider("gemini", platform, jobText, profile, parsed);
+                break;
+              } catch (fallbackErr: any) {
+                console.error(`[generateProposalsAction] Gemini fallback also failed: ${fallbackErr?.message}`);
+              }
+            }
+            await new Promise(r => setTimeout(r, msg.includes("429") ? 3000 : 1000));
+          } else {
+            results[platform] = `[Generation failed for ${platform}. Please try again.]`;
+          }
         }
       }
       if (i < platforms.length - 1) await new Promise(r => setTimeout(r, 350));
