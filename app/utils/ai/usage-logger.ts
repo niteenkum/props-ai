@@ -15,6 +15,7 @@ const db = prisma as AnyPrisma;
 export type AiApiType =
   | "pdf_parse"
   | "job_analysis"
+  | "candidacy_analysis"
   | "content_cold_email"
   | "content_proposal"
   | "content_linkedin"
@@ -90,6 +91,7 @@ export function categoryForApiType(apiType: AiApiType): AiCategory {
   switch (apiType) {
     case "pdf_parse":           return "pdf_reading";
     case "job_analysis":        return "job_analysis";
+    case "candidacy_analysis":  return "job_analysis";
     case "content_linkedin":    return "formalizing";
     case "content_cold_email":
     case "content_proposal":

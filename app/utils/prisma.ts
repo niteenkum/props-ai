@@ -3,8 +3,15 @@ import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 
+// Bump this version whenever the Prisma schema adds new models.
+// It ensures the dev server always creates a fresh client rather than
+// reusing a stale global singleton that is missing the new models.
+const PRISMA_SCHEMA_VERSION = "v2"; // bumped: added SentEmail model
+
+const GLOBAL_KEY = `prisma_${PRISMA_SCHEMA_VERSION}` as const;
+
 const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
+  [key: string]: PrismaClient | undefined;
 };
 
 const createPrismaClient = () => {
@@ -17,6 +24,6 @@ const createPrismaClient = () => {
   return new PrismaClient({ adapter });
 };
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+export const prisma = globalForPrisma[GLOBAL_KEY] ?? createPrismaClient();
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== "production") globalForPrisma[GLOBAL_KEY] = prisma;

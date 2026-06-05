@@ -37,6 +37,7 @@ export class OpenAIProvider implements AIProviderAdapter {
         messages,
         temperature: options.temperature ?? 0.7,
         max_tokens: options.maxTokens ?? 2048,
+        response_format: options.jsonMode ? { type: "json_object" } : undefined,
       }),
     });
 

@@ -7,12 +7,13 @@ import {
   Sparkles, AlertCircle, Link2, GitBranch, Globe,
   ChevronDown, ChevronUp, ExternalLink, Mail, Briefcase,
   Code2, Zap, ArrowUpRight, CheckCircle2, Laptop, Edit2,
-  GraduationCap as EduIcon, ScanLine, PackagePlus, RefreshCw
+  GraduationCap as EduIcon, ScanLine, PackagePlus, RefreshCw, Eye, Download
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useProfile } from "../../hooks/useProfile";
 import { useTheme } from "../../components/theme-provider";
 import { scanPortfolioAction, type ScannedProject } from "../../actions/portfolio-actions";
+import { getResumePdfBase64Action } from "../../actions/mail-actions";
 
 // ─── Skill category configurations ──────────────────────────────────────────
 const LANG_KEYWORDS   = ["javascript","typescript","python","dart","swift","kotlin","java","go","rust","c++","c#","php","ruby","html","css"];
@@ -800,9 +801,10 @@ export default function ProfilePage() {
                   padding: "12px 14px", borderRadius: 12,
                   background: isDark ? "rgba(34,197,94,0.03)" : "#f0fdf4",
                   border: `1px solid ${isDark ? "rgba(34,197,94,0.15)" : "#d1fae5"}`,
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
                 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  {/* Filename */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
                     <FileText style={{ width: 15, height: 15, color: "#22c55e", flexShrink: 0 }} />
                     <span style={{
                       fontSize: 12, fontWeight: 700, color: "var(--foreground)",
@@ -811,13 +813,79 @@ export default function ProfilePage() {
                       {p.profile.resumeFileName}
                     </span>
                   </div>
-                  <div style={{
-                    display: "flex", alignItems: "center", gap: 4,
-                    padding: "2px 8px", borderRadius: 50,
-                    background: isDark ? "rgba(34,197,94,0.08)" : "#d1fae5",
-                  }}>
-                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
-                    <span style={{ fontSize: 9, color: "#22c55e", fontWeight: 800, textTransform: "uppercase", letterSpacing: 1 }}>Active</span>
+
+                  {/* Actions row */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    {/* View PDF button */}
+                    {p.profile.resumePdfBase64 && (
+                      <>
+                        <button
+                          onClick={() => {
+                            const binary = atob(p.profile!.resumePdfBase64!);
+                            const bytes  = new Uint8Array(binary.length);
+                            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                            const blob   = new Blob([bytes], { type: "application/pdf" });
+                            const url    = URL.createObjectURL(blob);
+                            window.open(url, "_blank");
+                            setTimeout(() => URL.revokeObjectURL(url), 10000);
+                          }}
+                          title="View PDF in new tab"
+                          style={{
+                            display: "flex", alignItems: "center", gap: 4,
+                            padding: "4px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600,
+                            border: `1px solid ${isDark ? "rgba(99,102,241,0.3)" : "rgba(99,102,241,0.25)"}`,
+                            background: isDark ? "rgba(99,102,241,0.08)" : "rgba(99,102,241,0.05)",
+                            color: isDark ? "#818cf8" : "#6366f1",
+                            cursor: "pointer", transition: "all 0.2s",
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = isDark ? "rgba(99,102,241,0.15)" : "rgba(99,102,241,0.1)"; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = isDark ? "rgba(99,102,241,0.08)" : "rgba(99,102,241,0.05)"; }}
+                        >
+                          <Eye style={{ width: 12, height: 12 }} />
+                          View
+                        </button>
+
+                        {/* Download button */}
+                        <button
+                          onClick={() => {
+                            const binary = atob(p.profile!.resumePdfBase64!);
+                            const bytes  = new Uint8Array(binary.length);
+                            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                            const blob   = new Blob([bytes], { type: "application/pdf" });
+                            const url    = URL.createObjectURL(blob);
+                            const a      = document.createElement("a");
+                            a.href       = url;
+                            a.download   = p.profile!.resumeFileName ?? "Resume.pdf";
+                            a.click();
+                            setTimeout(() => URL.revokeObjectURL(url), 5000);
+                          }}
+                          title="Download PDF"
+                          style={{
+                            display: "flex", alignItems: "center", gap: 4,
+                            padding: "4px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600,
+                            border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                            background: "none",
+                            color: "var(--muted-foreground)",
+                            cursor: "pointer", transition: "all 0.2s",
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.color = "var(--foreground)"; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = "var(--muted-foreground)"; }}
+                        >
+                          <Download style={{ width: 12, height: 12 }} />
+                          Download
+                        </button>
+                      </>
+                    )}
+
+                    {/* ACTIVE badge */}
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: 4,
+                      padding: "2px 8px", borderRadius: 50,
+                      background: isDark ? "rgba(34,197,94,0.08)" : "#d1fae5",
+                    }}>
+                      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
+                      <span style={{ fontSize: 9, color: "#22c55e", fontWeight: 800, textTransform: "uppercase", letterSpacing: 1 }}>Active</span>
+                    </div>
                   </div>
                 </div>
               )}

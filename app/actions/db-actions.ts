@@ -25,21 +25,23 @@ function mapDbJob(job: any): JobPost {
       linkedin: job.linkedin ?? undefined,
       coverLetter: job.coverLetter ?? undefined,
     },
+    suggestAttachResume: job.suggestAttachResume ?? undefined,
   };
 }
 
 // Helper to map DB UserProfile to UI UserProfile type
 function mapDbProfile(profile: any, projects: any[] = []): UserProfile {
   return {
-    name: profile.name,
-    role: profile.role,
-    email: profile.email,
-    skills: profile.skills,
-    portfolioUrl: profile.portfolioUrl,
-    githubUrl: profile.githubUrl,
-    linkedinUrl: profile.linkedinUrl,
-    resumeFileName: profile.resumeFileName ?? undefined,
-    resumeText: profile.resumeText ?? undefined,
+    name:             profile.name,
+    role:             profile.role,
+    email:            profile.email,
+    skills:           profile.skills,
+    portfolioUrl:     profile.portfolioUrl,
+    githubUrl:        profile.githubUrl,
+    linkedinUrl:      profile.linkedinUrl,
+    resumeFileName:   profile.resumeFileName   ?? undefined,
+    resumeText:       profile.resumeText        ?? undefined,
+    resumePdfBase64:  profile.resumePdfBase64   ?? undefined,
     education: profile.education as { degree: string; school: string; year: string }[],
     projects: projects.map((p: any) => ({
       name: p.name,
@@ -105,6 +107,17 @@ export async function getJobPostsAction(): Promise<JobPost[]> {
   }
 }
 
+// 1a. Fetch a single job post by ID
+export async function getJobByIdAction(id: string): Promise<JobPost | null> {
+  try {
+    const job = await prisma.jobPost.findUnique({ where: { id } });
+    return job ? mapDbJob(job) : null;
+  } catch (error) {
+    console.error("Error in getJobByIdAction:", error);
+    return null;
+  }
+}
+
 // 1b. Find existing jobs by contact email (for duplicate detection)
 export async function getJobsByEmailAction(email: string): Promise<JobPost[]> {
   try {
@@ -138,6 +151,7 @@ export async function addJobPostAction(job: Omit<JobPost, "id" | "postedDate" | 
         proposal: job.generatedTemplates?.proposal || null,
         linkedin: job.generatedTemplates?.linkedin || null,
         coverLetter: job.generatedTemplates?.coverLetter || null,
+        suggestAttachResume: typeof job.suggestAttachResume === "boolean" ? job.suggestAttachResume : null,
       },
     });
     return mapDbJob(dbJob);
@@ -187,40 +201,16 @@ export async function deleteJobPostAction(id: string): Promise<void> {
   }
 }
 
-// 5. Get candidate profile (auto seeds standard defaults if not present)
+// 5. Get candidate profile — always look up via User.email (login email) → userId → UserProfile
 export async function getUserProfileAction(userEmail?: string): Promise<UserProfile> {
   try {
-    const queryEmail = userEmail || "niteen.kumar014@gmail.com";
-    
-    // Find User along with relational profile and projects
-    let user = await prisma.user.findUnique({
-      where: { email: queryEmail },
-      include: {
-        profile: true,
-        projects: true
-      }
+    const loginEmail = userEmail || "niteen@niteen.dev";
+
+    // Single clean path: User (login email) → profile (userId FK) + projects
+    const user = await prisma.user.findUnique({
+      where:   { email: loginEmail },
+      include: { profile: true, projects: true },
     });
-
-    // Fallback: search profile directly (for legacy compatibility)
-    if (!user) {
-      const legacyProfile = await prisma.userProfile.findFirst({
-        where: { email: queryEmail }
-      });
-      if (legacyProfile) {
-        user = await prisma.user.findUnique({
-          where: { id: legacyProfile.userId },
-          include: { profile: true, projects: true }
-        });
-      }
-    }
-
-    // Default Seed Fallback if Niteen Kumar
-    if (!user && queryEmail === "niteen.kumar014@gmail.com") {
-      user = await prisma.user.findUnique({
-        where: { email: "niteen.kumar014@gmail.com" },
-        include: { profile: true, projects: true }
-      });
-    }
 
     if (!user || !user.profile) {
       return DEFAULT_PROFILE;
@@ -251,29 +241,31 @@ export async function saveUserProfileAction(profile: UserProfile, userEmail?: st
       prisma.userProfile.upsert({
         where: { userId: user.id },
         update: {
-          name: profile.name,
-          role: profile.role,
-          email: profile.email,
-          skills: profile.skills,
-          portfolioUrl: profile.portfolioUrl,
-          githubUrl: profile.githubUrl,
-          linkedinUrl: profile.linkedinUrl,
-          resumeFileName: profile.resumeFileName || null,
-          resumeText: profile.resumeText || null,
-          education: profile.education as any,
+          name:             profile.name,
+          role:             profile.role,
+          email:            profile.email,
+          skills:           profile.skills,
+          portfolioUrl:     profile.portfolioUrl,
+          githubUrl:        profile.githubUrl,
+          linkedinUrl:      profile.linkedinUrl,
+          resumeFileName:   profile.resumeFileName   || null,
+          resumeText:       profile.resumeText        || null,
+          resumePdfBase64:  profile.resumePdfBase64   || null,
+          education:        profile.education as any,
         },
         create: {
-          userId: user.id,
-          name: profile.name,
-          role: profile.role,
-          email: profile.email,
-          skills: profile.skills,
-          portfolioUrl: profile.portfolioUrl,
-          githubUrl: profile.githubUrl,
-          linkedinUrl: profile.linkedinUrl,
-          resumeFileName: profile.resumeFileName || null,
-          resumeText: profile.resumeText || null,
-          education: profile.education as any,
+          userId:           user.id,
+          name:             profile.name,
+          role:             profile.role,
+          email:            profile.email,
+          skills:           profile.skills,
+          portfolioUrl:     profile.portfolioUrl,
+          githubUrl:        profile.githubUrl,
+          linkedinUrl:      profile.linkedinUrl,
+          resumeFileName:   profile.resumeFileName   || null,
+          resumeText:       profile.resumeText        || null,
+          resumePdfBase64:  profile.resumePdfBase64   || null,
+          education:        profile.education as any,
         },
       }),
       // Synchronize projects: delete old and create new

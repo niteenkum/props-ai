@@ -24,6 +24,14 @@ export function useDashboard(userEmail: string, pendingJobId?: string) {
   const [copiedStates, setCopiedStates]             = useState<Record<string, boolean>>({});
   const [notesText, setNotesText]                   = useState("");
 
+  // ─── Email compose drawer ──────────────────────────────────────────
+  const [isComposeOpen, setIsComposeOpen]           = useState(false);
+  const [composeBody, setComposeBody]               = useState(""); // pre-fill body
+
+  // ─── Inline template editing ────────────────────────────────────────
+  const [editingKey, setEditingKey]                 = useState<string | null>(null);
+  const [editingText, setEditingText]               = useState("");
+
   // ─── Data loading ──────────────────────────────────────────────────────────
   const loadJobs = async () => {
     try {
@@ -133,6 +141,39 @@ export function useDashboard(userEmail: string, pendingJobId?: string) {
     }
   };
 
+  // ─── Inline template edit handlers ───────────────────────────────────
+  const startEditingTemplate = (key: string, text: string) => {
+    setEditingKey(key);
+    setEditingText(text);
+  };
+
+  const cancelEditingTemplate = () => {
+    setEditingKey(null);
+    setEditingText("");
+  };
+
+  const saveEditingTemplate = async () => {
+    if (!selectedJob || !editingKey) return;
+    const updated = {
+      ...selectedJob,
+      generatedTemplates: {
+        ...(selectedJob.generatedTemplates ?? {}),
+        [editingKey]: editingText,
+      },
+    };
+    setSelectedJob(updated);
+    setEditingKey(null);
+    setEditingText("");
+    await updateJobPostAction(updated);
+    await loadJobs();
+  };
+
+  // ─── Open compose drawer ──────────────────────────────────────────────
+  const openCompose = (body: string) => {
+    setComposeBody(body);
+    setIsComposeOpen(true);
+  };
+
   // ─── Style helpers ────────────────────────────────────────────────────────
   const getScoreColor = (score: number) =>
     score >= 90 ? "#22c55e" : score >= 80 ? "#111" : "#f59e0b";
@@ -161,6 +202,11 @@ export function useDashboard(userEmail: string, pendingJobId?: string) {
     templateActiveTab, setTemplateActiveTab,
     copiedStates,
     notesText, setNotesText,
+    // compose
+    isComposeOpen, setIsComposeOpen, composeBody, openCompose,
+    // inline edit
+    editingKey, editingText, setEditingText,
+    startEditingTemplate, cancelEditingTemplate, saveEditingTemplate,
     // computed
     stats, filteredJobs,
     // handlers

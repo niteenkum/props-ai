@@ -12,6 +12,7 @@ export interface GenerateOptions {
   apiType?:   string;
   jobPostId?: string;
   userEmail?: string;
+  jsonMode?:  boolean;
 }
 
 export interface AIProviderAdapter {
@@ -32,6 +33,7 @@ export interface ParsedJobData {
   tags: string[];
   parsedSummary: string;
   notes: string;
+  suggestAttachResume?: boolean;  // AI-decided: should resume be attached?
 }
 
 export interface AIAnalysisResult extends ParsedJobData {

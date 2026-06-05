@@ -4,7 +4,7 @@ import React from "react";
 import {
   X, AlertTriangle, ExternalLink, Sparkles, CheckCircle2, Loader2,
   ArrowRight, Copy, Check, ChevronRight, Bot, Zap, Globe, Mail,
-  Link2, MessageCircle, FileText, BookOpen, RotateCcw,
+  Link2, MessageCircle, FileText, BookOpen, RotateCcw, TrendingUp, User, Building2, Phone,
 } from "lucide-react";
 import { ALL_PLATFORMS, type PlatformKey, type AIModel, type DrawerStep, type DuplicateState } from "../../hooks/useJobScanner";
 
@@ -14,6 +14,14 @@ interface JobDrawerProps {
   isOpen: boolean;
   step: DrawerStep;
   isDark: boolean;
+  // AI candidacy data (shown in analysis step)
+  aiCandidacy: {
+    score: number; role: string; company: string;
+    contactEmail: string; contactPhone: string;
+    explanation: string; matchedSkills: string[]; missingSkills: string[];
+  } | null;
+  isCandidacyLoading: boolean;
+  onContinueToTemplates: () => void;
   // duplicate
   duplicateState: DuplicateState | null;
   onGoToExisting: () => void;
@@ -92,6 +100,7 @@ function PlatformIcon({ key, size = 14 }: { key: string; size?: number }) {
 
 export default function JobDrawer({
   isOpen, step, isDark,
+  aiCandidacy, isCandidacyLoading, onContinueToTemplates,
   duplicateState, onGoToExisting, onContinueDespite, onClose,
   selectedPlatforms, onTogglePlatform,
   selectedModel, availableModels, onSelectModel,
@@ -156,11 +165,12 @@ export default function JobDrawer({
                 PropAI Generator
               </div>
               <div style={{ fontSize: 11, color: "var(--muted-foreground)", fontWeight: 500 }}>
-                {step === "checking"   && "Checking for duplicates..."}
-                {step === "duplicate"  && "Potential duplicate found"}
-                {step === "platforms"  && "Select platforms & model"}
+                {step === "checking"  && (isCandidacyLoading ? "Analyzing job & scoring candidacy..." : "Scanning for duplicates...")}
+                {step === "analysis"  && "Job analysis complete"}
+                {step === "duplicate" && "Potential duplicate found"}
+                {step === "platforms" && "Select platforms & model"}
                 {step === "generating" && "Generating proposals..."}
-                {step === "results"    && "Your proposals are ready"}
+                {step === "results"   && "Your proposals are ready"}
               </div>
             </div>
           </div>
@@ -185,12 +195,13 @@ export default function JobDrawer({
           borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"}`,
           flexShrink: 0,
         }}>
-          {(["checking", "platforms", "generating", "results"] as DrawerStep[]).map((s, i) => {
-            const steps: DrawerStep[] = ["checking", "duplicate", "platforms", "generating", "results"];
+          {(["checking", "analysis", "platforms", "generating", "results"] as DrawerStep[]).map((s) => {
+            const steps: DrawerStep[] = ["checking", "analysis", "duplicate", "platforms", "generating", "results"];
             const currentIdx = steps.indexOf(step);
             const stepIdx = steps.indexOf(s);
             const done = currentIdx > stepIdx;
             const active = step === s || (s === "checking" && step === "duplicate");
+            if (s === "duplicate") return null; // hidden from progress bar
             return (
               <React.Fragment key={s}>
                 <div style={{
@@ -207,18 +218,19 @@ export default function JobDrawer({
             );
           })}
           <span style={{ fontSize: 11, color: "var(--muted-foreground)", marginLeft: 6, fontWeight: 500 }}>
-            {step === "checking"   && "Step 1 of 4"}
-            {step === "duplicate"  && "Step 1 of 4"}
-            {step === "platforms"  && "Step 2 of 4"}
-            {step === "generating" && "Step 3 of 4"}
-            {step === "results"    && "Step 4 of 4"}
+            {step === "checking"   && "Step 1 of 5"}
+            {step === "duplicate"  && "Step 1 of 5"}
+            {step === "analysis"   && "Step 2 of 5"}
+            {step === "platforms"  && "Step 3 of 5"}
+            {step === "generating" && "Step 4 of 5"}
+            {step === "results"    && "Step 5 of 5"}
           </span>
         </div>
 
         {/* ── Content ── */}
         <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
 
-          {/* ── STEP: CHECKING ── */}
+          {/* ── STEP: CHECKING (analyzing) ── */}
           {step === "checking" && (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 300, gap: 20 }}>
               <div style={{
@@ -231,14 +243,140 @@ export default function JobDrawer({
               </div>
               <div style={{ textAlign: "center" }}>
                 <p style={{ fontSize: 16, fontWeight: 700, color: "var(--foreground)", margin: 0 }}>
-                  Checking for duplicates
+                  {isCandidacyLoading ? "Analyzing Job Post" : "Checking for duplicates"}
                 </p>
                 <p style={{ fontSize: 13, color: "var(--muted-foreground)", marginTop: 6 }}>
-                  Scanning your existing job posts for similar applications...
+                  {isCandidacyLoading
+                    ? "AI is scoring your candidacy, extracting contact info..."
+                    : "Scanning your existing job posts for similar applications..."}
                 </p>
               </div>
             </div>
           )}
+
+          {/* ── STEP: ANALYSIS ── */}
+          {step === "analysis" && (() => {
+            const score = aiCandidacy?.score ?? 0;
+            const scoreColor = score >= 85 ? "#22c55e" : score >= 55 ? "#818cf8" : score >= 35 ? "#f59e0b" : "#ef4444";
+            const scoreLabel = score >= 85 ? "Strong Fit" : score >= 55 ? "Moderate Fit" : score >= 35 ? "Weak Fit" : "Poor Fit";
+            const circumference = 2 * Math.PI * 34;
+            const dashOffset = circumference - (score / 100) * circumference;
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+                {/* Score hero */}
+                <div style={{
+                  padding: "24px", borderRadius: 16,
+                  background: isDark ? "rgba(99,102,241,0.06)" : "rgba(99,102,241,0.04)",
+                  border: "1px solid rgba(99,102,241,0.15)",
+                  display: "flex", alignItems: "center", gap: 20,
+                }}>
+                  {/* SVG ring */}
+                  <div style={{ flexShrink: 0, position: "relative" }}>
+                    <svg width="84" height="84" viewBox="0 0 84 84">
+                      <circle cx="42" cy="42" r="34" fill="none" stroke={isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)"} strokeWidth="7" />
+                      <circle cx="42" cy="42" r="34" fill="none" stroke={scoreColor} strokeWidth="7"
+                        strokeDasharray={circumference} strokeDashoffset={dashOffset}
+                        strokeLinecap="round" transform="rotate(-90 42 42)"
+                        style={{ transition: "stroke-dashoffset 0.8s ease" }} />
+                    </svg>
+                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
+                      <span style={{ fontSize: 18, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>{score}</span>
+                      <span style={{ fontSize: 8, fontWeight: 700, color: "var(--muted-foreground)", letterSpacing: 0.5 }}>/ 100</span>
+                    </div>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      <span style={{
+                        fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 20,
+                        background: `${scoreColor}20`, color: scoreColor,
+                        border: `1px solid ${scoreColor}40`,
+                      }}>{scoreLabel}</span>
+                    </div>
+                    <p style={{ fontSize: 13, color: "var(--muted-foreground)", margin: 0, lineHeight: 1.6 }}>
+                      {aiCandidacy?.explanation || "AI analyzed your profile against this job post."}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Job details */}
+                <div style={{
+                  padding: "16px", borderRadius: 14,
+                  background: "var(--card)", border: "1px solid var(--border)",
+                  display: "flex", flexDirection: "column", gap: 10,
+                }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: 1.2, color: "var(--muted-foreground)", margin: 0 }}>Job Details</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {aiCandidacy?.role && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <TrendingUp style={{ width: 13, height: 13, color: "#818cf8", flexShrink: 0 }} />
+                        <span style={{ fontSize: 13, color: "var(--foreground)", fontWeight: 600 }}>{aiCandidacy.role}</span>
+                      </div>
+                    )}
+                    {aiCandidacy?.company && aiCandidacy.company !== "Not specified" && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <Building2 style={{ width: 13, height: 13, color: "var(--muted-foreground)", flexShrink: 0 }} />
+                        <span style={{ fontSize: 13, color: "var(--muted-foreground)" }}>{aiCandidacy.company}</span>
+                      </div>
+                    )}
+                    {aiCandidacy?.contactEmail && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <Mail style={{ width: 13, height: 13, color: "var(--muted-foreground)", flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, color: "var(--muted-foreground)", fontFamily: "monospace" }}>{aiCandidacy.contactEmail}</span>
+                      </div>
+                    )}
+                    {aiCandidacy?.contactPhone && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <Phone style={{ width: 13, height: 13, color: "var(--muted-foreground)", flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, color: "var(--muted-foreground)", fontFamily: "monospace" }}>{aiCandidacy.contactPhone}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Skills */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  {/* Matched */}
+                  <div style={{
+                    padding: "14px", borderRadius: 12,
+                    background: isDark ? "rgba(34,197,94,0.06)" : "#f0fdf4",
+                    border: `1px solid ${isDark ? "rgba(34,197,94,0.2)" : "#bbf7d0"}`,
+                  }}>
+                    <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: 1.2, color: isDark ? "#4ade80" : "#16a34a", margin: "0 0 8px" }}>✅ Matched</p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      {(aiCandidacy?.matchedSkills ?? []).slice(0, 6).map((s, i) => (
+                        <span key={i} style={{
+                          fontSize: 10, padding: "2px 8px", borderRadius: 50, fontWeight: 600,
+                          background: isDark ? "rgba(34,197,94,0.12)" : "#dcfce7",
+                          color: isDark ? "#4ade80" : "#166534",
+                        }}>{s}</span>
+                      ))}
+                      {!aiCandidacy?.matchedSkills?.length && <span style={{ fontSize: 11, color: "var(--muted-foreground)", opacity: 0.6 }}>None detected</span>}
+                    </div>
+                  </div>
+                  {/* Missing */}
+                  <div style={{
+                    padding: "14px", borderRadius: 12,
+                    background: isDark ? "rgba(239,68,68,0.06)" : "#fef2f2",
+                    border: `1px solid ${isDark ? "rgba(239,68,68,0.2)" : "#fecaca"}`,
+                  }}>
+                    <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: 1.2, color: isDark ? "#f87171" : "#dc2626", margin: "0 0 8px" }}>❌ Missing</p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      {(aiCandidacy?.missingSkills ?? []).slice(0, 6).map((s, i) => (
+                        <span key={i} style={{
+                          fontSize: 10, padding: "2px 8px", borderRadius: 50, fontWeight: 600,
+                          background: isDark ? "rgba(239,68,68,0.12)" : "#fee2e2",
+                          color: isDark ? "#f87171" : "#991b1b",
+                        }}>{s}</span>
+                      ))}
+                      {!aiCandidacy?.missingSkills?.length && <span style={{ fontSize: 11, color: "var(--muted-foreground)", opacity: 0.6 }}>None detected</span>}
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            );
+          })()}
 
           {/* ── STEP: DUPLICATE ── */}
           {step === "duplicate" && duplicateState && (
@@ -619,6 +757,27 @@ export default function JobDrawer({
           background: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)",
           flexShrink: 0,
         }}>
+          {/* Analysis step footer: Continue button */}
+          {step === "analysis" && (
+            <button
+              onClick={onContinueToTemplates}
+              style={{
+                width: "100%", padding: "13px", borderRadius: 12, border: "none",
+                background: "linear-gradient(135deg, #818cf8, #6366f1)",
+                color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                boxShadow: "0 4px 18px rgba(99,102,241,0.35)",
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.opacity = "0.88"; }}
+              onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+            >
+              <Sparkles style={{ width: 15, height: 15 }} />
+              Continue to Templates
+              <ChevronRight style={{ width: 14, height: 14 }} />
+            </button>
+          )}
+
           {step === "platforms" && (
             <button
               onClick={onGenerateProposals}

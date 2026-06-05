@@ -12,6 +12,8 @@ export interface JobPost {
   status: 'Draft' | 'Generated' | 'Sent' | 'Interviewing' | 'Declined';
   notes?: string;
   generatedTemplates?: Record<string, string | undefined>;
+  sentEmails?: import("../actions/mail-actions").SentEmailRecord[];
+  suggestAttachResume?: boolean;   // AI hint: should resume be attached?
 }
 
 export interface UserProfile {
@@ -24,8 +26,9 @@ export interface UserProfile {
   linkedinUrl: string;
   education: { degree: string; school: string; year: string }[];
   projects: { name: string; tech: string[]; description: string; links?: { label: string; url: string }[] }[];
-  resumeFileName?: string;
-  resumeText?: string; // Raw extracted text stored in DB, used by Gemini
+  resumeFileName?:   string;
+  resumeText?:       string; // Raw extracted text stored in DB, used by Gemini
+  resumePdfBase64?:  string; // base64-encoded PDF for email attachment
 }
 
 const DEFAULT_PROFILE: UserProfile = {

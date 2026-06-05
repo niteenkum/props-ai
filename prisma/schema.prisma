@@ -33,38 +33,42 @@ enum JobStatus {
 }
 
 model JobPost {
-  id                 String    @id @default(uuid())
+  id                 String      @id @default(uuid())
   role               String
   company            String
-  originalText       String    @db.Text
-  parsedSummary      String    @db.Text
+  originalText       String      @db.Text
+  parsedSummary      String      @db.Text
   contactName        String?
   contactEmail       String?
   matchScore         Int
-  postedDate         DateTime  @default(now())
+  postedDate         DateTime    @default(now())
   tags               String[]
-  status             JobStatus @default(Draft)
-  notes              String?   @db.Text
-  coldEmail          String?   @db.Text
-  proposal           String?   @db.Text
-  linkedin           String?   @db.Text
-  coverLetter        String?   @db.Text
+  status             JobStatus   @default(Draft)
+  notes              String?     @db.Text
+  coldEmail          String?     @db.Text
+  proposal           String?     @db.Text
+  linkedin           String?     @db.Text
+  coverLetter        String?     @db.Text
+  generatedTemplates Json?                        // flexible map of platformKey → text
+  suggestAttachResume Boolean?                     // AI hint: should resume be attached?
+  sentEmails         SentEmail[]
 }
 
 model UserProfile {
-  id             String   @id @default(uuid())
-  userId         String   @unique
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name           String
-  role           String
-  email          String
-  skills         String[]
-  portfolioUrl   String
-  githubUrl      String
-  linkedinUrl    String
-  resumeFileName String?
-  resumeText     String?  @db.Text // Raw extracted resume text stored in DB
-  education      Json     // Array of { degree, school, year }
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  role            String
+  email           String
+  skills          String[]
+  portfolioUrl    String
+  githubUrl       String
+  linkedinUrl     String
+  resumeFileName  String?
+  resumeText      String?  @db.Text // Raw extracted resume text stored in DB
+  resumePdfBase64 String?  @db.Text // base64-encoded PDF binary for email attachment
+  education       Json     // Array of { degree, school, year }
 }
 
 model Project {
@@ -149,4 +153,24 @@ model MailAccount {
   updatedAt     DateTime @updatedAt
 
   @@index([userEmail])
+}
+
+// ─── Sent Email Log ────────────────────────────────────────────────────────
+// Tracks every email sent from PropAI via any provider (Zoho, later Gmail).
+// Linked to a JobPost so the user can see outreach history per opportunity.
+model SentEmail {
+  id          String    @id @default(uuid())
+  userEmail   String                        // PropAI user who sent
+  jobPostId   String?                       // linked job (nullable for non-job sends)
+  jobPost     JobPost?  @relation(fields: [jobPostId], references: [id], onDelete: SetNull)
+  provider    String    @default("zoho")    // "zoho" | "gmail" | "outlook"
+  fromEmail   String                        // sender mailbox address
+  toEmail     String
+  subject     String    @db.Text
+  body        String    @db.Text
+  zohoMsgId   String?                       // message ID returned by Zoho
+  sentAt      DateTime  @default(now())
+
+  @@index([userEmail])
+  @@index([jobPostId])
 }

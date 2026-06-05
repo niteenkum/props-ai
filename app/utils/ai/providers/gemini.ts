@@ -27,6 +27,8 @@ export class GeminiProvider implements AIProviderAdapter {
       generationConfig: {
         temperature: options.temperature ?? 0.7,
         maxOutputTokens: options.maxTokens ?? 2048,
+        responseMimeType: options.jsonMode ? "application/json" : undefined,
+        thinkingConfig: options.jsonMode ? { thinkingBudget: 0 } : undefined,
       },
     };
 
@@ -77,6 +79,7 @@ export class GeminiProvider implements AIProviderAdapter {
     }
 
     const data = await response.json();
+    console.log("[Gemini] API Response candidates:", JSON.stringify(data.candidates, null, 2));
 
     // Check for safety blocks (Gemini can return 200 but with blocked content)
     const candidates = data.candidates;

@@ -72,11 +72,14 @@ Output ONLY valid JSON with these exact fields (no markdown, no explanation):
   "contactName": "recruiter/poster name if found, else 'Hiring Team'",
   "contactEmail": "email if found, else ''",
   "tags": ["matched", "skill", "tags"],
-  "summary": "2-3 sentence summary of the role"
+  "summary": "2-3 sentence summary of the role",
+  "attachResume": true
 }
 
 The candidate has these skills: ${profile.skills.join(", ")}
-Only include tags that appear in both the job post AND the candidate's skills list.`;
+Only include tags that appear in both the job post AND the candidate's skills list.
+
+For the "attachResume" field: set to true if the job post explicitly asks for a resume/CV, says "apply with resume", or is a formal job application. Set to false if it's a casual freelance inquiry, a referral request, or doesn't ask for a resume.`;
 
   const userPrompt = `Analyze this job posting and extract metadata:
 

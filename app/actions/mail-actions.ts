@@ -5,6 +5,81 @@
 // Zoho-first implementation — provider field is extensible.
 
 import { prisma } from "../utils/prisma";
+import { Pool } from "pg";
+
+// ─── Raw pg fallback for SentEmail ───────────────────────────────────────────
+// Next.js bundles server actions, so a stale PrismaClient (without SentEmail)
+// can persist even after `prisma generate`. We bypass Prisma entirely here and
+// talk to Postgres directly via `pg` Pool — no bundle-cache issues.
+
+function rawPool() {
+  return new Pool({ connectionString: process.env.DATABASE_URL! });
+}
+
+async function rawInsertSentEmail(data: {
+  userEmail:  string;
+  jobPostId:  string | null;
+  provider:   string;
+  fromEmail:  string;
+  toEmail:    string;
+  subject:    string;
+  body:       string;
+  zohoMsgId:  string | null;
+}): Promise<{ id: string; sentAt: string }> {
+  const pool = rawPool();
+  try {
+    const res = await pool.query<{ id: string; sent_at: Date }>(
+      `INSERT INTO "SentEmail"
+         (id, "userEmail", "jobPostId", provider, "fromEmail", "toEmail", subject, body, "zohoMsgId", "sentAt")
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, NOW())
+       RETURNING id, "sentAt" AS sent_at`,
+      [
+        data.userEmail, data.jobPostId, data.provider,
+        data.fromEmail, data.toEmail,   data.subject,
+        data.body,      data.zohoMsgId,
+      ],
+    );
+    const row = res.rows[0];
+    console.log(`[rawInsertSentEmail] ✅ id=${row.id}`);
+    return { id: row.id, sentAt: row.sent_at.toISOString() };
+  } finally {
+    await pool.end();
+  }
+}
+
+async function rawSelectSentEmails(jobPostId: string): Promise<SentEmailRecord[]> {
+  const pool = rawPool();
+  try {
+    const res = await pool.query<{
+      id: string; provider: string; from_email: string;
+      to_email: string; subject: string; body: string;
+      zoho_msg_id: string | null; sent_at: Date;
+    }>(
+      `SELECT id, provider,
+              "fromEmail"  AS from_email,
+              "toEmail"    AS to_email,
+              subject, body,
+              "zohoMsgId"  AS zoho_msg_id,
+              "sentAt"     AS sent_at
+       FROM   "SentEmail"
+       WHERE  "jobPostId" = $1
+       ORDER  BY "sentAt" DESC`,
+      [jobPostId],
+    );
+    return res.rows.map(r => ({
+      id:        r.id,
+      provider:  r.provider,
+      fromEmail: r.from_email,
+      toEmail:   r.to_email,
+      subject:   r.subject,
+      body:      r.body,
+      zohoMsgId: r.zoho_msg_id ?? undefined,
+      sentAt:    r.sent_at.toISOString(),
+    }));
+  } finally {
+    await pool.end();
+  }
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -25,8 +100,9 @@ export interface MailMessage {
 }
 
 export interface SendResult {
-  success: boolean;
-  error?:  string;
+  success:    boolean;
+  error?:     string;
+  zohoMsgId?: string;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -216,13 +292,21 @@ export async function fetchInboxAction(
   }
 }
 
-// ─── 5. Send an email ────────────────────────────────────────────────────
+// ─── 5. Send an email ────────────────────────────────────────────────────────
+// Optional `attachment` attaches a file (e.g. resume PDF) via multipart/form-data.
+
+export interface MailAttachment {
+  base64:    string;   // base64-encoded file content
+  filename:  string;   // e.g. "Resume_NiteenKumar.pdf"
+  mimeType:  string;   // e.g. "application/pdf"
+}
 
 export async function sendMailAction(
   userEmail:   string,
   to:          string,
   subject:     string,
-  body:        string
+  body:        string,
+  attachment?: MailAttachment,
 ): Promise<SendResult> {
   const auth = await getValidAccessToken(userEmail);
   if (!auth) {
@@ -236,6 +320,288 @@ export async function sendMailAction(
   }
 
   try {
+    let res: Response;
+
+    if (attachment) {
+      // ── Step 1: Upload the attachment to Zoho ──────────────────────────────
+      const uploadForm = new FormData();
+      const binary  = Buffer.from(attachment.base64, "base64");
+      const blob    = new Blob([binary], { type: attachment.mimeType });
+      uploadForm.append("attach", blob, attachment.filename);
+
+      const uploadRes = await fetch(
+        `${apiBase}/api/accounts/${accountId}/messages/attachments?uploadType=multipart`,
+        {
+          method:  "POST",
+          headers: { Authorization: `Zoho-oauthtoken ${token}` },
+          body:    uploadForm,
+        }
+      );
+
+      if (!uploadRes.ok) {
+        const err = await uploadRes.text();
+        console.error("[sendMail] Zoho upload failed:", uploadRes.status, err);
+        return { success: false, error: `Failed to upload attachment (Zoho ${uploadRes.status})` };
+      }
+
+      const uploadData   = await uploadRes.json();
+      // Zoho returns data as an array ([{ storeName, attachmentName, attachmentPath }])
+      const rawData      = uploadData?.data;
+      const uploadedFile = Array.isArray(rawData) ? rawData[0] : rawData;
+      if (!uploadedFile?.storeName) {
+        console.error("[sendMail] Zoho upload response missing storeName:", uploadData);
+        return { success: false, error: "Attachment upload succeeded but returned no file reference." };
+      }
+
+      // ── Step 2: Send the email with the uploaded attachment reference ───────
+      res = await fetch(
+        `${apiBase}/api/accounts/${accountId}/messages`,
+        {
+          method:  "POST",
+          headers: {
+            Authorization:  `Zoho-oauthtoken ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            fromAddress: accountEmail,
+            toAddress:   to,
+            subject,
+            content:     body,
+            mailFormat:  "plaintext",
+            attachments: [
+              {
+                storeName:      uploadedFile.storeName,
+                attachmentName: uploadedFile.attachmentName,
+                attachmentPath: uploadedFile.attachmentPath,
+              },
+            ],
+          }),
+        }
+      );
+    } else {
+      // ── Plain JSON send (no attachment) ─────────────────────────────────────
+      res = await fetch(
+        `${apiBase}/api/accounts/${accountId}/messages`,
+        {
+          method:  "POST",
+          headers: {
+            Authorization:  `Zoho-oauthtoken ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            fromAddress: accountEmail,
+            toAddress:   to,
+            subject,
+            content:     body,
+            mailFormat:  "plaintext",
+          }),
+        }
+      );
+    }
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.error("[sendMail] Zoho send failed:", res.status, err);
+      return { success: false, error: `Failed to send (Zoho ${res.status})` };
+    }
+
+    const resData   = await res.json().catch(() => ({}));
+    const zohoMsgId = String(resData?.data?.messageId ?? resData?.messageId ?? "") || undefined;
+
+    console.log(`[sendMail] ✅ Sent from ${userEmail} → ${to}${attachment ? " 📎 +attachment" : ""} (msgId: ${zohoMsgId ?? "n/a"})`);
+    return { success: true, zohoMsgId };
+  } catch (err: any) {
+    console.error("[sendMail] Error:", err);
+    return { success: false, error: err?.message ?? "Unexpected send error." };
+  }
+}
+
+
+// ─── 6. Send email linked to a job post ──────────────────────────────────────
+// Wraps sendMailAction: also persists a SentEmail record and flips job status → Sent.
+
+export interface SentEmailRecord {
+  id:         string;
+  provider:   string;
+  fromEmail:  string;
+  toEmail:    string;
+  subject:    string;
+  body:       string;
+  zohoMsgId?: string | null;
+  sentAt:     string;  // ISO string
+}
+
+export async function sendJobEmailAction(
+  userEmail:     string,
+  jobPostId:     string,
+  to:            string,
+  subject:       string,
+  body:          string,
+  attachResume?: boolean,
+): Promise<{ success: boolean; error?: string; zohoMsgId?: string; sentAt?: string }> {
+  // 1. Optionally load user's resume PDF from DB
+  let attachment: MailAttachment | undefined;
+  if (attachResume) {
+    const pool = rawPool();
+    try {
+      const r = await pool.query<{ resume_pdf_base64: string | null; resume_file_name: string | null }>(
+        // Join via User table — UserProfile.email ≠ login email
+        `SELECT up."resumePdfBase64" AS resume_pdf_base64,
+                up."resumeFileName"  AS resume_file_name
+         FROM   "UserProfile" up
+         JOIN   "User" u ON u.id = up."userId"
+         WHERE  u.email = $1
+         LIMIT  1`,
+        [userEmail],
+      );
+      const row = r.rows[0];
+      if (row?.resume_pdf_base64) {
+        attachment = {
+          base64:   row.resume_pdf_base64,
+          filename: row.resume_file_name ?? "Resume.pdf",
+          mimeType: "application/pdf",
+        };
+        console.log(`[sendJobEmail] 📎 Attaching resume: ${attachment.filename}`);
+      } else {
+        console.warn(`[sendJobEmail] attachResume=true but no PDF found for ${userEmail}`);
+      }
+    } finally {
+      await pool.end();
+    }
+  }
+
+  // 2. Send via Zoho (with or without attachment)
+  const result = await sendMailAction(userEmail, to, subject, body, attachment);
+  if (!result.success) return result;
+
+  // 3. Get sender address
+  const account   = await prisma.mailAccount.findUnique({ where: { userEmail } });
+  const fromEmail = account?.accountEmail ?? userEmail;
+
+  // 4. Save SentEmail via raw pg (bypasses stale Next.js-bundled Prisma client)
+  const sent = await rawInsertSentEmail({
+    userEmail,
+    jobPostId,
+    provider:  account?.provider ?? "zoho",
+    fromEmail,
+    toEmail:   to,
+    subject,
+    body,
+    zohoMsgId: result.zohoMsgId ?? null,
+  });
+
+  // 5. Check existing sent email count — if this is the first send, sync contactEmail
+  const existingSentCount = await prisma.sentEmail.count({ where: { jobPostId } }).catch(() => 1);
+  const isFirstSend = existingSentCount <= 1; // ≤1 because we just inserted above
+
+  // 6. Update job status → Sent; also update contactEmail if changed or blank (first send only)
+  const currentJob = await prisma.jobPost.findUnique({
+    where: { id: jobPostId },
+    select: { contactEmail: true },
+  });
+
+  const shouldUpdateEmail =
+    isFirstSend &&
+    to.trim() !== "" &&
+    (currentJob?.contactEmail !== to.trim());
+
+  await prisma.jobPost.update({
+    where: { id: jobPostId },
+    data:  {
+      status: "Sent",
+      ...(shouldUpdateEmail ? { contactEmail: to.trim() } : {}),
+    },
+  });
+
+  if (shouldUpdateEmail) {
+    console.log(`[sendJobEmail] 📧 Updated job contactEmail → ${to.trim()}`);
+  }
+
+  return { success: true, zohoMsgId: result.zohoMsgId, sentAt: sent.sentAt };
+}
+
+// ─── 7. Get sent email history for a job ────────────────────────────────────────────
+
+export async function getSentEmailsForJobAction(
+  jobPostId: string
+): Promise<SentEmailRecord[]> {
+  return rawSelectSentEmails(jobPostId);
+}
+
+// ─── 8. Get resume filename for a user (used to populate attach toggle) ───────
+
+export async function getUserResumeFilenameAction(
+  userEmail: string
+): Promise<string | null> {
+  const pool = rawPool();
+  try {
+    const res = await pool.query<{ resume_file_name: string | null; has_pdf: boolean }>(
+      // Join via User table so we match by LOGIN email, not profile email field
+      `SELECT up."resumeFileName"  AS resume_file_name,
+              (up."resumePdfBase64" IS NOT NULL AND up."resumePdfBase64" != '') AS has_pdf
+       FROM   "UserProfile" up
+       JOIN   "User" u ON u.id = up."userId"
+       WHERE  u.email = $1
+       LIMIT  1`,
+      [userEmail],
+    );
+    const row = res.rows[0];
+    if (!row || !row.has_pdf) return null;
+    return row.resume_file_name ?? "Resume.pdf";
+  } catch (e) {
+    console.error("[getUserResumeFilenameAction]", e);
+    return null;
+  } finally {
+    await pool.end();
+  }
+}
+
+// ─── 9. Get resume PDF base64 (for in-browser preview / download) ─────────────
+
+export async function getResumePdfBase64Action(
+  userEmail: string
+): Promise<{ base64: string; filename: string } | null> {
+  const pool = rawPool();
+  try {
+    const res = await pool.query<{ pdf: string | null; filename: string | null }>(
+      `SELECT up."resumePdfBase64" AS pdf,
+              up."resumeFileName"  AS filename
+       FROM   "UserProfile" up
+       JOIN   "User" u ON u.id = up."userId"
+       WHERE  u.email = $1
+       LIMIT  1`,
+      [userEmail],
+    );
+    const row = res.rows[0];
+    if (!row?.pdf) return null;
+    return { base64: row.pdf, filename: row.filename ?? "Resume.pdf" };
+  } catch (e) {
+    console.error("[getResumePdfBase64Action]", e);
+    return null;
+  } finally {
+    await pool.end();
+  }
+}
+
+// ─── 10. Send a reply in an existing email thread ────────────────────────────
+// Uses Zoho's inReplyTo field to keep the message in the same thread.
+
+export async function sendReplyEmailAction(
+  userEmail:    string,
+  jobPostId:    string,
+  to:           string,
+  subject:      string,
+  body:         string,
+  inReplyToId:  string,   // Zoho messageId of the message being replied to
+): Promise<{ success: boolean; error?: string; zohoMsgId?: string; sentAt?: string }> {
+  const auth = await getValidAccessToken(userEmail);
+  if (!auth) return { success: false, error: "Mail account not connected or token expired." };
+
+  const { token, accountId, apiBase, accountEmail } = auth;
+  if (!accountId) return { success: false, error: "Zoho account ID not available." };
+
+  try {
+    // Zoho reply: POST same endpoint but with action=reply and inReplyTo header
     const res = await fetch(
       `${apiBase}/api/accounts/${accountId}/messages`,
       {
@@ -245,25 +611,44 @@ export async function sendMailAction(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          fromAddress: accountEmail,  // Must be the exact linked Zoho mailbox address
+          fromAddress: accountEmail,
           toAddress:   to,
-          subject,
+          subject:     subject.startsWith("Re:") ? subject : `Re: ${subject}`,
           content:     body,
           mailFormat:  "plaintext",
+          inReplyTo:   inReplyToId,   // threads the reply in the same conversation
         }),
       }
     );
 
     if (!res.ok) {
       const err = await res.text();
-      console.error("[sendMail] Zoho send failed:", res.status, err);
-      return { success: false, error: `Failed to send (Zoho ${res.status})` };
+      console.error("[sendReply] Zoho failed:", res.status, err);
+      return { success: false, error: `Failed to send reply (Zoho ${res.status})` };
     }
 
-    console.log(`[sendMail] ✅ Sent from ${userEmail} → ${to}`);
-    return { success: true };
+    const resData   = await res.json().catch(() => ({}));
+    const zohoMsgId = String(resData?.data?.messageId ?? resData?.messageId ?? "") || undefined;
+
+    // Persist the reply to SentEmail table
+    const account   = await prisma.mailAccount.findUnique({ where: { userEmail } });
+    const fromEmail = account?.accountEmail ?? userEmail;
+
+    const sent = await rawInsertSentEmail({
+      userEmail,
+      jobPostId,
+      provider:  account?.provider ?? "zoho",
+      fromEmail,
+      toEmail:   to,
+      subject:   subject.startsWith("Re:") ? subject : `Re: ${subject}`,
+      body,
+      zohoMsgId: zohoMsgId ?? null,
+    });
+
+    console.log(`[sendReply] ✅ Reply sent → ${to} (msgId: ${zohoMsgId ?? "n/a"})`);
+    return { success: true, zohoMsgId, sentAt: sent.sentAt };
   } catch (err: any) {
-    console.error("[sendMail] Error:", err);
-    return { success: false, error: err?.message ?? "Unexpected send error." };
+    console.error("[sendReply] Error:", err);
+    return { success: false, error: err?.message ?? "Unexpected error sending reply." };
   }
 }

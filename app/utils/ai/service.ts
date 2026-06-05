@@ -301,6 +301,7 @@ export async function analyzeJobWithAI(
       temperature: 0.3, // low temperature for structured extraction
       maxTokens: 1024,
       apiType: "job_analysis",
+      jsonMode: true,
     });
 
     // Try to parse JSON from the response
@@ -321,6 +322,7 @@ export async function analyzeJobWithAI(
       tags: Array.isArray(parsed.tags) ? parsed.tags : [],
       parsedSummary: parsed.summary || jsonStr.substring(0, 200),
       notes: "",
+      suggestAttachResume: typeof parsed.attachResume === "boolean" ? parsed.attachResume : undefined,
     };
   } catch (error) {
     console.error("[AI Service] Job analysis with AI failed, falling back:", error);

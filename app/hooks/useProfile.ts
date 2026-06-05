@@ -91,25 +91,26 @@ export function useProfile(userEmail: string) {
         const ai = result.profile;
         const updated: UserProfile = {
           ...profile,
-          name:          ai.name          || profile.name,
-          role:          ai.role          || profile.role,
-          email:         ai.email         || profile.email,
-          portfolioUrl:  ai.portfolioUrl  || profile.portfolioUrl,
-          githubUrl:     ai.githubUrl     || profile.githubUrl,
-          linkedinUrl:   ai.linkedinUrl   || profile.linkedinUrl,
+          name:           ai.name          || profile.name,
+          role:           ai.role          || profile.role,
+          email:          ai.email         || profile.email,
+          portfolioUrl:   ai.portfolioUrl  || profile.portfolioUrl,
+          githubUrl:      ai.githubUrl     || profile.githubUrl,
+          linkedinUrl:    ai.linkedinUrl   || profile.linkedinUrl,
           // Merge skills: combine existing + AI, deduplicate
-          skills:        ai.skills && ai.skills.length > 0
+          skills:         ai.skills && ai.skills.length > 0
             ? Array.from(new Set([...ai.skills]))
             : profile.skills,
           // Replace education + projects only if AI returned real data
-          education:     ai.education && ai.education.length > 0
+          education:      ai.education && ai.education.length > 0
             ? ai.education
             : profile.education,
-          projects:      ai.projects && ai.projects.length > 0
+          projects:       ai.projects && ai.projects.length > 0
             ? ai.projects
             : profile.projects,
-          resumeFileName: file.name,
-          resumeText:    ai.resumeText || profile.resumeText,
+          resumeFileName:   file.name,
+          resumeText:       ai.resumeText || profile.resumeText,
+          resumePdfBase64:  base64,    // store raw PDF so it can be attached to emails
         };
 
         setProfile(updated);

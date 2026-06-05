@@ -236,6 +236,7 @@ export async function generateProposalsAction(
     role: string; company: string; contactName: string;
     contactEmail: string; matchScore: number; tags: string[]; parsedSummary: string;
   };
+  suggestAttachResume?: boolean;   // AI hint: should resume be attached?
   error?: string;
   provider?: string;
 }> {
@@ -259,6 +260,8 @@ export async function generateProposalsAction(
       notes:         heuristic.notes,
     };
 
+    let suggestAttachResume: boolean | undefined;
+
     if (isAIAvailable()) {
       try {
         const aiParsed = await analyzeJobWithAI(jobText, profile);
@@ -272,6 +275,10 @@ export async function generateProposalsAction(
             tags:          aiParsed.tags?.length   ? aiParsed.tags : parsed.tags,
             parsedSummary: aiParsed.parsedSummary || parsed.parsedSummary,
           };
+          // Carry the AI's attach-resume recommendation
+          if (typeof aiParsed.suggestAttachResume === "boolean") {
+            suggestAttachResume = aiParsed.suggestAttachResume;
+          }
         }
       } catch { /* ignore — use heuristic */ }
     }
@@ -298,7 +305,7 @@ export async function generateProposalsAction(
       if (i < platforms.length - 1) await new Promise(r => setTimeout(r, 350));
     }
 
-    console.log(`[generateProposalsAction] Done — ${Object.keys(results).length}/${platforms.length} generated.`);
+    console.log(`[generateProposalsAction] Done — ${Object.keys(results).length}/${platforms.length} generated. attachResume=${suggestAttachResume}`);
     return {
       success: true,
       results,
@@ -307,6 +314,7 @@ export async function generateProposalsAction(
         contactEmail: parsed.contactEmail, matchScore: parsed.matchScore,
         tags: parsed.tags, parsedSummary: parsed.parsedSummary,
       },
+      suggestAttachResume,
       provider: String(providerName),
     };
   } catch (err: any) {
@@ -315,13 +323,24 @@ export async function generateProposalsAction(
   }
 }
 
-// ─── Live candidacy analysis via AI ────────────────────────────────────────
-// Called by the Live Analysis Engine panel while the user is typing.
-// Sends the full profile + job post to AI, returns a structured candidacy score.
+// ─── Unified job analysis: candidacy scoring + duplicate detection ────────────
+// Called when user clicks "Analyze Job".
+// Flow:
+//   1. Extract email from job post (caller's responsibility)
+//   2. If existingJobs provided → AI checks for duplicate AND scores candidacy in one call
+//   3. If no existingJobs (no email found) → AI scores candidacy + extracts contact info
+
+export interface ExistingJobSnippet {
+  id: string;
+  role: string;
+  company: string;
+  originalText: string;
+}
 
 export async function analyzeJobCandidacyAction(
   jobText: string,
-  userEmail: string
+  userEmail: string,
+  existingJobs?: ExistingJobSnippet[]
 ): Promise<{
   success: boolean;
   score?: number;
@@ -332,6 +351,9 @@ export async function analyzeJobCandidacyAction(
   explanation?: string;
   matchedSkills?: string[];
   missingSkills?: string[];
+  isDuplicate?: boolean;
+  duplicateJobId?: string;
+  duplicateReason?: string;
   error?: string;
 }> {
   if (!jobText.trim() || jobText.length < 30) {
@@ -352,26 +374,43 @@ export async function analyzeJobCandidacyAction(
       `• ${p.name}: ${p.description.slice(0, 100)} [${p.tech.slice(0, 4).join(", ")}]`
     ).join("\n");
 
-    const systemPrompt = `You are a smart job-candidacy analyzer. Given a professional profile and a job post, analyze how well the candidate fits.
+    const hasPrior = existingJobs && existingJobs.length > 0;
 
+    const duplicateSection = hasPrior
+      ? `\nEXISTING JOBS IN DB (check if new post is duplicate of any):
+${existingJobs!.map((j, i) =>
+  `[${i}] id="${j.id}" role="${j.role}" company="${j.company}"\n${j.originalText.slice(0, 400)}`
+).join("\n---\n")}
+
+DUPLICATE RULES:
+- Same job = same company + same role + similar requirements (even if reworded)
+- Different budget/deadline alone does NOT make it a different job
+- Only flag isDuplicate=true if confidence > 75%
+`
+      : "";
+
+    const systemPrompt = `You are a smart job-candidacy analyzer. Analyze candidacy fit${hasPrior ? " and detect duplicates" : ""}.
 CRITICAL: Output ONLY valid JSON. No markdown, no explanation, no code blocks.`;
 
-    const userPrompt = `Analyze this candidacy and return JSON.
+    const duplicateFields = hasPrior
+      ? `,\n  "isDuplicate": <true|false>,\n  "duplicateJobId": "<matching id from existing jobs or ''>",\n  "duplicateReason": "<brief reason or ''>"` : "";
 
-CANDIDATE:
+    const userPrompt = `Analyze this candidacy${hasPrior ? " and check for duplicates" : ""} and return JSON.
+
+CANDIDATE PROFILE:
 - Role: ${profile.role}
 - Skills: ${profile.skills.join(", ")}
 ${profile.resumeText ? `- Summary: ${profile.resumeText.slice(0, 300)}` : ""}
 ${projectSummaries ? `- Projects:\n${projectSummaries}` : ""}
-
-JOB POST:
+${duplicateSection}
+NEW JOB POST:
 ${jobText.slice(0, 1200)}
 
-RULES:
-- Look BEYOND exact keyword matches. "Web developer" job = match for React/Next.js/Node.js developer
-- "Full Stack" role matches someone with frontend + backend skills
-- Score 0 = completely wrong field, 50 = partial overlap, 85-100 = strong match
-- Extract phone numbers (like 8383873071) as contactPhone
+SCORING RULES:
+- Look BEYOND exact keywords — "web developer" = match for React/Next.js/Node.js developer
+- "Full Stack" matches frontend + backend skills
+- 0 = wrong field, 50 = partial overlap, 85-100 = strong match
+- Extract phone numbers as contactPhone
 
 Return ONLY this JSON:
 {
@@ -381,31 +420,77 @@ Return ONLY this JSON:
   "contactEmail": "<email or ''>",
   "contactPhone": "<phone or ''>",
   "explanation": "<1-2 honest sentences about fit>",
-  "matchedSkills": ["<candidate skill relevant to job>"],
-  "missingSkills": ["<skill job needs that candidate lacks>"]
+  "matchedSkills": ["<your skill relevant to job>"],
+  "missingSkills": ["<skill the job needs that you lack>"]${duplicateFields}
 }`;
 
     const raw = await provider.generate({
       systemPrompt, userPrompt,
-      temperature: 0.2, maxTokens: 512, apiType: "candidacy_analysis",
+      temperature: 0.2, maxTokens: 1200, apiType: "candidacy_analysis",
+      jsonMode: true,
     });
 
-    let jsonStr = raw.trim();
-    if (jsonStr.startsWith("```")) {
-      jsonStr = jsonStr.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+    // ── Robust JSON extraction — multi-attempt ────────────────────────────
+    const raw2 = raw.trim();
+
+    // Helper: extract first balanced {...} block
+    function extractJson(s: string): string {
+      const start = s.indexOf("{");
+      const end   = s.lastIndexOf("}");
+      return (start !== -1 && end > start) ? s.slice(start, end + 1) : s;
     }
 
-    const p = JSON.parse(jsonStr);
+    // Attempt 1: strip code fences + extract {} + fix trailing commas
+    function basicClean(s: string): string {
+      return s
+        .replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "")  // fences
+        .replace(/,\s*([}\]])/g, "$1")                                // trailing commas
+        .replace(/:\s*True\b/g, ": true").replace(/:\s*False\b/g, ": false"); // Python bools
+    }
+
+    // Attempt 2: also fix unquoted keys — only at property-name positions
+    // Safe approach: use a state-machine style replace that skips string content
+    function fixUnquotedKeys(s: string): string {
+      // Only match identifier immediately after { or , (skips inside string values)
+      return s.replace(/([{,]\s*)([a-zA-Z_]\w*)\s*(?=:)/g, (_, prefix, key) => {
+        // If already preceded by a quote, skip
+        return `${prefix}"${key}"`;
+      });
+    }
+
+    let p: Record<string, unknown> = {};
+    const attempts = [
+      () => JSON.parse(raw2),
+      () => JSON.parse(basicClean(raw2)),
+      () => JSON.parse(basicClean(extractJson(raw2))),
+      () => JSON.parse(fixUnquotedKeys(basicClean(extractJson(raw2)))),
+    ];
+
+    let parsed = false;
+    for (const attempt of attempts) {
+      try { p = attempt(); parsed = true; break; } catch { /* try next */ }
+    }
+    if (!parsed) {
+      console.error("[analyzeJobCandidacyAction] All JSON parse attempts failed. Raw:", raw2.slice(0, 600));
+      throw new Error("AI returned invalid JSON after all recovery attempts");
+    }
+
+
+    const str = (v: unknown, fallback = "") => (typeof v === "string" ? v : fallback);
+
     return {
-      success: true,
-      score:         typeof p.score === "number" ? Math.min(Math.max(p.score, 0), 100) : 50,
-      role:          p.role          || "Unknown",
-      company:       p.company       || "Not specified",
-      contactEmail:  p.contactEmail  || "",
-      contactPhone:  p.contactPhone  || "",
-      explanation:   p.explanation   || "",
-      matchedSkills: Array.isArray(p.matchedSkills) ? p.matchedSkills : [],
-      missingSkills: Array.isArray(p.missingSkills)  ? p.missingSkills  : [],
+      success:        true,
+      score:          typeof p.score === "number" ? Math.min(Math.max(p.score, 0), 100) : 50,
+      role:           str(p.role, "Unknown"),
+      company:        str(p.company, "Not specified"),
+      contactEmail:   str(p.contactEmail),
+      contactPhone:   str(p.contactPhone),
+      explanation:    str(p.explanation),
+      matchedSkills:  Array.isArray(p.matchedSkills) ? (p.matchedSkills as string[]) : [],
+      missingSkills:  Array.isArray(p.missingSkills)  ? (p.missingSkills  as string[]) : [],
+      isDuplicate:    hasPrior ? !!p.isDuplicate : undefined,
+      duplicateJobId: str(p.duplicateJobId),
+      duplicateReason: str(p.duplicateReason),
     };
   } catch (err: any) {
     console.error("[analyzeJobCandidacyAction] Failed:", err);

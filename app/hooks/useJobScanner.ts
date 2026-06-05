@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo } from "react";
 import React from "react";
 import { useRouter } from "next/navigation";
 import { addJobPostAction, getJobsByEmailAction } from "../actions/db-actions";
-import { getAIStatusAction, compareDuplicatePostsAction, generateProposalsAction, getAvailableProvidersAction, analyzeJobCandidacyAction } from "../actions/ai-actions";
+import { getAIStatusAction, generateProposalsAction, getAvailableProvidersAction, analyzeJobCandidacyAction } from "../actions/ai-actions";
+import type { ExistingJobSnippet } from "../actions/ai-actions";
 import { extractEmailFromText, detectPlatform, platformTemplates, type Platform } from "../utils/platform-detector";
 import type { UserProfile } from "../utils/db";
 import type { JobPost } from "../utils/db";
@@ -17,7 +18,7 @@ export interface DuplicateState {
   confidence: number;
 }
 
-export type DrawerStep = "checking" | "duplicate" | "platforms" | "generating" | "results";
+export type DrawerStep = "idle" | "checking" | "analysis" | "duplicate" | "platforms" | "generating" | "results";
 
 export type AIModel = "gemini" | "claude" | "openai" | "auto";
 
@@ -46,6 +47,10 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
   const [aiAvailable, setAiAvailable]   = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
 
+  // ─── Has the user clicked Analyze Job yet? ───────────────────────────
+  // Only true after button click — prevents live heuristics from showing on paste
+  const [hasAnalyzed, setHasAnalyzed]   = useState(false);
+
   // ─── AI candidacy analysis state ───────────────────────────────────────
   const [aiCandidacy, setAiCandidacy] = useState<{
     score: number;
@@ -56,6 +61,9 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
     explanation: string;
     matchedSkills: string[];
     missingSkills: string[];
+    isDuplicate?: boolean;
+    duplicateJobId?: string;
+    duplicateReason?: string;
   } | null>(null);
   const [isCandidacyLoading, setIsCandidacyLoading] = useState(false);
 
@@ -69,45 +77,58 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
     });
   }, []);
 
-  // ─── Debounced AI candidacy analysis (triggers 1.2s after user stops typing) ────
-  useEffect(() => {
-    // Reset AI candidacy when text is cleared
-    if (!pasteText.trim() || pasteText.length < 40) {
+  // ─── On-demand candidacy analysis ────────────────────────────────────────────────────
+  // Accepts optional existing jobs from DB for unified duplicate detection.
+  const triggerCandidacyAnalysis = async (
+    text: string,
+    existingJobs?: ExistingJobSnippet[]
+  ) => {
+    if (!text.trim() || text.length < 40 || !userEmail) {
       setAiCandidacy(null);
       setIsCandidacyLoading(false);
-      return;
+      return null;
     }
-
-    if (!userEmail) return;
-
     setIsCandidacyLoading(true);
-
-    const timer = setTimeout(async () => {
-      try {
-        const result = await analyzeJobCandidacyAction(pasteText, userEmail);
-        if (result.success) {
-          setAiCandidacy({
-            score:         result.score        ?? 50,
-            role:          result.role         ?? "Unknown",
-            company:       result.company      ?? "Not specified",
-            contactEmail:  result.contactEmail ?? "",
-            contactPhone:  result.contactPhone ?? "",
-            explanation:   result.explanation  ?? "",
-            matchedSkills: result.matchedSkills ?? [],
-            missingSkills: result.missingSkills ?? [],
-          });
-        } else {
-          setAiCandidacy(null); // fall back to heuristics silently
-        }
-      } catch {
+    try {
+      const result = await analyzeJobCandidacyAction(text, userEmail, existingJobs);
+      if (result.success) {
+        const candidacy = {
+          score:          result.score        ?? 50,
+          role:           result.role         ?? "Unknown",
+          company:        result.company      ?? "Not specified",
+          contactEmail:   result.contactEmail ?? "",
+          contactPhone:   result.contactPhone ?? "",
+          explanation:    result.explanation  ?? "",
+          matchedSkills:  result.matchedSkills ?? [],
+          missingSkills:  result.missingSkills ?? [],
+          isDuplicate:    result.isDuplicate,
+          duplicateJobId: result.duplicateJobId,
+          duplicateReason: result.duplicateReason,
+        };
+        setAiCandidacy(candidacy);
+        return candidacy;
+      } else {
         setAiCandidacy(null);
-      } finally {
-        setIsCandidacyLoading(false);
+        setGenerationError(result.error || "AI candidacy analysis failed");
+        return null;
       }
-    }, 1200); // 1.2s debounce
+    } catch (err: any) {
+      setAiCandidacy(null);
+      setGenerationError(err?.message || "AI candidacy analysis failed");
+      return null;
+    } finally {
+      setIsCandidacyLoading(false);
+    }
+  };
 
-    return () => clearTimeout(timer);
-  }, [pasteText, userEmail]);
+  // Reset AI candidacy when text is cleared
+  useEffect(() => {
+    if (!pasteText.trim()) {
+      setAiCandidacy(null);
+      setIsCandidacyLoading(false);
+      setHasAnalyzed(false);  // reset gate so panel goes back to empty state
+    }
+  }, [pasteText]);
 
   // ─── Platform detection (live) ────────────────────────────────────────────
   const platform: Platform = useMemo(() => {
@@ -220,7 +241,7 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
 
   // ─── Drawer state ─────────────────────────────────────────────────────────
   const [isDrawerOpen, setIsDrawerOpen]         = useState(false);
-  const [drawerStep, setDrawerStep]             = useState<DrawerStep>("checking");
+  const [drawerStep, setDrawerStep]             = useState<DrawerStep>("idle");
   const [duplicateState, setDuplicateState]     = useState<DuplicateState | null>(null);
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<PlatformKey>>(
     new Set<PlatformKey>(["coldEmail"])   // updated dynamically on drawer open based on detected platform
@@ -234,6 +255,7 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
   const [activeResultTab, setActiveResultTab]   = useState<string>("");
   const [isSavingJob, setIsSavingJob]           = useState(false);
   const [jobSavedId, setJobSavedId]             = useState<string | null>(null);
+  const [suggestAttachResume, setSuggestAttachResume] = useState<boolean | undefined>(undefined);
 
   // ─── Toggle platform selection ─────────────────────────────────────────────
   const togglePlatform = (key: PlatformKey) => {
@@ -249,7 +271,11 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
     });
   };
 
-  // ─── Open drawer: check duplicate first ───────────────────────────────────
+  // ─── Open drawer: UNIFIED flow (single AI call) ──────────────────────────────
+  // 1. Extract email from job post
+  // 2. If email found → fetch existing jobs from DB
+  // 3. Single AI call: profile + job post + existingJobs → score + isDuplicate + contact
+  // 4. If isDuplicate → show duplicate step; else → show platforms step
   const handleOpenDrawer = async () => {
     if (!pasteText.trim()) return;
     setGenerationError(null);
@@ -257,42 +283,62 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
     setGeneratedProposals({});
     setParsedJobData(null);
     setJobSavedId(null);
+    setHasAnalyzed(true);
 
-    // Pre-select platforms based on detected platform
+    // Pre-select platforms
     const detectedPlatform = detectPlatform(pasteText);
     const suggested = platformTemplates(detectedPlatform) as PlatformKey[];
-    // If only one suggestion and it's generic, add coldEmail as fallback
-    const defaults = suggested.length > 0 ? suggested : ["coldEmail"] as PlatformKey[];
-    setSelectedPlatforms(new Set(defaults));
+    setSelectedPlatforms(new Set(suggested.length > 0 ? suggested : ["coldEmail" as PlatformKey]));
 
     setIsDrawerOpen(true);
     setDrawerStep("checking");
 
-    // Extract email and check for duplicates
+    // Step 1: extract email
     const email = extractEmailFromText(pasteText);
+    let existingJobs: ExistingJobSnippet[] = [];
+
+    // Step 2: if email found → fetch existing jobs from DB
     if (email) {
       try {
-        const existingJobs = await getJobsByEmailAction(email);
-        if (existingJobs.length > 0) {
-          for (const existing of existingJobs) {
-            const comparison = await compareDuplicatePostsAction(existing.originalText, pasteText);
-            if (comparison.isSame) {
-              setDuplicateState({
-                existingJob: existing,
-                reason: comparison.reason,
-                confidence: comparison.confidence,
-              });
-              setDrawerStep("duplicate");
-              return;
-            }
-          }
-        }
+        const rows = await getJobsByEmailAction(email);
+        existingJobs = rows.map(j => ({
+          id:           j.id,
+          role:         j.role,
+          company:      j.company,
+          originalText: j.originalText,
+        }));
       } catch (err) {
-        console.warn("[useJobScanner] Duplicate check failed, proceeding:", err);
+        console.warn("[useJobScanner] DB fetch failed:", err);
       }
     }
 
-    // No duplicate → go to platform selection
+    // Step 3: single AI call (candidacy score + duplicate check)
+    const candidacy = await triggerCandidacyAnalysis(pasteText, existingJobs);
+    if (!candidacy) {
+      setDrawerStep("idle");
+      return;
+    }
+
+    // Step 4: if duplicate detected → show duplicate step
+    if (candidacy.isDuplicate && candidacy.duplicateJobId) {
+      const fullRows = email ? await getJobsByEmailAction(email).catch(() => []) : [];
+      const existingFull = fullRows.find(j => j.id === candidacy.duplicateJobId);
+      if (existingFull) {
+        setDuplicateState({
+          existingJob: existingFull,
+          reason: candidacy.duplicateReason || "AI detected this as a duplicate posting.",
+          confidence: 80,
+        });
+        setDrawerStep("duplicate");
+        return;
+      }
+    }
+
+    setDrawerStep("analysis");
+  };
+
+  // ─── Continue from analysis → platform selection ──────────────────────────
+  const handleContinueToTemplates = () => {
     setDrawerStep("platforms");
   };
 
@@ -335,6 +381,7 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
 
       setGeneratedProposals(result.results);
       if (result.parsed) setParsedJobData(result.parsed);
+      setSuggestAttachResume(result.suggestAttachResume);
       setActiveResultTab(platformsArray[0]);
       setDrawerStep("results");
     } catch (err: any) {
@@ -363,6 +410,7 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
         tags:               parsedJobData.tags,
         notes:              "",
         generatedTemplates: generatedProposals as any,
+        suggestAttachResume,
       });
       setJobSavedId(newJob.id);
       setPasteText("");
@@ -378,7 +426,7 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
 
   const handleCloseDrawer = () => {
     setIsDrawerOpen(false);
-    setDrawerStep("checking");
+    setDrawerStep("idle");
     setDuplicateState(null);
     setGeneratedProposals({});
     setParsedJobData(null);
@@ -416,6 +464,7 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
     selectedPlatforms, togglePlatform,
     selectedModel, setSelectedModel,
     generatedProposals, parsedJobData,
+    suggestAttachResume,
     activeResultTab, setActiveResultTab,
     handleEditProposal,
     isSavingJob, jobSavedId,
@@ -435,5 +484,8 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
     isCheckingDuplicate: drawerStep === "checking" && isDrawerOpen,
     generationStep: 0,
     lastUsedProvider: aiProvider,
+    handleContinueToTemplates,
+    triggerCandidacyAnalysis,
+    hasAnalyzed,
   };
 }
