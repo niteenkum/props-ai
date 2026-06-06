@@ -40,6 +40,7 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
 
   // ─── Paste state ──────────────────────────────────────────────────────────
   const [pasteText, setPasteText]             = useState("");
+  const [waMessageId, setWaMessageId]         = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
 
   // ─── AI status ────────────────────────────────────────────────────────────
@@ -57,6 +58,8 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
     role: string;
     company: string;
     contactEmail: string;
+    contactCc?: string;
+    contactBcc?: string;
     contactPhone: string;
     explanation: string;
     matchedSkills: string[];
@@ -75,6 +78,16 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
     getAvailableProvidersAction().then(({ providers }) => {
       setAvailableModels(providers);
     });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const text = params.get("text");
+      const waMsgId = params.get("waMessageId");
+      if (text) setPasteText(text);
+      if (waMsgId) setWaMessageId(waMsgId);
+    }
   }, []);
 
   // ─── On-demand candidacy analysis ────────────────────────────────────────────────────
@@ -97,6 +110,8 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
           role:           result.role         ?? "Unknown",
           company:        result.company      ?? "Not specified",
           contactEmail:   result.contactEmail ?? "",
+          contactCc:      result.contactCc    ?? "",
+          contactBcc:     result.contactBcc   ?? "",
           contactPhone:   result.contactPhone ?? "",
           explanation:    result.explanation  ?? "",
           matchedSkills:  result.matchedSkills ?? [],
@@ -250,7 +265,8 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
   const [generatedProposals, setGeneratedProposals] = useState<Record<string, string>>({});
   const [parsedJobData, setParsedJobData] = useState<{
     role: string; company: string; contactName: string;
-    contactEmail: string; matchScore: number; tags: string[]; parsedSummary: string;
+    contactEmail: string; contactCc?: string; contactBcc?: string;
+    matchScore: number; tags: string[]; parsedSummary: string;
   } | null>(null);
   const [activeResultTab, setActiveResultTab]   = useState<string>("");
   const [isSavingJob, setIsSavingJob]           = useState(false);
@@ -399,6 +415,14 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
     }
     setIsSavingJob(true);
     try {
+      const tags = [...parsedJobData.tags];
+      if (parsedJobData.contactCc && !tags.some(t => t.startsWith("cc:"))) {
+        tags.push(`cc:${parsedJobData.contactCc}`);
+      }
+      if (parsedJobData.contactBcc && !tags.some(t => t.startsWith("bcc:"))) {
+        tags.push(`bcc:${parsedJobData.contactBcc}`);
+      }
+
       const newJob = await addJobPostAction({
         role:               parsedJobData.role,
         company:            parsedJobData.company,
@@ -407,10 +431,11 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
         contactName:        parsedJobData.contactName,
         contactEmail:       parsedJobData.contactEmail,
         matchScore:         parsedJobData.matchScore,
-        tags:               parsedJobData.tags,
+        tags:               tags,
         notes:              "",
         generatedTemplates: generatedProposals as any,
         suggestAttachResume,
+        waMessageId:        waMessageId ?? undefined,
       });
       setJobSavedId(newJob.id);
       setPasteText("");
@@ -430,6 +455,41 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
     setDuplicateState(null);
     setGeneratedProposals({});
     setParsedJobData(null);
+  };
+
+  // ─── Open drawer with STORED data (skip AI re-analysis) ─────────────────────────
+  // Used by job detail page: job already has analysis data stored in DB.
+  // Inject it into scanner state and jump straight to analysis step.
+  const handleOpenWithStoredData = (data: {
+    score: number;
+    role: string;
+    company: string;
+    contactEmail: string;
+    contactCc?: string;
+    contactBcc?: string;
+    contactPhone: string;
+    explanation: string;
+    matchedSkills: string[];
+    missingSkills: string[];
+  }) => {
+    setGenerationError(null);
+    setDuplicateState(null);
+    setGeneratedProposals({});
+    setParsedJobData(null);
+
+    // Detect platform from text and pre-select templates
+    const detectedPlatform = detectPlatform(pasteText);
+    const suggested = platformTemplates(detectedPlatform) as PlatformKey[];
+    setSelectedPlatforms(new Set(suggested.length > 0 ? suggested : ["coldEmail" as PlatformKey]));
+
+    // Inject stored candidacy data
+    setAiCandidacy(data);
+    setIsCandidacyLoading(false);
+    setHasAnalyzed(true);
+
+    // Open at 'analysis' so user sees the stored score/details, then continues to platforms
+    setIsDrawerOpen(true);
+    setDrawerStep("analysis");
   };
 
   // ─── Edit a single generated proposal inline ──────────────────────────────
@@ -487,5 +547,6 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
     handleContinueToTemplates,
     triggerCandidacyAnalysis,
     hasAnalyzed,
+    handleOpenWithStoredData,
   };
 }

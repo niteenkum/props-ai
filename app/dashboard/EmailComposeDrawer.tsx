@@ -38,6 +38,8 @@ function fmtTime(iso: string) {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function EmailComposeDrawer({ isOpen, onClose, job, userEmail, isDark, initialBody = "" }: Props) {
   const [to,        setTo]       = useState(job.contactEmail ?? "");
+  const [cc,        setCc]       = useState("");
+  const [bcc,       setBcc]      = useState("");
   const [subject,   setSubject]  = useState("");
   const [body,      setBody]     = useState("");
   const [fromEmail, setFromEmail] = useState<string | null>(null);
@@ -64,6 +66,12 @@ export default function EmailComposeDrawer({ isOpen, onClose, job, userEmail, is
     setBody(parsed ? stripSubjectLine(initialBody) : initialBody);
     setTo(job.contactEmail ?? "");
     setSendState(null);
+
+    const ccTag = job.tags?.find(t => t.startsWith("cc:"));
+    const bccTag = job.tags?.find(t => t.startsWith("bcc:"));
+    setCc(ccTag ? ccTag.slice("cc:".length) : "");
+    setBcc(bccTag ? bccTag.slice("bcc:".length) : "");
+
     // Default attach toggle to AI's suggestion (false if not specified)
     setAttachResume(job.suggestAttachResume ?? false);
 
@@ -83,7 +91,7 @@ export default function EmailComposeDrawer({ isOpen, onClose, job, userEmail, is
       setHistory(rows);
       setShowHistory(rows.length > 0);
     });
-  }, [isOpen, job.id, userEmail, initialBody]);
+  }, [isOpen, job.id, userEmail, initialBody, job.tags]);
 
   const handleSend = async () => {
     if (!to.trim() || !subject.trim() || !body.trim()) return;
@@ -93,6 +101,8 @@ export default function EmailComposeDrawer({ isOpen, onClose, job, userEmail, is
       const res = await sendJobEmailAction(
         userEmail, job.id, to.trim(), subject.trim(), body.trim(),
         attachResume && !!resumeFilename,
+        cc.trim() || undefined,
+        bcc.trim() || undefined,
       );
       if (res.success) {
         setSendState({ status: "success", zohoMsgId: res.zohoMsgId, sentAt: res.sentAt! });
@@ -268,6 +278,28 @@ export default function EmailComposeDrawer({ isOpen, onClose, job, userEmail, is
                   value={to}
                   onChange={e => setTo(e.target.value)}
                   placeholder="recipient@email.com"
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+
+            {/* CC / BCC row */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <div>
+                <label style={labelStyle}>Cc</label>
+                <input
+                  value={cc}
+                  onChange={e => setCc(e.target.value)}
+                  placeholder="cc@email.com"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Bcc</label>
+                <input
+                  value={bcc}
+                  onChange={e => setBcc(e.target.value)}
+                  placeholder="bcc@email.com"
                   style={inputStyle}
                 />
               </div>

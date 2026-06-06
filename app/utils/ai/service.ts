@@ -322,11 +322,22 @@ export async function analyzeJobWithAI(
 
     const parsed = JSON.parse(jsonStr);
 
+    let contactEmail = parsed.contactEmail || "";
+    if (!contactEmail) {
+      const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
+      const foundEmails = jobText.match(emailRegex);
+      if (foundEmails && foundEmails.length > 0) {
+        contactEmail = foundEmails[0];
+      }
+    }
+
     return {
       role: parsed.role || "Frontend Engineer",
       company: parsed.company || "Company",
       contactName: parsed.contactName || "Hiring Team",
-      contactEmail: parsed.contactEmail || "",
+      contactEmail,
+      contactCc: parsed.contactCc || "",
+      contactBcc: parsed.contactBcc || "",
       matchScore: 0, // will be computed by heuristics
       tags: Array.isArray(parsed.tags) ? parsed.tags : [],
       parsedSummary: parsed.summary || jsonStr.substring(0, 200),

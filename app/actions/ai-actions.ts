@@ -234,7 +234,8 @@ export async function generateProposalsAction(
   results?: Record<string, string>;
   parsed?: {
     role: string; company: string; contactName: string;
-    contactEmail: string; matchScore: number; tags: string[]; parsedSummary: string;
+    contactEmail: string; contactCc?: string; contactBcc?: string;
+    matchScore: number; tags: string[]; parsedSummary: string;
   };
   suggestAttachResume?: boolean;   // AI hint: should resume be attached?
   error?: string;
@@ -254,6 +255,8 @@ export async function generateProposalsAction(
       company:       heuristic.company,
       contactName:   heuristic.contactName,
       contactEmail:  heuristic.contactEmail,
+      contactCc:     undefined as string | undefined,
+      contactBcc:    undefined as string | undefined,
       matchScore:    heuristic.matchScore,
       tags:          heuristic.tags,
       parsedSummary: heuristic.parsedSummary,
@@ -272,6 +275,8 @@ export async function generateProposalsAction(
             company:       aiParsed.company       || parsed.company,
             contactName:   aiParsed.contactName   || parsed.contactName,
             contactEmail:  aiParsed.contactEmail  || parsed.contactEmail,
+            contactCc:     aiParsed.contactCc     || parsed.contactCc,
+            contactBcc:    aiParsed.contactBcc    || parsed.contactBcc,
             tags:          aiParsed.tags?.length   ? aiParsed.tags : parsed.tags,
             parsedSummary: aiParsed.parsedSummary || parsed.parsedSummary,
           };
@@ -326,8 +331,8 @@ export async function generateProposalsAction(
       results,
       parsed: {
         role: parsed.role, company: parsed.company, contactName: parsed.contactName,
-        contactEmail: parsed.contactEmail, matchScore: parsed.matchScore,
-        tags: parsed.tags, parsedSummary: parsed.parsedSummary,
+        contactEmail: parsed.contactEmail, contactCc: parsed.contactCc, contactBcc: parsed.contactBcc,
+        matchScore: parsed.matchScore, tags: parsed.tags, parsedSummary: parsed.parsedSummary,
       },
       suggestAttachResume,
       provider: String(providerName),
@@ -362,7 +367,11 @@ export async function analyzeJobCandidacyAction(
   role?: string;
   company?: string;
   contactEmail?: string;
+  contactCc?: string;
+  contactBcc?: string;
   contactPhone?: string;
+  upworkJobUrl?: string;
+  applyUrl?: string;
   explanation?: string;
   matchedSkills?: string[];
   missingSkills?: string[];
@@ -426,6 +435,8 @@ SCORING RULES:
 - "Full Stack" matches frontend + backend skills
 - 0 = wrong field, 50 = partial overlap, 85-100 = strong match
 - Extract phone numbers as contactPhone
+- Extract Upwork job URLs (upwork.com/jobs/... or upwork.com/ab/...) as upworkJobUrl
+- Extract any application/apply URL (google forms, typeform, careers page, etc.) as applyUrl
 
 Return ONLY this JSON:
 {
@@ -433,7 +444,11 @@ Return ONLY this JSON:
   "role": "<job title>",
   "company": "<company or 'Not specified'>",
   "contactEmail": "<email or ''>",
+  "contactCc": "<cc email or alternative application email if found, else ''>",
+  "contactBcc": "<bcc email if found, else ''>",
   "contactPhone": "<phone or ''>",
+  "upworkJobUrl": "<upwork job link or ''>",
+  "applyUrl": "<any other application URL or ''>",
   "explanation": "<1-2 honest sentences about fit>",
   "matchedSkills": ["<your skill relevant to job>"],
   "missingSkills": ["<skill the job needs that you lack>"]${duplicateFields}
@@ -493,13 +508,26 @@ Return ONLY this JSON:
 
     const str = (v: unknown, fallback = "") => (typeof v === "string" ? v : fallback);
 
+    let contactEmail = str(p.contactEmail);
+    if (!contactEmail) {
+      const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
+      const foundEmails = jobText.match(emailRegex);
+      if (foundEmails && foundEmails.length > 0) {
+        contactEmail = foundEmails[0];
+      }
+    }
+
     return {
       success:        true,
       score:          typeof p.score === "number" ? Math.min(Math.max(p.score, 0), 100) : 50,
       role:           str(p.role, "Unknown"),
       company:        str(p.company, "Not specified"),
-      contactEmail:   str(p.contactEmail),
+      contactEmail,
+      contactCc:      str(p.contactCc),
+      contactBcc:     str(p.contactBcc),
       contactPhone:   str(p.contactPhone),
+      upworkJobUrl:   str(p.upworkJobUrl),
+      applyUrl:       str(p.applyUrl),
       explanation:    str(p.explanation),
       matchedSkills:  Array.isArray(p.matchedSkills) ? (p.matchedSkills as string[]) : [],
       missingSkills:  Array.isArray(p.missingSkills)  ? (p.missingSkills  as string[]) : [],

@@ -138,7 +138,9 @@ Output ONLY valid JSON with these exact fields (no markdown, no explanation):
   "role": "extracted job title",
   "company": "company name",
   "contactName": "recruiter/poster name if found, else 'Hiring Team'",
-  "contactEmail": "email if found, else ''",
+  "contactEmail": "primary email if found, else ''",
+  "contactCc": "cc email or secondary/alternative application email if explicitly mentioned, else ''",
+  "contactBcc": "bcc email if explicitly mentioned, else ''",
   "tags": ["matched", "skill", "tags"],
   "summary": "2-3 sentence summary of the role",
   "attachResume": false

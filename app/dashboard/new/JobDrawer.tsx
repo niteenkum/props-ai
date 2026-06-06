@@ -17,7 +17,7 @@ interface JobDrawerProps {
   // AI candidacy data (shown in analysis step)
   aiCandidacy: {
     score: number; role: string; company: string;
-    contactEmail: string; contactPhone: string;
+    contactEmail: string; contactCc?: string; contactBcc?: string; contactPhone: string;
     explanation: string; matchedSkills: string[]; missingSkills: string[];
   } | null;
   isCandidacyLoading: boolean;
@@ -323,6 +323,18 @@ export default function JobDrawer({
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <Mail style={{ width: 13, height: 13, color: "var(--muted-foreground)", flexShrink: 0 }} />
                         <span style={{ fontSize: 12, color: "var(--muted-foreground)", fontFamily: "monospace" }}>{aiCandidacy.contactEmail}</span>
+                      </div>
+                    )}
+                    {aiCandidacy?.contactCc && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <Mail style={{ width: 13, height: 13, color: "var(--muted-foreground)", flexShrink: 0, opacity: 0.8 }} />
+                        <span style={{ fontSize: 12, color: "var(--muted-foreground)", fontFamily: "monospace" }}>CC: {aiCandidacy.contactCc}</span>
+                      </div>
+                    )}
+                    {aiCandidacy?.contactBcc && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <Mail style={{ width: 13, height: 13, color: "var(--muted-foreground)", flexShrink: 0, opacity: 0.8 }} />
+                        <span style={{ fontSize: 12, color: "var(--muted-foreground)", fontFamily: "monospace" }}>BCC: {aiCandidacy.contactBcc}</span>
                       </div>
                     )}
                     {aiCandidacy?.contactPhone && (

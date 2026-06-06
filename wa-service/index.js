@@ -417,8 +417,11 @@ app.get("/groups", async (req, res) => {
 });
 
 // ── GET /messages/:groupId ────────────────────────────────────────────────────
-// Returns today's messages for a group. If needed, triggers fetchMessageHistory
-// to sync the latest messages from the phone, waiting for the sync to complete.
+// Returns today's messages for a group.
+// Strategy:
+//  1. Check in-memory todayMessages (populated from live messages.upsert events)
+//  2. If empty, try sock.loadMessages() which reads from Baileys local store
+//  3. Return whatever we have — no unreliable fetchMessageHistory peer requests
 app.get("/messages/:groupId", async (req, res) => {
   if (!isConnected || !sock) {
     return res.status(503).json({ error: "WhatsApp not connected" });
@@ -426,49 +429,88 @@ app.get("/messages/:groupId", async (req, res) => {
   const groupId = decodeURIComponent(req.params.groupId);
   console.log(`[WA] /messages/:groupId called for ${groupId}`);
 
-  // Block until the initial history sync completes (or 12s timeout) if we are in the middle of it
+  // Block until initial history sync completes (or 12s timeout)
   await waitForHistory(12000);
 
-  // Trigger an active on-demand sync from WhatsApp to pull any new messages
-  try {
-    console.log(`[WA] Triggering on-demand history sync for group: ${groupId}`);
-    
-    // We send a peer request for the latest 100 messages.
-    // By passing an empty ID and the current timestamp in milliseconds,
-    // the phone will send the 100 most recent messages of the chat.
-    const oldestMsgKey = { id: "", fromMe: false, remoteJid: groupId };
-    const requestId = await sock.fetchMessageHistory(100, oldestMsgKey, Date.now());
-    console.log(`[WA] Sent history request ID: ${requestId}, waiting for response...`);
+  // ── Step 1: Check in-memory store ──────────────────────────────────────────
+  let existing = todayMessages.get(groupId) || [];
+  console.log(`[WA] In-memory messages for group: ${existing.length}`);
 
-    // Wait for the on-demand sync response (up to 8 seconds)
-    await new Promise((resolve) => {
-      const timeout = setTimeout(() => {
-        const list = syncWaiters.get(requestId);
-        if (list) {
-          const idx = list.indexOf(resolve);
-          if (idx !== -1) list.splice(idx, 1);
-          if (list.length === 0) syncWaiters.delete(requestId);
+  // ── Step 2: If empty, pull from Baileys local message store ────────────────
+  if (existing.length === 0) {
+    try {
+      console.log(`[WA] Trying sock.loadMessages() for group: ${groupId}`);
+      // Load last 200 messages from Baileys store (populated on connect via syncFullHistory)
+      const stored = await sock.loadMessages(groupId, 200);
+      console.log(`[WA] sock.loadMessages returned ${stored?.messages?.length ?? 0} messages`);
+
+      if (stored?.messages?.length > 0) {
+        let captured = 0;
+        for (const msg of stored.messages) {
+          try {
+            const ts = Number(msg.messageTimestamp);
+            if (!isToday(ts)) continue;
+            if (msg.message?.protocolMessage) continue;
+            if (msg.message?.reactionMessage) continue;
+            const text = getMessageText(msg);
+            if (!text) continue;
+            const { phone, name } = getSenderDetails(msg);
+            const entry = {
+              id:         msg.key.id,
+              sender:     phone,
+              senderName: name,
+              text,
+              timestamp:  ts,
+            };
+            if (!todayMessages.has(groupId)) todayMessages.set(groupId, []);
+            const arr = todayMessages.get(groupId);
+            if (!arr.find(m => m.id === entry.id)) {
+              arr.push(entry);
+              captured++;
+            }
+          } catch {}
         }
-        console.log(`[WA] On-demand sync timeout for request ${requestId}`);
-        resolve();
-      }, 8000);
+        if (captured > 0) {
+          console.log(`[WA] loadMessages → stored ${captured} today-messages for ${groupId.split("@")[0]}`);
+          saveCache();
+        }
+        existing = todayMessages.get(groupId) || [];
+      }
+    } catch (err) {
+      console.warn(`[WA] sock.loadMessages() failed: ${err.message}`);
 
-      if (!syncWaiters.has(requestId)) syncWaiters.set(requestId, []);
-      syncWaiters.get(requestId).push(() => {
-        clearTimeout(timeout);
-        resolve();
-      });
-    });
-  } catch (err) {
-    console.warn(`[WA] fetchMessageHistory failed:`, err.message);
+      // ── Step 3: Fallback — try fetchMessageHistory (peer request) ────────────
+      // This is unreliable on multi-device but worth one attempt
+      try {
+        console.log(`[WA] Fallback: fetchMessageHistory for group: ${groupId}`);
+        const oldestMsgKey = { id: "", fromMe: false, remoteJid: groupId };
+        const requestId = await sock.fetchMessageHistory(100, oldestMsgKey, Date.now());
+        console.log(`[WA] Sent history request ID: ${requestId}, waiting up to 6s...`);
+
+        await new Promise((resolve) => {
+          const timeout = setTimeout(() => {
+            syncWaiters.delete(requestId);
+            console.log(`[WA] fetchMessageHistory timeout for ${requestId}`);
+            resolve();
+          }, 6000);
+
+          if (!syncWaiters.has(requestId)) syncWaiters.set(requestId, []);
+          syncWaiters.get(requestId).push(() => { clearTimeout(timeout); resolve(); });
+        });
+
+        existing = todayMessages.get(groupId) || [];
+      } catch (err2) {
+        console.warn(`[WA] fetchMessageHistory also failed: ${err2.message}`);
+      }
+    }
   }
 
-  // Get and sort today's messages
-  const all    = todayMessages.get(groupId) || [];
-  const sorted = [...all].sort((a, b) => b.timestamp - a.timestamp);
+  // ── Return ──────────────────────────────────────────────────────────────────
+  const sorted = [...existing].sort((a, b) => b.timestamp - a.timestamp);
   console.log(`[WA] /messages returning ${sorted.length} messages for ${groupId.split("@")[0]}`);
   res.json({ groupId, date: new Date().toISOString().split("T")[0], count: sorted.length, messages: sorted });
 });
+
 
 // ── GET /debug ────────────────────────────────────────────────────────────────
 // Shows all groups that have captured messages (useful for debugging)

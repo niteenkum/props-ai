@@ -40,6 +40,7 @@ model JobPost {
   parsedSummary      String      @db.Text
   contactName        String?
   contactEmail       String?
+  contactPhone       String?                          // extracted from job post text
   matchScore         Int
   postedDate         DateTime    @default(now())
   tags               String[]
@@ -49,9 +50,13 @@ model JobPost {
   proposal           String?     @db.Text
   linkedin           String?     @db.Text
   coverLetter        String?     @db.Text
-  generatedTemplates Json?                        // flexible map of platformKey → text
-  suggestAttachResume Boolean?                     // AI hint: should resume be attached?
+  generatedTemplates Json?                            // flexible map of platformKey → text
+  suggestAttachResume Boolean?                        // AI hint: should resume be attached?
+  matchExplanation   String?     @db.Text             // AI explanation of candidacy fit
+  matchedSkills      String[]                         // skills from profile matching the job
+  missingSkills      String[]                         // skills job needs that profile lacks
   sentEmails         SentEmail[]
+  whatsappSource     WhatsAppMessage?                 // reverse link from WA message
 }
 
 model UserProfile {
@@ -173,4 +178,46 @@ model SentEmail {
 
   @@index([userEmail])
   @@index([jobPostId])
+}
+
+// ─── WhatsApp Messages Table ────────────────────────────────────────────────────────────
+// Stores ALL messages synced from WhatsApp groups — approved, skipped, and rejected.
+// Users can see all messages and manually promote skipped/low-score ones to job leads.
+model WhatsAppMessage {
+  id                 String    @id @default(uuid())
+  userEmail          String
+  groupId            String
+  groupName          String
+  whatsappMessageId  String    @unique           // msg.key.id from Baileys — globally unique per WA message
+  senderPhone        String    @default("")
+  senderName         String    @default("Unknown")
+  text               String    @db.Text
+  timestamp          DateTime
+
+  // Analysis state
+  // raw | skipped | analyzed | duplicate | lead
+  status             String    @default("raw")
+
+  // AI candidacy analysis results (populated after Gemini call)
+  aiScore            Int?
+  aiRole             String?
+  aiCompany          String?
+  aiExplanation      String?   @db.Text
+  matchedSkills      String[]
+  missingSkills      String[]
+
+  // Duplicate detection: if this message is a duplicate, link to the original job post
+  isDuplicate        Boolean   @default(false)
+  duplicateOfJobId   String?   // points to the existing JobPost this duplicates
+
+  // If this message became a job lead, link to the created JobPost
+  jobPostId          String?   @unique
+  jobPost            JobPost?  @relation(fields: [jobPostId], references: [id], onDelete: SetNull)
+
+  createdAt          DateTime  @default(now())
+
+  @@index([userEmail])
+  @@index([groupId])
+  @@index([whatsappMessageId])
+  @@index([userEmail, groupId])
 }

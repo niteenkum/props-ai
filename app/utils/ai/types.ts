@@ -29,6 +29,8 @@ export interface ParsedJobData {
   company: string;
   contactName: string;
   contactEmail: string;
+  contactCc?: string;
+  contactBcc?: string;
   matchScore: number;
   tags: string[];
   parsedSummary: string;
