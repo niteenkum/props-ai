@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FilePlus2, LogOut, Sparkles, User, Sun, Moon, BarChart3, Mail } from "lucide-react";
+import { LayoutDashboard, FilePlus2, LogOut, Sparkles, User, Sun, Moon, BarChart3, Mail, MessageCircle } from "lucide-react";
 import { useTheme } from "./theme-provider";
 
 interface SidebarProps {
@@ -12,12 +12,13 @@ interface SidebarProps {
   userRole?: string;
 }
 
-const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; exact?: boolean }[] = [
-  { href: "/dashboard",         label: "Dashboard",        icon: LayoutDashboard, exact: true },
-  { href: "/dashboard/new",     label: "New Scan / Paste", icon: FilePlus2 },
-  { href: "/dashboard/profile", label: "Candidate Profile", icon: User },
-  { href: "/dashboard/mail",    label: "Mail Account",     icon: Mail },
-  { href: "/dashboard/expense", label: "AI Expense",        icon: BarChart3 },
+const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; exact?: boolean; accent?: string }[] = [
+  { href: "/dashboard",           label: "Dashboard",        icon: LayoutDashboard, exact: true },
+  { href: "/dashboard/new",       label: "New Scan / Paste", icon: FilePlus2 },
+  { href: "/dashboard/profile",   label: "Candidate Profile", icon: User },
+  { href: "/dashboard/whatsapp",  label: "WhatsApp Groups",  icon: MessageCircle, accent: "#25d366" },
+  { href: "/dashboard/mail",      label: "Mail Account",     icon: Mail },
+  { href: "/dashboard/expense",   label: "AI Expense",       icon: BarChart3 },
 ];
 
 export default function Sidebar({
@@ -81,8 +82,9 @@ export default function Sidebar({
 
         {/* Nav Items */}
         <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          {NAV_ITEMS.map(({ href, label, icon: Icon, exact }) => {
+          {NAV_ITEMS.map(({ href, label, icon: Icon, exact, accent }) => {
             const active = isActive(href, exact);
+            const iconColor = active ? "var(--foreground)" : (accent || "var(--muted-foreground)");
             return (
               <Link
                 key={href}
@@ -93,7 +95,7 @@ export default function Sidebar({
                   gap: 10,
                   padding: "10px 12px",
                   borderRadius: 10,
-                  background: active ? "var(--accent)" : "transparent",
+                  background: active ? (accent ? `${accent}18` : "var(--accent)") : "transparent",
                   color: active ? "var(--foreground)" : "var(--muted-foreground)",
                   fontSize: 13,
                   fontWeight: active ? 600 : 500,
@@ -103,8 +105,8 @@ export default function Sidebar({
                 }}
                 onMouseEnter={e => {
                   if (!active) {
-                    (e.currentTarget as HTMLElement).style.background = "var(--input)";
-                    (e.currentTarget as HTMLElement).style.color = "var(--foreground)";
+                    (e.currentTarget as HTMLElement).style.background = accent ? `${accent}12` : "var(--input)";
+                    (e.currentTarget as HTMLElement).style.color = accent || "var(--foreground)";
                   }
                 }}
                 onMouseLeave={e => {
@@ -119,11 +121,11 @@ export default function Sidebar({
                     style={{
                       position: "absolute", left: 0, top: "25%", bottom: "25%",
                       width: 3, borderRadius: "0 4px 4px 0",
-                      background: "var(--primary)",
+                      background: accent || "var(--primary)",
                     }}
                   />
                 )}
-                <Icon style={{ width: 18, height: 18, flexShrink: 0 }} />
+                <Icon style={{ width: 18, height: 18, flexShrink: 0, color: iconColor }} />
                 <span>{label}</span>
               </Link>
             );

@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "wa": "node wa-service/index.js",
+    "wa:dev": "node --watch wa-service/index.js"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
