@@ -118,14 +118,16 @@ function isToday(unixSeconds) {
   );
 }
 
-// ─── Helper: get display name from message ────────────────────────────────────
-function getSenderName(msg, sock) {
+// ─── Helper: get sender details (phone and display name) ──────────────────────
+function getSenderDetails(msg) {
   try {
-    const pushName = msg.pushName || "";
-    const jid      = msg.key.participant || msg.key.remoteJid || "";
-    return pushName || jid.split("@")[0] || "Unknown";
+    const jid = msg.participant || msg.key?.participant || (msg.key?.fromMe ? sock?.user?.id : null) || msg.key?.remoteJid || "";
+    const phone = jid.split("@")[0] || "";
+    const formattedPhone = phone ? `+${phone}` : "";
+    const name = msg.pushName || formattedPhone || "Unknown";
+    return { phone: formattedPhone, name };
   } catch {
-    return "Unknown";
+    return { phone: "", name: "Unknown" };
   }
 }
 
@@ -191,16 +193,25 @@ async function connectToWhatsApp() {
         if (msg.message?.reactionMessage) continue;
         const text = getMessageText(msg);
         if (!text) continue;
+        const { phone, name } = getSenderDetails(msg);
         const entry = {
           id:         msg.key.id,
-          sender:     (msg.key.participant || "").split("@")[0],
-          senderName: msg.pushName || (msg.key.participant || "").split("@")[0] || "Unknown",
+          sender:     phone,
+          senderName: name,
           text,
           timestamp:  ts,
         };
         if (!todayMessages.has(jid)) todayMessages.set(jid, []);
         const arr = todayMessages.get(jid);
-        if (!arr.find(m => m.id === entry.id)) { arr.push(entry); captured++; }
+        const existing = arr.find(m => m.id === entry.id);
+        if (!existing) {
+          arr.push(entry);
+          captured++;
+        } else if (existing.senderName !== entry.senderName) {
+          existing.sender = entry.sender;
+          existing.senderName = entry.senderName;
+          captured++;
+        }
       } catch {}
     }
     console.log(`[WA] messaging-history.set → stored ${captured} new today-messages (total across all groups)`);
@@ -291,20 +302,27 @@ async function connectToWhatsApp() {
         if (!text) continue;
 
         const groupId = msg.key.remoteJid;
+        const { phone, name } = getSenderDetails(msg);
         const entry = {
           id:         msg.key.id,
-          sender:     (msg.key.participant || msg.key.remoteJid || "").split("@")[0],
-          senderName: msg.pushName || (msg.key.participant || "").split("@")[0] || "Unknown",
+          sender:     phone,
+          senderName: name,
           text,
           timestamp:  Number(msg.messageTimestamp),
         };
 
         if (!todayMessages.has(groupId)) todayMessages.set(groupId, []);
         const arr = todayMessages.get(groupId);
-        if (!arr.find(m => m.id === entry.id)) {
+        const existing = arr.find(m => m.id === entry.id);
+        if (!existing) {
           arr.push(entry);
           captured++;
           console.log(`  ✅ Stored: "${text.slice(0,60)}" from ${entry.senderName} in ${groupId.split("@")[0]}`);
+        } else if (existing.senderName !== entry.senderName) {
+          existing.sender = entry.sender;
+          existing.senderName = entry.senderName;
+          captured++;
+          console.log(`  🔄 Updated sender for: "${text.slice(0,60)}" to ${entry.senderName}`);
         }
       } catch (err) {
         console.error(`  ❌ Error processing msg:`, err.message);
