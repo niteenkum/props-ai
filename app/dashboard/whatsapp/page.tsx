@@ -60,12 +60,53 @@ function StepDot({ step, current, done, label, isDark }: {
   );
 }
 
+interface MessageGroup {
+  label: string;
+  messages: WAMessage[];
+}
+
+const getGroupLabel = (timestamp: number): string => {
+  const d = new Date(timestamp * 1000);
+  const now = new Date();
+  
+  const isToday = d.getDate() === now.getDate() &&
+                  d.getMonth() === now.getMonth() &&
+                  d.getFullYear() === now.getFullYear();
+  
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday = d.getDate() === yesterday.getDate() &&
+                      d.getMonth() === yesterday.getMonth() &&
+                      d.getFullYear() === yesterday.getFullYear();
+                      
+  if (isToday) return "Today";
+  if (isYesterday) return "Yesterday";
+  
+  return d.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+};
+
+const groupMessages = (msgs: WAMessage[]): MessageGroup[] => {
+  const groups: MessageGroup[] = [];
+  msgs.forEach(msg => {
+    const label = getGroupLabel(msg.timestamp);
+    let group = groups.find(g => g.label === label);
+    if (!group) {
+      group = { label, messages: [] };
+      groups.push(group);
+    }
+    group.messages.push(msg);
+  });
+  return groups;
+};
+
 // ─── Message bubble ───────────────────────────────────────────────────────────
 function MessageBubble({ msg, isDark, onUseAsLead }: {
   msg: WAMessage; isDark: boolean; onUseAsLead: (text: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const time = new Date(msg.timestamp * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  
+  const date = new Date(msg.timestamp * 1000);
+  const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   const handleCopy = () => {
     navigator.clipboard.writeText(msg.text);
@@ -223,7 +264,9 @@ export default function WhatsAppPage() {
     try {
       const res  = await fetch(`/api/whatsapp/messages/${encodeURIComponent(selectedGroup.id)}`);
       const data = await res.json();
-      setMessages(data.messages || []);
+      const msgs = data.messages || [];
+      const sortedMsgs = [...msgs].sort((a: WAMessage, b: WAMessage) => b.timestamp - a.timestamp);
+      setMessages(sortedMsgs);
       setLastSyncTime(new Date());
       setSyncStatus("");
     } catch {
@@ -652,13 +695,44 @@ export default function WhatsAppPage() {
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {messages.map(msg => (
-                  <MessageBubble
-                    key={msg.id}
-                    msg={msg}
-                    isDark={isDark}
-                    onUseAsLead={handleUseAsLead}
-                  />
+                {groupMessages(messages).map(group => (
+                  <div key={group.label} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {/* Date Divider */}
+                    <div style={{
+                      display: "flex",
+                      alignItems: "center",
+                      margin: "20px 0 10px",
+                      gap: 12
+                    }}>
+                      <div style={{ flex: 1, height: 1, background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }} />
+                      <span style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        color: "var(--muted-foreground)",
+                        padding: "4px 12px",
+                        borderRadius: 12,
+                        background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+                        border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`
+                      }}>
+                        {group.label}
+                      </span>
+                      <div style={{ flex: 1, height: 1, background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }} />
+                    </div>
+
+                    {/* Messages under this group */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {group.messages.map(msg => (
+                        <MessageBubble
+                          key={msg.id}
+                          msg={msg}
+                          isDark={isDark}
+                          onUseAsLead={handleUseAsLead}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             )}

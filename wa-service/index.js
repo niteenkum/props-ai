@@ -447,7 +447,7 @@ app.get("/messages/:groupId", async (req, res) => {
 
   // Get and sort today's messages
   const all    = todayMessages.get(groupId) || [];
-  const sorted = [...all].sort((a, b) => a.timestamp - b.timestamp);
+  const sorted = [...all].sort((a, b) => b.timestamp - a.timestamp);
   console.log(`[WA] /messages returning ${sorted.length} messages for ${groupId.split("@")[0]}`);
   res.json({ groupId, date: new Date().toISOString().split("T")[0], count: sorted.length, messages: sorted });
 });
