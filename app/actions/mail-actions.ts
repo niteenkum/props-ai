@@ -725,6 +725,29 @@ export async function getEmailThreadForJobAction(
               .replace(/&#39;/gi, "'")
               .replace(/\n{3,}/g, "\n\n")
               .trim();
+
+            // Strip quoted reply content (e.g. "On Sun, 7 Jun 2026 at 00:34, <x@y.com> wrote:")
+            // Common patterns:
+            //   "On [date], [name/email] wrote:"
+            //   "-----Original Message-----"
+            //   "> quoted lines"
+            const quotePatterns = [
+              /\n?\s*On\s+.{10,80}\s+wrote:\s*\n?[\s\S]*/i,              // "On ... wrote:" + everything after
+              /\n?\s*-{3,}\s*Original Message\s*-{3,}\s*\n?[\s\S]*/i,    // -----Original Message-----
+              /\n?\s*From:\s+.+\n\s*Sent:\s+.+\n[\s\S]*/i,              // Outlook style "From: ... Sent: ..."
+              /\n?\s*_{3,}\s*\n[\s\S]*/,                                  // ___ divider + everything after
+            ];
+            for (const pattern of quotePatterns) {
+              const match = body.match(pattern);
+              if (match && match.index !== undefined) {
+                // Only strip if there's actual content before the quote
+                const beforeQuote = body.slice(0, match.index).trim();
+                if (beforeQuote.length > 0) {
+                  body = beforeQuote;
+                  break;
+                }
+              }
+            }
           }
         } catch (err) {
           console.warn(`[getEmailThread] Failed to fetch content for ${msgId}:`, err);
