@@ -185,7 +185,7 @@ export default function ExpensePage() {
             AI Expense Center
           </h1>
           <p style={{ fontSize: 13, color: "var(--muted-foreground)", margin: "4px 0 0 44px" }}>
-            Track every Gemini API call — tokens, cost, latency &amp; more
+            Track every Gemini &amp; Claude API call — tokens, cost, latency &amp; more
           </p>
         </div>
         <button
@@ -211,7 +211,7 @@ export default function ExpensePage() {
             sub={`${summary.successCalls} success · ${summary.failedCalls} failed`} />
           <StatCard icon={DollarSign}   label="Total Cost"        color="#10b981"
             value={fmt.usdK(summary.totalCostUsd)}
-            sub="Gemini 2.5 Flash pricing" />
+            sub="Accurate per-model pricing" />
           <StatCard icon={TrendingUp}   label="Total Tokens"      color="#3b82f6"
             value={fmt.tokens(summary.totalTokens)}
             sub={`In: ${fmt.tokens(summary.totalInputTokens)} · Out: ${fmt.tokens(summary.totalOutputTokens)}`} />

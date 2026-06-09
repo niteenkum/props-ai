@@ -49,6 +49,8 @@ export class ClaudeProvider implements AIProviderAdapter {
         body.temperature = options.temperature;
       }
 
+      const callStart = Date.now();
+
       const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -59,9 +61,30 @@ export class ClaudeProvider implements AIProviderAdapter {
         body: JSON.stringify(body),
       });
 
+      const durationMs = Date.now() - callStart;
+
       if (!response.ok) {
         const errorBody = await response.text();
         console.error(`[Claude] API error ${response.status} for model ${model}:`, errorBody);
+
+        // Log the failed call
+        if (options.apiType) {
+          const { logAiUsage, categoryForApiType } = await import("../usage-logger");
+          await logAiUsage({
+            apiType:      options.apiType as any,
+            category:     categoryForApiType(options.apiType as any),
+            model,
+            provider:     "claude",
+            jobPostId:    options.jobPostId,
+            userEmail:    options.userEmail,
+            inputTokens:  0,
+            outputTokens: 0,
+            durationMs,
+            success:      false,
+            errorMessage: `HTTP ${response.status}: ${errorBody.slice(0, 200)}`,
+          }).catch(() => {/* ignore logging errors */});
+        }
+
         // 404 = model not found on this tier → try next in cascade
         if (response.status === 404 && modelsToTry.length > 1) {
           console.warn(`[Claude] Model ${model} not available, trying next in cascade...`);
@@ -75,6 +98,27 @@ export class ClaudeProvider implements AIProviderAdapter {
       const content = data.content;
       if (!content || content.length === 0) {
         throw new Error("[Claude] No content in response");
+      }
+
+      // ─── Log token usage (Anthropic returns counts in data.usage) ──────────
+      if (options.apiType) {
+        const usage        = data.usage || {};
+        const inputTokens  = usage.input_tokens  || 0;
+        const outputTokens = usage.output_tokens || 0;
+
+        const { logAiUsage, categoryForApiType } = await import("../usage-logger");
+        await logAiUsage({
+          apiType:      options.apiType as any,
+          category:     categoryForApiType(options.apiType as any),
+          model,
+          provider:     "claude",
+          jobPostId:    options.jobPostId,
+          userEmail:    options.userEmail,
+          inputTokens,
+          outputTokens,
+          durationMs,
+          success:      true,
+        }).catch(() => {/* ignore logging errors */});
       }
 
       console.log(`[Claude] Success with model: ${model}`);

@@ -1,8 +1,15 @@
 // ─── AI Usage Logger ──────────────────────────────────────────────────────
-// Call logAiUsage() after any Gemini API call to record token usage + cost.
+// Call logAiUsage() after any Gemini or Claude API call to record token usage + cost.
+//
 // Gemini 2.5 Flash pricing (as of 2025):
-//   Input:  $0.075 / 1M tokens
-//   Output: $0.30  / 1M tokens
+//   Input:  $0.075 / 1M tokens  |  Output: $0.30  / 1M tokens
+//
+// Anthropic Claude pricing (as of 2025):
+//   Haiku 4.5:  $0.80  input / $4.00  output per 1M tokens
+//   Sonnet 4.5: $3.00  input / $15.00 output per 1M tokens
+//   Opus 4.5:   $15.00 input / $75.00 output per 1M tokens
+//   3.5 Haiku:  $0.80  input / $4.00  output per 1M tokens
+//   3.5 Sonnet: $3.00  input / $15.00 output per 1M tokens
 
 import { prisma } from "../prisma";
 
@@ -41,22 +48,45 @@ interface LogAiUsageParams {
   errorMessage?: string;
 }
 
-// Gemini 2.5 Flash pricing per 1M tokens (USD)
+// Pricing per 1M tokens (USD) — Gemini + Anthropic Claude
 const PRICING: Record<string, { input: number; output: number }> = {
-  "gemini-2.5-flash":   { input: 0.075,  output: 0.30  },
-  "gemini-1.5-flash":   { input: 0.075,  output: 0.30  },
-  "gemini-1.5-pro":     { input: 3.50,   output: 10.50 },
-  "gemini-2.0-flash":   { input: 0.10,   output: 0.40  },
+  // ── Gemini ──────────────────────────────────────────────────────────────
+  "gemini-2.5-flash":          { input: 0.075,  output: 0.30   },
+  "gemini-1.5-flash":          { input: 0.075,  output: 0.30   },
+  "gemini-1.5-pro":            { input: 3.50,   output: 10.50  },
+  "gemini-2.0-flash":          { input: 0.10,   output: 0.40   },
+
+  // ── Anthropic Claude 4 family ────────────────────────────────────────────
+  "claude-haiku-4":            { input: 0.80,   output: 4.00   },  // Haiku 4.x
+  "claude-sonnet-4":           { input: 3.00,   output: 15.00  },  // Sonnet 4.x
+  "claude-opus-4":             { input: 15.00,  output: 75.00  },  // Opus 4.x
+
+  // ── Anthropic Claude 3.5 family ─────────────────────────────────────────
+  "claude-3-5-haiku":          { input: 0.80,   output: 4.00   },  // 3.5 Haiku
+  "claude-3-5-sonnet":         { input: 3.00,   output: 15.00  },  // 3.5 Sonnet
+  "claude-3-opus":             { input: 15.00,  output: 75.00  },  // 3 Opus
 };
 
-function getCostPerToken(model: string) {
-  const key = Object.keys(PRICING).find(k => model.toLowerCase().includes(k));
-  return PRICING[key || "gemini-2.5-flash"];
+// Default fallback pricing per provider
+const DEFAULT_PRICING: Record<string, { input: number; output: number }> = {
+  gemini:    { input: 0.075, output: 0.30  },  // assume Flash
+  anthropic: { input: 3.00,  output: 15.00 },  // assume Sonnet
+  claude:    { input: 3.00,  output: 15.00 },
+  openai:    { input: 2.50,  output: 10.00 },  // assume GPT-4o
+};
+
+function getCostPerToken(model: string, provider?: string) {
+  const modelLower = model.toLowerCase();
+  const key = Object.keys(PRICING).find(k => modelLower.includes(k));
+  if (key) return PRICING[key];
+  // Fall back to provider-level default
+  const providerKey = (provider || "gemini").toLowerCase();
+  return DEFAULT_PRICING[providerKey] ?? DEFAULT_PRICING["gemini"];
 }
 
 export async function logAiUsage(params: LogAiUsageParams): Promise<void> {
   try {
-    const pricing      = getCostPerToken(params.model);
+    const pricing      = getCostPerToken(params.model, params.provider);
     const totalTokens  = params.inputTokens + params.outputTokens;
     const inputCostUsd  = (params.inputTokens  / 1_000_000) * pricing.input;
     const outputCostUsd = (params.outputTokens / 1_000_000) * pricing.output;
