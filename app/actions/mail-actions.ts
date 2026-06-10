@@ -216,78 +216,90 @@ async function getValidAccessToken(
 }
 
 // ─── 4. Fetch inbox messages ──────────────────────────────────────────────
+// NOTE: The /folders API requires ZohoMail.folders.READ scope (not granted).
+// /messages/view with NO folderId returns all recent mail — this works fine.
 
 export async function fetchInboxAction(
   userEmail: string,
   limit = 20
 ): Promise<{ success: boolean; messages?: MailMessage[]; error?: string }> {
+  console.log(`\n[fetchInbox] 🚀 CALLED for ${userEmail}, limit=${limit}`);
   const auth = await getValidAccessToken(userEmail);
   if (!auth) {
+    console.error("[fetchInbox] ❌ No valid token");
     return { success: false, error: "Mail account not connected or token expired." };
   }
 
   const { token, accountId, apiBase } = auth;
+  console.log(`[fetchInbox] ✅ Token OK | accountId=${accountId} | apiBase=${apiBase}`);
 
-  // We need the Zoho accountId to call the messages API
-  if (!accountId) {
-    // Try to fetch it now
+  // Ensure we have the accountId
+  let activeAccountId = accountId;
+  if (!activeAccountId) {
     try {
       const accRes = await fetch(`${apiBase}/api/accounts`, {
         headers: { Authorization: `Zoho-oauthtoken ${token}` },
       });
       if (accRes.ok) {
-        const accData    = await accRes.json();
-        const firstAcc   = accData?.data?.[0];
-        const fetchedId  = firstAcc?.accountId ?? firstAcc?.accountID;
-        if (fetchedId) {
+        const accData   = await accRes.json();
+        const firstAcc  = accData?.data?.[0];
+        activeAccountId = String(firstAcc?.accountId ?? firstAcc?.accountID ?? "");
+        if (activeAccountId) {
           await prisma.mailAccount.update({
             where: { userEmail },
-            data:  { zohoAccountId: String(fetchedId) },
+            data:  { zohoAccountId: activeAccountId },
           });
-          // Re-run with the now-known accountId
-          return fetchInboxAction(userEmail, limit);
+          console.log(`[fetchInbox] ✅ Resolved accountId: ${activeAccountId}`);
         }
       }
-    } catch { /* fall through to error */ }
+    } catch { /* proceed */ }
+  }
+
+  if (!activeAccountId) {
+    console.error("[fetchInbox] ❌ Cannot resolve Zoho account ID");
     return { success: false, error: "Could not determine Zoho account ID." };
   }
 
   try {
+    // Call messages/view WITHOUT folderId — returns all recent mail (200 OK)
     const params = new URLSearchParams({
-      folderId: "INBOX",
-      limit:    String(Math.min(limit, 50)),
-      sortBy:   "date",
+      limit:  String(Math.min(limit, 50)),
+      sortBy: "date",
+    });
+    const url = `${apiBase}/api/accounts/${activeAccountId}/messages/view?${params}`;
+    console.log(`[fetchInbox] 📡 GET ${url}`);
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Zoho-oauthtoken ${token}` },
     });
 
-    const res = await fetch(
-      `${apiBase}/api/accounts/${accountId}/messages/view?${params}`,
-      { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
-    );
+    const bodyText = await res.text();
+    console.log(`[fetchInbox] Response status: ${res.status}`);
 
     if (!res.ok) {
-      const err = await res.text();
-      console.error("[fetchInbox] Zoho API error:", res.status, err);
+      console.error(`[fetchInbox] ❌ Zoho error (${res.status}):`, bodyText.slice(0, 400));
       return { success: false, error: `Zoho API error (${res.status})` };
     }
 
-    const data = await res.json();
+    const data = JSON.parse(bodyText);
     const raw: any[] = data?.data ?? [];
+    console.log(`[fetchInbox] ✅ Got ${raw.length} messages from Zoho`);
 
     const messages: MailMessage[] = raw.map((m: any) => ({
       messageId:  String(m.messageId   ?? m.msgId ?? ""),
       subject:    m.subject            ?? "(no subject)",
       fromEmail:  m.fromAddress        ?? m.sender ?? "",
-      fromName:   m.fromDisplayString  ?? m.senderDisplayName ?? "",
+      fromName:   m.fromDisplayString  ?? m.senderDisplayName ?? m.sender ?? "",
       receivedAt: m.receivedTime
         ? new Date(Number(m.receivedTime)).toISOString()
         : new Date().toISOString(),
       summary:    (m.summary ?? m.content ?? "").slice(0, 120),
-      isRead:     m.isRead === true || m.status === "read",
+      isRead:     m.isRead === true || m.status === "0" || m.status === "read",
     }));
 
     return { success: true, messages };
   } catch (err: any) {
-    console.error("[fetchInbox] Error:", err);
+    console.error("[fetchInbox] ❌ Exception:", err);
     return { success: false, error: err?.message ?? "Failed to fetch inbox." };
   }
 }

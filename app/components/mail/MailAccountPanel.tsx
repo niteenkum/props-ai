@@ -1,100 +1,255 @@
 "use client";
 
-// ─── MailAccountPanel ─────────────────────────────────────────────────────
-// Self-contained UI for the linked mail account feature.
-// Renders three states: loading skeleton, not-connected, connected.
-// The panel is intentionally standalone — just pass userEmail + isDark.
+// ─── MailAccountPanel ─────────────────────────────────────────────────────────
+// Revamped: Category tabs, paginated inbox, premium UI, send form.
 
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
-  Mail, Link2, Unlink, RefreshCw, Send, Inbox, ChevronDown,
-  CheckCircle2, AlertCircle, Loader2, ExternalLink, Clock,
-  ShieldCheck, X,
+  Mail, Link2, Unlink, RefreshCw, Send, Inbox, CheckCircle2, AlertCircle,
+  Loader2, ExternalLink, ShieldCheck, X, Star, Tag, Users, Briefcase,
+  ChevronLeft, ChevronRight, Clock, Eye, EyeOff, Zap, Filter,
 } from "lucide-react";
 import { useMailAccount } from "../../hooks/useMailAccount";
 import type { MailMessage } from "../../actions/mail-actions";
 
-interface MailAccountPanelProps {
-  userEmail: string;
-  isDark:    boolean;
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 8;
+
+type Category = "all" | "unread" | "starred" | "jobs" | "people" | "updates";
+
+const CATEGORIES: { id: Category; label: string; icon: React.ReactNode; desc: string }[] = [
+  { id: "all",     label: "All Mail",  icon: <Inbox    size={13} />, desc: "Everything" },
+  { id: "unread",  label: "Unread",    icon: <Eye      size={13} />, desc: "Unread only" },
+  { id: "starred", label: "Starred",   icon: <Star     size={13} />, desc: "Marked important" },
+  { id: "jobs",    label: "Jobs",      icon: <Briefcase size={13} />, desc: "Job-related" },
+  { id: "people",  label: "People",    icon: <Users    size={13} />, desc: "From contacts" },
+  { id: "updates", label: "Updates",   icon: <Tag      size={13} />, desc: "Notifications" },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function classifyMessage(msg: MailMessage): Category[] {
+  const cats: Category[] = ["all"];
+  if (!msg.isRead) cats.push("unread");
+
+  const subjectLower  = (msg.subject  ?? "").toLowerCase();
+  const fromLower     = (msg.fromEmail ?? "").toLowerCase();
+  const summaryLower  = (msg.summary  ?? "").toLowerCase();
+
+  const jobKeywords   = ["job", "position", "vacancy", "hiring", "role", "opportunity",
+                          "career", "offer", "apply", "application", "interview", "recruiter"];
+  const updateKeywords = ["notification", "alert", "noreply", "no-reply", "newsletter",
+                           "unsubscribe", "invoice", "receipt", "verify", "confirm", "account",
+                           "update", "linkedin", "github", "google", "facebook", "twitter"];
+
+  const isJob    = jobKeywords.some(k => subjectLower.includes(k) || summaryLower.includes(k));
+  const isUpdate = updateKeywords.some(k => fromLower.includes(k) || subjectLower.includes(k));
+
+  if (isJob)    cats.push("jobs");
+  else if (isUpdate) cats.push("updates");
+  else          cats.push("people");
+
+  return cats;
 }
 
-// ─── Sub-component: Inbox message row ────────────────────────────────────
+function fmtTime(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = now.getTime() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+}
 
-function MessageRow({ msg, isDark }: { msg: MailMessage; isDark: boolean }) {
-  const [expanded, setExpanded] = useState(false);
-  const time = new Date(msg.receivedAt).toLocaleString("en-IN", {
-    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-  });
+function getInitials(name: string, email: string) {
+  if (name && name.trim()) {
+    const parts = name.trim().split(" ");
+    return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase();
+  }
+  return email.slice(0, 2).toUpperCase();
+}
 
+const AVATAR_COLORS = [
+  "#6366f1", "#8b5cf6", "#ec4899", "#14b8a6",
+  "#f59e0b", "#22c55e", "#3b82f6", "#ef4444",
+];
+
+function avatarColor(email: string) {
+  let hash = 0;
+  for (let i = 0; i < email.length; i++) hash = email.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+// ─── AvatarBubble ─────────────────────────────────────────────────────────────
+
+function AvatarBubble({ name, email, size = 36 }: { name: string; email: string; size?: number }) {
+  const color = avatarColor(email);
   return (
-    <div
-      onClick={() => setExpanded(v => !v)}
-      style={{
-        padding: "12px 14px",
-        borderRadius: 10,
-        border: `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.08)"}`,
-        background: msg.isRead
-          ? "transparent"
-          : (isDark ? "rgba(99,102,241,0.06)" : "rgba(99,102,241,0.04)"),
-        cursor: "pointer",
-        transition: "background 0.15s",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-            {!msg.isRead && (
-              <span style={{
-                width: 6, height: 6, borderRadius: "50%", background: "#818cf8",
-                flexShrink: 0, display: "inline-block",
-              }} />
-            )}
-            <span style={{
-              fontSize: 12, fontWeight: msg.isRead ? 500 : 700,
-              color: "var(--foreground)", overflow: "hidden",
-              textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>
-              {msg.subject}
-            </span>
-          </div>
-          <div style={{ fontSize: 11, color: "var(--muted-foreground)", marginBottom: expanded ? 8 : 0 }}>
-            {msg.fromName ? `${msg.fromName} ` : ""}<span style={{ fontFamily: "monospace", fontSize: 10 }}>{"<"}{msg.fromEmail}{">"}</span>
-          </div>
-          {expanded && msg.summary && (
-            <p style={{
-              fontSize: 12, color: "var(--muted-foreground)", lineHeight: 1.6,
-              marginTop: 6, paddingTop: 8,
-              borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
-            }}>
-              {msg.summary}…
-            </p>
-          )}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-          <span style={{ fontSize: 10, color: "var(--muted-foreground)", whiteSpace: "nowrap" }}>{time}</span>
-          <ChevronDown style={{
-            width: 12, height: 12, color: "var(--muted-foreground)",
-            transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
-            transition: "transform 0.2s",
-          }} />
-        </div>
-      </div>
+    <div style={{
+      width: size, height: size, borderRadius: "50%", flexShrink: 0,
+      background: `${color}18`, border: `1.5px solid ${color}30`,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: size * 0.33, fontWeight: 800, color, letterSpacing: -0.5,
+    }}>
+      {getInitials(name, email)}
     </div>
   );
 }
 
-// ─── Sub-component: Quick-send form ──────────────────────────────────────
+// ─── MessageRow ───────────────────────────────────────────────────────────────
+
+function MessageRow({
+  msg, isDark, isStarred, onToggleStar,
+}: {
+  msg: MailMessage;
+  isDark: boolean;
+  isStarred: boolean;
+  onToggleStar: (id: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const color = avatarColor(msg.fromEmail);
+
+  return (
+    <div
+      style={{
+        borderRadius: 12,
+        border: `1px solid ${
+          !msg.isRead
+            ? (isDark ? `${color}30` : `${color}20`)
+            : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)")
+        }`,
+        background: !msg.isRead
+          ? (isDark ? `${color}08` : `${color}05`)
+          : (isDark ? "rgba(255,255,255,0.015)" : "rgba(0,0,0,0.01)"),
+        cursor: "pointer",
+        transition: "all 0.18s ease",
+        overflow: "hidden",
+      }}
+      onMouseEnter={e => {
+        (e.currentTarget as HTMLDivElement).style.borderColor = isDark
+          ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.14)";
+        (e.currentTarget as HTMLDivElement).style.background = isDark
+          ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.025)";
+      }}
+      onMouseLeave={e => {
+        (e.currentTarget as HTMLDivElement).style.borderColor = !msg.isRead
+          ? (isDark ? `${color}30` : `${color}20`)
+          : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)");
+        (e.currentTarget as HTMLDivElement).style.background = !msg.isRead
+          ? (isDark ? `${color}08` : `${color}05`)
+          : (isDark ? "rgba(255,255,255,0.015)" : "rgba(0,0,0,0.01)");
+      }}
+    >
+      <div
+        onClick={() => setExpanded(v => !v)}
+        style={{ padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 10 }}
+      >
+        {/* Avatar */}
+        <AvatarBubble name={msg.fromName} email={msg.fromEmail} size={36} />
+
+        {/* Content */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+              {!msg.isRead && (
+                <span style={{
+                  width: 6, height: 6, borderRadius: "50%",
+                  background: color, flexShrink: 0,
+                }} />
+              )}
+              <span style={{
+                fontSize: 12.5, fontWeight: msg.isRead ? 500 : 700,
+                color: "var(--foreground)",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                maxWidth: 160,
+              }}>
+                {msg.fromName || msg.fromEmail.split("@")[0]}
+              </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              <span style={{ fontSize: 10, color: "var(--muted-foreground)", whiteSpace: "nowrap" }}>
+                {fmtTime(msg.receivedAt)}
+              </span>
+              {/* Star toggle */}
+              <button
+                onClick={e => { e.stopPropagation(); onToggleStar(msg.messageId); }}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  padding: 2, color: isStarred ? "#f59e0b" : "var(--muted-foreground)",
+                  transition: "color 0.15s", opacity: isStarred ? 1 : 0.45,
+                }}
+              >
+                <Star size={12} fill={isStarred ? "#f59e0b" : "none"} />
+              </button>
+            </div>
+          </div>
+
+          {/* Subject */}
+          <p style={{
+            fontSize: 12, fontWeight: msg.isRead ? 400 : 600,
+            color: "var(--foreground)", margin: "1px 0 2px",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            opacity: msg.isRead ? 0.7 : 1,
+          }}>
+            {msg.subject}
+          </p>
+
+          {/* Preview */}
+          {!expanded && msg.summary && (
+            <p style={{
+              fontSize: 11, color: "var(--muted-foreground)",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              margin: 0, opacity: 0.75,
+            }}>
+              {msg.summary}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded content */}
+      {expanded && msg.summary && (
+        <div style={{
+          padding: "0 14px 14px 60px",
+          borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"}`,
+          marginTop: 0,
+        }}>
+          <p style={{
+            fontSize: 12, color: "var(--muted-foreground)",
+            lineHeight: 1.7, margin: "12px 0 8px",
+          }}>
+            {msg.summary}…
+          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{
+              fontSize: 10, color: "var(--muted-foreground)",
+              fontFamily: "monospace", opacity: 0.6,
+            }}>
+              from: {msg.fromEmail}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── QuickSendForm ────────────────────────────────────────────────────────────
 
 function QuickSendForm({
   onSend, isSending, sendError, lastSendSuccess, onClear, isDark,
 }: {
-  onSend:          (to: string, subject: string, body: string) => void;
-  isSending:       boolean;
-  sendError:       string | null;
+  onSend: (to: string, subject: string, body: string) => void;
+  isSending: boolean;
+  sendError: string | null;
   lastSendSuccess: boolean;
-  onClear:         () => void;
-  isDark:          boolean;
+  onClear: () => void;
+  isDark: boolean;
 }) {
   const [to,      setTo]      = useState("");
   const [subject, setSubject] = useState("");
@@ -102,155 +257,307 @@ function QuickSendForm({
 
   const canSend = to.trim() && subject.trim() && body.trim() && !isSending;
 
-  const handleSend = () => {
-    if (!canSend) return;
-    onSend(to.trim(), subject.trim(), body.trim());
-  };
-
-  const inputStyle: React.CSSProperties = {
+  const input: React.CSSProperties = {
     width: "100%", boxSizing: "border-box",
-    padding: "9px 12px", borderRadius: 9,
-    border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
-    background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
-    color: "var(--foreground)", fontSize: 12, fontFamily: "inherit",
-    outline: "none",
+    padding: "10px 13px", borderRadius: 10,
+    border: `1px solid ${isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.1)"}`,
+    background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.025)",
+    color: "var(--foreground)", fontSize: 13, fontFamily: "inherit",
+    outline: "none", transition: "border-color 0.15s",
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.2, color: "var(--muted-foreground)", margin: 0 }}>
-        Send Email
-      </p>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
+      {/* Status banners */}
       {lastSendSuccess && (
         <div style={{
-          padding: "8px 12px", borderRadius: 8,
-          background: isDark ? "rgba(34,197,94,0.1)" : "#f0fdf4",
-          border: `1px solid ${isDark ? "rgba(34,197,94,0.3)" : "#bbf7d0"}`,
+          padding: "10px 14px", borderRadius: 10,
+          background: isDark ? "rgba(34,197,94,0.08)" : "#f0fdf4",
+          border: `1px solid ${isDark ? "rgba(34,197,94,0.25)" : "#bbf7d0"}`,
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <CheckCircle2 style={{ width: 13, height: 13, color: "#22c55e" }} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: isDark ? "#4ade80" : "#16a34a" }}>Email sent successfully!</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <CheckCircle2 size={13} style={{ color: "#22c55e" }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: isDark ? "#4ade80" : "#16a34a" }}>
+              Email sent successfully!
+            </span>
           </div>
           <button onClick={onClear} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted-foreground)", padding: 2 }}>
-            <X style={{ width: 12, height: 12 }} />
+            <X size={12} />
           </button>
         </div>
       )}
 
       {sendError && (
         <div style={{
-          padding: "8px 12px", borderRadius: 8,
-          background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)",
-          display: "flex", alignItems: "center", gap: 6,
+          padding: "10px 14px", borderRadius: 10,
+          background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.25)",
+          display: "flex", alignItems: "center", gap: 7,
         }}>
-          <AlertCircle style={{ width: 13, height: 13, color: "#ef4444" }} />
+          <AlertCircle size={13} style={{ color: "#ef4444" }} />
           <span style={{ fontSize: 12, color: "#ef4444" }}>{sendError}</span>
         </div>
       )}
 
-      <input
-        type="email" placeholder="To: recipient@email.com" value={to}
-        onChange={e => setTo(e.target.value)} style={inputStyle}
-      />
-      <input
-        type="text" placeholder="Subject" value={subject}
-        onChange={e => setSubject(e.target.value)} style={inputStyle}
-      />
-      <textarea
-        rows={5} placeholder="Email body..." value={body}
-        onChange={e => setBody(e.target.value)}
-        style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }}
-      />
+      {/* Fields */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+        <label style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, color: "var(--muted-foreground)", marginBottom: 4 }}>
+          To
+        </label>
+        <input
+          type="email" placeholder="recipient@example.com" value={to}
+          onChange={e => setTo(e.target.value)} style={input}
+        />
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+        <label style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, color: "var(--muted-foreground)", marginBottom: 4 }}>
+          Subject
+        </label>
+        <input
+          type="text" placeholder="What's this about?" value={subject}
+          onChange={e => setSubject(e.target.value)} style={input}
+        />
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+        <label style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, color: "var(--muted-foreground)", marginBottom: 4 }}>
+          Message
+        </label>
+        <textarea
+          rows={5} placeholder="Write your message..." value={body}
+          onChange={e => setBody(e.target.value)}
+          style={{ ...input, resize: "vertical", lineHeight: 1.65 }}
+        />
+      </div>
 
       <button
-        onClick={handleSend}
+        onClick={() => { if (canSend) onSend(to.trim(), subject.trim(), body.trim()); }}
         disabled={!canSend}
         style={{
-          padding: "10px 18px", borderRadius: 10, border: "none",
-          background: canSend ? "linear-gradient(135deg, #818cf8, #6366f1)" : "var(--border)",
+          padding: "11px 0", borderRadius: 11, border: "none", width: "100%",
+          background: canSend
+            ? "linear-gradient(135deg, #818cf8 0%, #6366f1 100%)"
+            : (isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.06)"),
           color: canSend ? "#fff" : "var(--muted-foreground)",
-          fontSize: 13, fontWeight: 700,
-          cursor: canSend ? "pointer" : "not-allowed",
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-          boxShadow: canSend ? "0 4px 14px rgba(99,102,241,0.3)" : "none",
+          fontSize: 13, fontWeight: 700, cursor: canSend ? "pointer" : "not-allowed",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          boxShadow: canSend ? "0 4px 18px rgba(99,102,241,0.3)" : "none",
           transition: "all 0.2s",
         }}
       >
         {isSending
-          ? <><Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> Sending...</>
-          : <><Send style={{ width: 13, height: 13 }} /> Send Email</>
+          ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Sending...</>
+          : <><Send size={13} /> Send Email</>
         }
       </button>
     </div>
   );
 }
 
-// ─── Main Panel ───────────────────────────────────────────────────────────
+// ─── CategoryBadge ────────────────────────────────────────────────────────────
+
+function CategoryBadge({ count, isDark }: { count: number; isDark: boolean }) {
+  if (!count) return null;
+  return (
+    <span style={{
+      fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 50,
+      background: isDark ? "rgba(99,102,241,0.18)" : "rgba(99,102,241,0.1)",
+      color: isDark ? "#818cf8" : "#6366f1",
+      border: `1px solid ${isDark ? "rgba(99,102,241,0.3)" : "rgba(99,102,241,0.2)"}`,
+      minWidth: 18, textAlign: "center",
+    }}>
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+// ─── Pagination ───────────────────────────────────────────────────────────────
+
+function Pagination({
+  page, total, pageSize, onChange, isDark,
+}: {
+  page: number;
+  total: number;
+  pageSize: number;
+  onChange: (p: number) => void;
+  isDark: boolean;
+}) {
+  const totalPages = Math.ceil(total / pageSize);
+  if (totalPages <= 1) return null;
+
+  const btnStyle = (active: boolean, disabled?: boolean): React.CSSProperties => ({
+    width: 30, height: 30, borderRadius: 8, border: "none",
+    fontSize: 12, fontWeight: active ? 700 : 500, cursor: disabled ? "default" : "pointer",
+    background: active
+      ? "linear-gradient(135deg, #818cf8, #6366f1)"
+      : (isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"),
+    color: active ? "#fff" : (disabled ? "var(--muted-foreground)" : "var(--foreground)"),
+    opacity: disabled ? 0.4 : 1,
+    display: "flex", alignItems: "center", justifyContent: "center",
+    transition: "all 0.15s",
+    boxShadow: active ? "0 2px 10px rgba(99,102,241,0.3)" : "none",
+  });
+
+  const pages = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || Math.abs(i - page) <= 1) {
+      pages.push(i);
+    } else if (pages[pages.length - 1] !== -1) {
+      pages.push(-1); // ellipsis
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, paddingTop: 16 }}>
+      <button
+        style={btnStyle(false, page === 1)}
+        onClick={() => page > 1 && onChange(page - 1)}
+        disabled={page === 1}
+      >
+        <ChevronLeft size={13} />
+      </button>
+
+      {pages.map((p, i) =>
+        p === -1 ? (
+          <span key={`ellipsis-${i}`} style={{ fontSize: 12, color: "var(--muted-foreground)", padding: "0 2px" }}>…</span>
+        ) : (
+          <button key={p} style={btnStyle(p === page)} onClick={() => onChange(p)}>
+            {p}
+          </button>
+        )
+      )}
+
+      <button
+        style={btnStyle(false, page === totalPages)}
+        onClick={() => page < totalPages && onChange(page + 1)}
+        disabled={page === totalPages}
+      >
+        <ChevronRight size={13} />
+      </button>
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+interface MailAccountPanelProps {
+  userEmail: string;
+  isDark:    boolean;
+}
 
 export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanelProps) {
   const mail = useMailAccount(userEmail);
-  const [activeTab, setActiveTab] = useState<"inbox" | "send">("inbox");
 
-  // ── Loading skeleton ──────────────────────────────────────────────────────
+  const [activeTab,   setActiveTab]   = useState<"inbox" | "send">("inbox");
+  const [category,    setCategory]    = useState<Category>("all");
+  const [page,        setPage]        = useState(1);
+  const [starred,     setStarred]     = useState<Set<string>>(new Set());
+  const [search,      setSearch]      = useState("");
+
+  // ── Toggle star ────────────────────────────────────────────────────────────
+  const toggleStar = useCallback((id: string) => {
+    setStarred(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+
+  // ── Filter messages ────────────────────────────────────────────────────────
+  const filteredMessages = mail.inbox.filter(msg => {
+    const cats = classifyMessage(msg);
+    const isInCat = category === "starred" ? starred.has(msg.messageId) : cats.includes(category);
+    if (!isInCat) return false;
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      msg.subject.toLowerCase().includes(q) ||
+      msg.fromEmail.toLowerCase().includes(q) ||
+      msg.fromName.toLowerCase().includes(q) ||
+      (msg.summary ?? "").toLowerCase().includes(q)
+    );
+  });
+
+  const totalPages  = Math.ceil(filteredMessages.length / PAGE_SIZE);
+  const currentPage = Math.min(page, Math.max(1, totalPages));
+  const pageItems   = filteredMessages.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  // Reset to page 1 when category/search changes
+  const handleCategoryChange = (cat: Category) => {
+    setCategory(cat);
+    setPage(1);
+  };
+  const handleSearch = (q: string) => {
+    setSearch(q);
+    setPage(1);
+  };
+
+  // ── Category counts ────────────────────────────────────────────────────────
+  const countFor = (cat: Category) => {
+    if (cat === "starred") return mail.inbox.filter(m => starred.has(m.messageId)).length;
+    return mail.inbox.filter(m => classifyMessage(m).includes(cat)).length;
+  };
+  const unreadCount = mail.inbox.filter(m => !m.isRead).length;
+
+  // ── Loading skeleton ───────────────────────────────────────────────────────
   if (mail.isLoading) {
     return (
-      <div style={{
-        padding: "32px 24px", display: "flex", flexDirection: "column",
-        alignItems: "center", gap: 14,
-      }}>
+      <div style={{ padding: "40px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
         <div style={{
           width: 52, height: 52, borderRadius: "50%",
           background: isDark ? "rgba(99,102,241,0.1)" : "rgba(99,102,241,0.06)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <Loader2 style={{ width: 22, height: 22, color: "#818cf8", animation: "spin 1s linear infinite" }} />
+          <Loader2 size={22} style={{ color: "#818cf8", animation: "spin 1s linear infinite" }} />
         </div>
-        <p style={{ fontSize: 13, color: "var(--muted-foreground)", margin: 0 }}>Loading mail account...</p>
+        <p style={{ fontSize: 13, color: "var(--muted-foreground)", margin: 0 }}>Loading mail account…</p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
-  // ── Not connected ─────────────────────────────────────────────────────────
+  // ── Not connected ──────────────────────────────────────────────────────────
   if (!mail.mailAccount) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        {/* Hero section */}
+
+        {/* Hero */}
         <div style={{ textAlign: "center", paddingTop: 8 }}>
           <div style={{
-            width: 64, height: 64, borderRadius: "50%", margin: "0 auto 16px",
-            background: isDark
-              ? "linear-gradient(135deg, rgba(99,102,241,0.15), rgba(129,140,248,0.08))"
-              : "linear-gradient(135deg, rgba(99,102,241,0.1), rgba(129,140,248,0.05))",
+            width: 72, height: 72, borderRadius: "50%", margin: "0 auto 18px",
+            background: "linear-gradient(135deg, rgba(99,102,241,0.15), rgba(129,140,248,0.06))",
             border: "1.5px solid rgba(99,102,241,0.25)",
             display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 0 30px rgba(99,102,241,0.12)",
           }}>
-            <Mail style={{ width: 26, height: 26, color: "#818cf8" }} />
+            <Mail size={28} style={{ color: "#818cf8" }} />
           </div>
-          <h3 style={{ fontSize: 17, fontWeight: 700, color: "var(--foreground)", margin: "0 0 6px" }}>
-            Connect Your Zoho Mail
+          <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--foreground)", margin: "0 0 8px" }}>
+            Connect Your Mailbox
           </h3>
           <p style={{ fontSize: 13, color: "var(--muted-foreground)", lineHeight: 1.65, margin: 0 }}>
-            Link your Zoho mailbox to read job opportunities directly and send outreach proposals without leaving PropAI.
+            Link Zoho Mail to read job leads and send outreach proposals without leaving PropAI.
           </p>
         </div>
 
         {/* Permission bullets */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {[
-            { icon: <Inbox      style={{ width: 13, height: 13 }} />, text: "Read your inbox to surface job leads" },
-            { icon: <Send       style={{ width: 13, height: 13 }} />, text: "Send cold emails & proposals directly" },
-            { icon: <ShieldCheck style={{ width: 13, height: 13 }} />, text: "Tokens stored securely — revoke anytime" },
+            { icon: <Inbox size={13} />,       text: "Read your inbox to surface job leads" },
+            { icon: <Send size={13} />,        text: "Send cold emails & proposals directly" },
+            { icon: <ShieldCheck size={13} />, text: "Tokens stored securely — revoke anytime" },
+            { icon: <Zap size={13} />,         text: "Category-smart inbox organisation" },
           ].map(({ icon, text }) => (
             <div key={text} style={{
               display: "flex", alignItems: "center", gap: 10,
               padding: "10px 14px", borderRadius: 10,
-              background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.025)",
-              border: `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)"}`,
+              background: isDark ? "rgba(255,255,255,0.025)" : "rgba(0,0,0,0.02)",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"}`,
             }}>
               <span style={{ color: "#818cf8", flexShrink: 0 }}>{icon}</span>
-              <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>{text}</span>
+              <span style={{ fontSize: 12.5, color: "var(--muted-foreground)" }}>{text}</span>
             </div>
           ))}
         </div>
@@ -259,55 +566,57 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
         <button
           onClick={mail.connect}
           style={{
-            width: "100%", padding: "13px", borderRadius: 12, border: "none",
+            width: "100%", padding: "14px", borderRadius: 12, border: "none",
             background: "linear-gradient(135deg, #818cf8, #6366f1)",
             color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 9,
-            boxShadow: "0 4px 18px rgba(99,102,241,0.35)",
-            transition: "opacity 0.2s",
+            boxShadow: "0 4px 20px rgba(99,102,241,0.38)",
+            transition: "opacity 0.2s, transform 0.15s",
           }}
-          onMouseEnter={e => { e.currentTarget.style.opacity = "0.88"; }}
-          onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+          onMouseEnter={e => { e.currentTarget.style.opacity = "0.88"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.transform = "translateY(0)"; }}
         >
-          <Link2 style={{ width: 15, height: 15 }} />
+          <Link2 size={15} />
           Link Zoho Mail Account
-          <ExternalLink style={{ width: 12, height: 12, opacity: 0.7 }} />
+          <ExternalLink size={12} style={{ opacity: 0.7 }} />
         </button>
 
-        <p style={{ fontSize: 10, textAlign: "center", color: "var(--muted-foreground)", opacity: 0.55, margin: 0 }}>
-          You'll be redirected to Zoho's secure authorization page.
+        <p style={{ fontSize: 10, textAlign: "center", color: "var(--muted-foreground)", opacity: 0.5, margin: 0 }}>
           Gmail & Outlook support coming soon.
         </p>
+
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
-  // ── Connected ─────────────────────────────────────────────────────────────
+  // ── Connected ──────────────────────────────────────────────────────────────
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
 
-      {/* Account badge */}
+      {/* ── Account badge ── */}
       <div style={{
         padding: "14px 16px", borderRadius: 14,
-        background: isDark ? "rgba(34,197,94,0.07)" : "#f0fdf4",
-        border: `1px solid ${isDark ? "rgba(34,197,94,0.2)" : "#bbf7d0"}`,
+        background: isDark ? "rgba(34,197,94,0.06)" : "#f0fdf4",
+        border: `1px solid ${isDark ? "rgba(34,197,94,0.18)" : "#bbf7d0"}`,
         display: "flex", alignItems: "center", justifyContent: "space-between",
+        marginBottom: 20,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{
             width: 40, height: 40, borderRadius: "50%",
-            background: isDark ? "rgba(34,197,94,0.15)" : "#dcfce7",
+            background: isDark ? "rgba(34,197,94,0.12)" : "#dcfce7",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <Mail style={{ width: 18, height: 18, color: isDark ? "#4ade80" : "#16a34a" }} />
+            <Mail size={18} style={{ color: isDark ? "#4ade80" : "#16a34a" }} />
           </div>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--foreground)" }}>
                 {mail.mailAccount.accountEmail}
               </span>
               <span style={{
-                fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1,
+                fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1,
                 padding: "2px 7px", borderRadius: 50,
                 background: isDark ? "rgba(34,197,94,0.15)" : "#dcfce7",
                 color: isDark ? "#4ade80" : "#16a34a",
@@ -315,6 +624,16 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
               }}>
                 Connected
               </span>
+              {unreadCount > 0 && (
+                <span style={{
+                  fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 50,
+                  background: isDark ? "rgba(99,102,241,0.15)" : "rgba(99,102,241,0.08)",
+                  color: isDark ? "#818cf8" : "#6366f1",
+                  border: `1px solid ${isDark ? "rgba(99,102,241,0.3)" : "rgba(99,102,241,0.15)"}`,
+                }}>
+                  {unreadCount} unread
+                </span>
+              )}
             </div>
             <p style={{ fontSize: 11, color: "var(--muted-foreground)", margin: "2px 0 0", textTransform: "capitalize" }}>
               {mail.mailAccount.provider} Mail
@@ -322,117 +641,227 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
           </div>
         </div>
 
-        {/* Disconnect */}
         <button
           onClick={mail.disconnect}
           disabled={mail.isDisconnecting}
-          title="Disconnect mail account"
           style={{
             display: "flex", alignItems: "center", gap: 5,
-            padding: "6px 10px", borderRadius: 8,
-            border: `1px solid ${isDark ? "rgba(239,68,68,0.3)" : "#fecaca"}`,
-            background: isDark ? "rgba(239,68,68,0.08)" : "#fef2f2",
+            padding: "6px 11px", borderRadius: 8,
+            border: `1px solid ${isDark ? "rgba(239,68,68,0.28)" : "#fecaca"}`,
+            background: isDark ? "rgba(239,68,68,0.07)" : "#fef2f2",
             color: isDark ? "#f87171" : "#dc2626",
-            fontSize: 11, fontWeight: 700, cursor: "pointer",
-            transition: "all 0.15s",
+            fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "all 0.15s",
           }}
-          onMouseEnter={e => { e.currentTarget.style.opacity = "0.75"; }}
+          onMouseEnter={e => { e.currentTarget.style.opacity = "0.72"; }}
           onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
         >
           {mail.isDisconnecting
-            ? <Loader2 style={{ width: 12, height: 12, animation: "spin 1s linear infinite" }} />
-            : <Unlink style={{ width: 12, height: 12 }} />
-          }
-          {mail.isDisconnecting ? "Disconnecting..." : "Disconnect"}
+            ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} />
+            : <Unlink size={11} />}
+          {mail.isDisconnecting ? "Disconnecting…" : "Disconnect"}
         </button>
       </div>
 
-      {/* Tab nav */}
-      <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)"}`, paddingBottom: 4 }}>
+      {/* ── Tab nav ── */}
+      <div style={{
+        display: "flex", gap: 2,
+        borderBottom: `1.5px solid ${isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.08)"}`,
+        marginBottom: 20,
+      }}>
         {(["inbox", "send"] as const).map(tab => {
           const active = activeTab === tab;
-          const Icon   = tab === "inbox" ? Inbox : Send;
-          const label  = tab === "inbox" ? "Inbox" : "Send Email";
           return (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               style={{
                 display: "flex", alignItems: "center", gap: 6,
-                padding: "7px 14px", borderRadius: "8px 8px 0 0",
+                padding: "8px 16px",
                 border: "none",
-                background: active
-                  ? (isDark ? "rgba(99,102,241,0.12)" : "rgba(99,102,241,0.07)")
-                  : "transparent",
+                background: "transparent",
                 borderBottom: active ? "2px solid #818cf8" : "2px solid transparent",
+                marginBottom: -1.5,
                 color: active ? "#818cf8" : "var(--muted-foreground)",
                 fontSize: 13, fontWeight: active ? 700 : 500,
                 cursor: "pointer", transition: "all 0.15s",
               }}
             >
-              <Icon style={{ width: 13, height: 13 }} />
-              {label}
+              {tab === "inbox" ? <Inbox size={13} /> : <Send size={13} />}
+              {tab === "inbox" ? "Inbox" : "Send Email"}
+              {tab === "inbox" && unreadCount > 0 && (
+                <CategoryBadge count={unreadCount} isDark={isDark} />
+              )}
             </button>
           );
         })}
       </div>
 
-      {/* ── Inbox tab ── */}
+      {/* ── INBOX TAB ── */}
       {activeTab === "inbox" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.2, color: "var(--muted-foreground)", margin: 0 }}>
-              Recent Messages {mail.inbox.length > 0 && `(${mail.inbox.length})`}
-            </p>
+        <div>
+          {/* Toolbar */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14 }}>
+            <div style={{ position: "relative", flex: 1, maxWidth: 280 }}>
+              <Filter size={11} style={{
+                position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+                color: "var(--muted-foreground)", pointerEvents: "none",
+              }} />
+              <input
+                type="text"
+                placeholder="Search messages…"
+                value={search}
+                onChange={e => handleSearch(e.target.value)}
+                style={{
+                  width: "100%", boxSizing: "border-box",
+                  padding: "7px 12px 7px 30px", borderRadius: 9, fontSize: 12,
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.09)"}`,
+                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                  color: "var(--foreground)", outline: "none", fontFamily: "inherit",
+                }}
+              />
+            </div>
             <button
-              onClick={mail.fetchInbox}
+              onClick={() => {
+                console.log("[MailAccountPanel] Refresh clicked — calling mail.fetchInbox()");
+                mail.fetchInbox();
+              }}
               disabled={mail.isFetchingInbox}
               style={{
                 display: "flex", alignItems: "center", gap: 5,
-                padding: "5px 11px", borderRadius: 8,
-                border: "1px solid var(--border)", background: "var(--input)",
+                padding: "7px 12px", borderRadius: 9,
+                border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.09)"}`,
+                background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.025)",
                 color: "var(--muted-foreground)", fontSize: 11, fontWeight: 600,
                 cursor: mail.isFetchingInbox ? "wait" : "pointer", transition: "all 0.15s",
+                whiteSpace: "nowrap",
               }}
-              onMouseEnter={e => { e.currentTarget.style.background = "var(--card)"; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "var(--input)"; }}
             >
               {mail.isFetchingInbox
-                ? <Loader2 style={{ width: 11, height: 11, animation: "spin 1s linear infinite" }} />
-                : <RefreshCw style={{ width: 11, height: 11 }} />
-              }
-              {mail.isFetchingInbox ? "Loading..." : "Refresh"}
+                ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} />
+                : <RefreshCw size={11} />}
+              {mail.isFetchingInbox ? "Loading…" : "Refresh"}
             </button>
           </div>
 
+          {/* Category pills */}
+          <div style={{
+            display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16,
+          }}>
+            {CATEGORIES.map(cat => {
+              const count  = countFor(cat.id);
+              const active = category === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => handleCategoryChange(cat.id)}
+                  title={cat.desc}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 5,
+                    padding: "5px 11px", borderRadius: 50,
+                    border: active
+                      ? `1.5px solid ${isDark ? "#818cf8" : "#6366f1"}`
+                      : `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.09)"}`,
+                    background: active
+                      ? (isDark ? "rgba(99,102,241,0.15)" : "rgba(99,102,241,0.08)")
+                      : "transparent",
+                    color: active
+                      ? (isDark ? "#818cf8" : "#6366f1")
+                      : "var(--muted-foreground)",
+                    fontSize: 11.5, fontWeight: active ? 700 : 500,
+                    cursor: "pointer", transition: "all 0.15s",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {cat.icon}
+                  {cat.label}
+                  {count > 0 && (
+                    <span style={{
+                      fontSize: 9, fontWeight: 800,
+                      background: active
+                        ? (isDark ? "rgba(99,102,241,0.3)" : "rgba(99,102,241,0.15)")
+                        : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)"),
+                      color: active
+                        ? (isDark ? "#818cf8" : "#6366f1")
+                        : "var(--muted-foreground)",
+                      padding: "0 5px", borderRadius: 50, minWidth: 16, textAlign: "center",
+                    }}>
+                      {count > 99 ? "99+" : count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Error banner */}
           {mail.inboxError && (
             <div style={{
-              padding: "10px 12px", borderRadius: 8,
-              background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)",
+              padding: "10px 14px", borderRadius: 10, marginBottom: 12,
+              background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.22)",
               display: "flex", alignItems: "center", gap: 7,
             }}>
-              <AlertCircle style={{ width: 13, height: 13, color: "#ef4444" }} />
+              <AlertCircle size={13} style={{ color: "#ef4444" }} />
               <span style={{ fontSize: 12, color: "#ef4444" }}>{mail.inboxError}</span>
             </div>
           )}
 
+          {/* Empty state — no inbox loaded */}
           {mail.inbox.length === 0 && !mail.isFetchingInbox && !mail.inboxError && (
-            <div style={{
-              textAlign: "center", padding: "32px 0",
-              color: "var(--muted-foreground)",
-            }}>
-              <Inbox style={{ width: 28, height: 28, margin: "0 auto 10px", opacity: 0.3 }} />
-              <p style={{ fontSize: 13, margin: 0 }}>Click Refresh to load your inbox.</p>
+            <div style={{ textAlign: "center", padding: "40px 0", color: "var(--muted-foreground)" }}>
+              <Inbox size={32} style={{ margin: "0 auto 12px", opacity: 0.2, display: "block" }} />
+              <p style={{ fontSize: 13, fontWeight: 600, margin: "0 0 4px" }}>Inbox not loaded yet</p>
+              <p style={{ fontSize: 12, margin: 0, opacity: 0.6 }}>Hit Refresh to pull your latest messages.</p>
             </div>
           )}
 
-          {mail.inbox.map(msg => (
-            <MessageRow key={msg.messageId} msg={msg} isDark={isDark} />
-          ))}
+          {/* Empty filtered state */}
+          {mail.inbox.length > 0 && filteredMessages.length === 0 && (
+            <div style={{ textAlign: "center", padding: "32px 0", color: "var(--muted-foreground)" }}>
+              <EyeOff size={28} style={{ margin: "0 auto 10px", opacity: 0.2, display: "block" }} />
+              <p style={{ fontSize: 13, fontWeight: 600, margin: "0 0 4px" }}>No messages in this category</p>
+              <p style={{ fontSize: 12, margin: 0, opacity: 0.6 }}>Try "All Mail" or a different filter.</p>
+            </div>
+          )}
+
+          {/* Message list */}
+          {pageItems.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {pageItems.map(msg => (
+                <MessageRow
+                  key={msg.messageId}
+                  msg={msg}
+                  isDark={isDark}
+                  isStarred={starred.has(msg.messageId)}
+                  onToggleStar={toggleStar}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {filteredMessages.length > PAGE_SIZE && (
+            <Pagination
+              page={currentPage}
+              total={filteredMessages.length}
+              pageSize={PAGE_SIZE}
+              onChange={setPage}
+              isDark={isDark}
+            />
+          )}
+
+          {/* Summary line */}
+          {filteredMessages.length > 0 && (
+            <p style={{
+              fontSize: 10, textAlign: "center", color: "var(--muted-foreground)",
+              opacity: 0.55, margin: "10px 0 0",
+            }}>
+              Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, filteredMessages.length)}–{Math.min(currentPage * PAGE_SIZE, filteredMessages.length)} of {filteredMessages.length} messages
+            </p>
+          )}
         </div>
       )}
 
-      {/* ── Send tab ── */}
+      {/* ── SEND TAB ── */}
       {activeTab === "send" && (
         <QuickSendForm
           onSend={mail.sendEmail}
@@ -443,6 +872,10 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
           isDark={isDark}
         />
       )}
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 }
