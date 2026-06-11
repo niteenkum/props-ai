@@ -924,3 +924,219 @@ export async function sendReplyEmailAction(
     return { success: false, error: err?.message ?? "Unexpected error sending reply." };
   }
 }
+
+// ─── 11. General Email Thread Fetcher ─────────────────────────────────────────
+// Searches and builds a chronological thread of emails (sent and received) sharing the same subject line.
+
+export async function getEmailThreadAction(
+  userEmail: string,
+  messageId: string,
+  subject: string,
+  senderEmail: string
+): Promise<{ success: boolean; messages?: ThreadMessage[]; error?: string }> {
+  console.log(`\n[getEmailThreadAction] 🚀 CALLED for ${userEmail}, msgId=${messageId}, subject="${subject}", sender="${senderEmail}"`);
+
+  const auth = await getValidAccessToken(userEmail);
+  if (!auth || !auth.accountId) {
+    console.error("[getEmailThreadAction] ❌ No valid token");
+    return { success: false, error: "Mail account not connected or token expired." };
+  }
+
+  const { token, accountId, apiBase, accountEmail } = auth;
+  const baseSubject = subject
+    .replace(/^(Re:\s*|Fwd:\s*)+/i, "")
+    .trim();
+
+  try {
+    console.log(`[getEmailThreadAction] 🔍 Searching Zoho: baseSubject="${baseSubject}"`);
+
+    const searchKey = `subject:"${baseSubject}"`;
+    const params = new URLSearchParams({
+      searchKey,
+      limit: "50",
+    });
+
+    const searchRes = await fetch(
+      `${apiBase}/api/accounts/${accountId}/messages/search?${params}`,
+      { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+    );
+
+    let rawMessages: any[] = [];
+    if (searchRes.ok) {
+      const searchData = await searchRes.json();
+      rawMessages = searchData?.data ?? [];
+      console.log(`[getEmailThreadAction] Found ${rawMessages.length} messages by subject search`);
+    } else {
+      const errText = await searchRes.text();
+      console.warn(`[getEmailThreadAction] Subject search failed: ${searchRes.status} — ${errText}`);
+    }
+
+    // Ensure the clicked message itself is included
+    const hasClickedMsg = rawMessages.some(m => String(m.messageId ?? m.msgId ?? "") === messageId);
+    if (!hasClickedMsg) {
+      console.log(`[getEmailThreadAction] Clicked message ${messageId} not in results, searching specifically...`);
+      const singleRes = await fetch(
+        `${apiBase}/api/accounts/${accountId}/messages/search?searchKey=msgId:${messageId}`,
+        { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+      );
+      if (singleRes.ok) {
+        const singleData = await singleRes.json();
+        const singleMsgs = singleData?.data ?? [];
+        if (singleMsgs.length > 0) {
+          rawMessages.push(singleMsgs[0]);
+        }
+      }
+    }
+
+    const accountEmailLower = accountEmail.toLowerCase();
+    const messages: ThreadMessage[] = [];
+
+    for (const m of rawMessages) {
+      const msgId = String(m.messageId ?? m.msgId ?? "");
+      const folderId = String(m.folderId ?? "");
+      const from = (m.fromAddress ?? m.sender ?? "").toLowerCase();
+      const direction = from.includes(accountEmailLower) ? ("sent" as const) : ("received" as const);
+      
+      let body = m.summary ?? m.content ?? "";
+
+      if (folderId && msgId) {
+        try {
+          const contentRes = await fetch(
+            `${apiBase}/api/accounts/${accountId}/folders/${folderId}/messages/${msgId}/content?includeBlockContent=false`,
+            { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+          );
+          if (contentRes.ok) {
+            const contentData = await contentRes.json();
+            const htmlContent = contentData?.data?.content ?? "";
+            body = htmlContent
+              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+              .replace(/<br\s*\/?>/gi, "\n")
+              .replace(/<\/p>/gi, "\n\n")
+              .replace(/<\/div>/gi, "\n")
+              .replace(/<[^>]+>/g, "")
+              .replace(/&nbsp;/gi, " ")
+              .replace(/&amp;/gi, "&")
+              .replace(/&lt;/gi, "<")
+              .replace(/&gt;/gi, ">")
+              .replace(/&quot;/gi, '"')
+              .replace(/&#39;/gi, "'")
+              .replace(/\n{3,}/g, "\n\n")
+              .trim();
+
+            // Strip quotes
+            const quotePatterns = [
+              /\n?\s*On\s+.{10,80}\s+wrote:\s*\n?[\s\S]*/i,
+              /\n?\s*-{3,}\s*Original Message\s*-{3,}\s*\n?[\s\S]*/i,
+              /\n?\s*From:\s+.+\n\s*Sent:\s+.+\n[\s\S]*/i,
+              /\n?\s*_{3,}\s*\n[\s\S]*/,
+            ];
+            for (const pattern of quotePatterns) {
+              const match = body.match(pattern);
+              if (match && match.index !== undefined) {
+                const beforeQuote = body.slice(0, match.index).trim();
+                if (beforeQuote.length > 0) {
+                  body = beforeQuote;
+                  break;
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.warn(`[getEmailThreadAction] Failed to fetch content for ${msgId}:`, err);
+        }
+      }
+
+      const receivedAt = m.receivedTime
+        ? new Date(Number(m.receivedTime)).toISOString()
+        : m.sentDateInGMT
+          ? new Date(m.sentDateInGMT).toISOString()
+          : new Date().toISOString();
+
+      messages.push({
+        id: msgId,
+        direction,
+        fromEmail: m.fromAddress ?? m.sender ?? "",
+        fromName: m.fromDisplayString ?? m.senderDisplayName ?? m.sender ?? "",
+        toEmail: m.toAddress ?? accountEmail,
+        subject: m.subject ?? "(no subject)",
+        body,
+        sentAt: receivedAt,
+        zohoMsgId: msgId
+      });
+    }
+
+    messages.sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime());
+    return { success: true, messages };
+  } catch (err: any) {
+    console.error("[getEmailThreadAction] Error:", err);
+    return { success: false, error: err?.message ?? "Failed to build thread." };
+  }
+}
+
+// ─── 12. Send a general thread reply ──────────────────────────────────────────
+
+export async function sendThreadReplyAction(
+  userEmail:    string,
+  to:           string,
+  subject:      string,
+  body:         string,
+  inReplyToId:  string,
+): Promise<{ success: boolean; error?: string; zohoMsgId?: string; sentAt?: string }> {
+  console.log(`[sendThreadReplyAction] 🚀 Reply requested: to=${to}, subject="${subject}", inReplyToId=${inReplyToId}`);
+  const auth = await getValidAccessToken(userEmail);
+  if (!auth) return { success: false, error: "Mail account not connected or token expired." };
+
+  const { token, accountId, apiBase, accountEmail } = auth;
+  if (!accountId) return { success: false, error: "Zoho account ID not available." };
+
+  try {
+    const replySubject = subject.toLowerCase().startsWith("re:") ? subject : `Re: ${subject}`;
+    const res = await fetch(
+      `${apiBase}/api/accounts/${accountId}/messages`,
+      {
+        method:  "POST",
+        headers: {
+          Authorization:  `Zoho-oauthtoken ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fromAddress: accountEmail,
+          toAddress:   to,
+          subject:     replySubject,
+          content:     body,
+          mailFormat:  "plaintext",
+          inReplyTo:   inReplyToId,
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.error("[sendThreadReplyAction] Zoho failed:", res.status, err);
+      return { success: false, error: `Failed to send reply (Zoho ${res.status})` };
+    }
+
+    const resData   = await res.json().catch(() => ({}));
+    const zohoMsgId = String(resData?.data?.messageId ?? resData?.messageId ?? "") || undefined;
+
+    const account   = await prisma.mailAccount.findUnique({ where: { userEmail } });
+    const fromEmail = account?.accountEmail ?? userEmail;
+
+    const sent = await rawInsertSentEmail({
+      userEmail,
+      jobPostId: null,
+      provider:  account?.provider ?? "zoho",
+      fromEmail,
+      toEmail:   to,
+      subject:   replySubject,
+      body,
+      zohoMsgId: zohoMsgId ?? null,
+    });
+
+    console.log(`[sendThreadReplyAction] ✅ Reply sent to ${to} (msgId: ${zohoMsgId})`);
+    return { success: true, zohoMsgId, sentAt: sent.sentAt };
+  } catch (err: any) {
+    console.error("[sendThreadReplyAction] Error:", err);
+    return { success: false, error: err?.message ?? "Unexpected error sending reply." };
+  }
+}

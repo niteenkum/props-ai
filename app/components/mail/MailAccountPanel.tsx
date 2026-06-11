@@ -10,7 +10,12 @@ import {
   ChevronLeft, ChevronRight, Clock, Eye, EyeOff, Zap, Filter,
 } from "lucide-react";
 import { useMailAccount } from "../../hooks/useMailAccount";
-import type { MailMessage } from "../../actions/mail-actions";
+import {
+  getEmailThreadAction,
+  sendThreadReplyAction,
+  type MailMessage,
+  type ThreadMessage,
+} from "../../actions/mail-actions";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -104,12 +109,13 @@ function AvatarBubble({ name, email, size = 36 }: { name: string; email: string;
 // ─── MessageRow ───────────────────────────────────────────────────────────────
 
 function MessageRow({
-  msg, isDark, isStarred, onToggleStar,
+  msg, isDark, isStarred, onToggleStar, onClick,
 }: {
   msg: MailMessage;
   isDark: boolean;
   isStarred: boolean;
   onToggleStar: (id: string) => void;
+  onClick: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const color = avatarColor(msg.fromEmail);
@@ -146,7 +152,7 @@ function MessageRow({
       }}
     >
       <div
-        onClick={() => setExpanded(v => !v)}
+        onClick={onClick}
         style={{ padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 10 }}
       >
         {/* Avatar */}
@@ -456,6 +462,77 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
   const [starred,     setStarred]     = useState<Set<string>>(new Set());
   const [search,      setSearch]      = useState("");
 
+  const [selectedMail, setSelectedMail] = useState<MailMessage | null>(null);
+  const [threadMessages, setThreadMessages] = useState<ThreadMessage[]>([]);
+  const [isFetchingThread, setIsFetchingThread] = useState(false);
+  const [threadError, setThreadError] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [isSendingReply, setIsSendingReply] = useState(false);
+
+  // ── Fetch Thread ───────────────────────────────────────────────────────────
+  const handleSelectMail = async (msg: MailMessage) => {
+    setSelectedMail(msg);
+    setIsFetchingThread(true);
+    setThreadError(null);
+    setThreadMessages([]);
+    try {
+      console.log("[MailAccountPanel] Fetching thread for message:", msg.messageId);
+      const res = await getEmailThreadAction(userEmail, msg.messageId, msg.subject, msg.fromEmail);
+      if (res.success && res.messages) {
+        setThreadMessages(res.messages);
+      } else {
+        setThreadError(res.error ?? "Failed to load thread conversation.");
+      }
+    } catch (err: any) {
+      setThreadError(err?.message ?? "An error occurred.");
+    } finally {
+      setIsFetchingThread(false);
+    }
+  };
+
+  // ── Send Thread Reply ──────────────────────────────────────────────────────
+  const handleSendReply = async () => {
+    if (!selectedMail || !replyText.trim()) return;
+    setIsSendingReply(true);
+    try {
+      const lastMsg = threadMessages.length > 0 
+        ? threadMessages[threadMessages.length - 1] 
+        : null;
+      const replyToId = lastMsg?.zohoMsgId || selectedMail.messageId;
+
+      console.log("[MailAccountPanel] Replying to", selectedMail.fromEmail, "for subject", selectedMail.subject);
+      const res = await sendThreadReplyAction(
+        userEmail,
+        selectedMail.fromEmail,
+        selectedMail.subject,
+        replyText,
+        replyToId
+      );
+
+      if (res.success) {
+        const newMsg: ThreadMessage = {
+          id: res.zohoMsgId ?? Math.random().toString(),
+          direction: "sent",
+          fromEmail: userEmail,
+          fromName: "You",
+          toEmail: selectedMail.fromEmail,
+          subject: selectedMail.subject.toLowerCase().startsWith("re:") ? selectedMail.subject : `Re: ${selectedMail.subject}`,
+          body: replyText,
+          sentAt: new Date().toISOString(),
+          zohoMsgId: res.zohoMsgId,
+        };
+        setThreadMessages(prev => [...prev, newMsg]);
+        setReplyText("");
+      } else {
+        alert(res.error ?? "Failed to send reply.");
+      }
+    } catch (err: any) {
+      alert(err?.message ?? "Failed to send reply.");
+    } finally {
+      setIsSendingReply(false);
+    }
+  };
+
   // ── Toggle star ────────────────────────────────────────────────────────────
   const toggleStar = useCallback((id: string) => {
     setStarred(prev => {
@@ -586,6 +663,196 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
         </p>
 
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  // ── Connected ──────────────────────────────────────────────────────────────
+  if (selectedMail) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 0, minHeight: 450 }}>
+        {/* Thread Header */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 12,
+          paddingBottom: 14,
+          borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+          marginBottom: 14,
+        }}>
+          <button
+            onClick={() => setSelectedMail(null)}
+            style={{
+              background: "none", border: "none", cursor: "pointer",
+              display: "flex", alignItems: "center", gap: 4,
+              color: "#818cf8", fontSize: 13, fontWeight: 700,
+              padding: "4px 8px", borderRadius: 8,
+              transition: "background 0.15s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"}
+            onMouseLeave={e => e.currentTarget.style.background = "none"}
+          >
+            <ChevronLeft size={16} /> Back
+          </button>
+          
+          <AvatarBubble name={selectedMail.fromName} email={selectedMail.fromEmail} size={38} />
+          
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h4 style={{
+              fontSize: 13.5, fontWeight: 700, color: "var(--foreground)", margin: 0,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
+            }}>
+              {selectedMail.fromName || selectedMail.fromEmail.split("@")[0]}
+            </h4>
+            <p style={{
+              fontSize: 11, color: "var(--muted-foreground)", margin: "1px 0 0",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
+            }}>
+              {selectedMail.subject}
+            </p>
+          </div>
+        </div>
+
+        {/* Thread Body (Messages Area) */}
+        <div style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "12px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+          maxHeight: 400,
+          minHeight: 300,
+          background: isDark ? "rgba(0, 0, 0, 0.15)" : "rgba(0, 0, 0, 0.025)",
+          borderRadius: 12,
+          border: `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}`,
+          marginBottom: 14,
+        }}>
+          {isFetchingThread && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", minHeight: 200, gap: 10, padding: 20 }}>
+              <Loader2 size={24} style={{ color: "#818cf8", animation: "spin 1s linear infinite" }} />
+              <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Loading conversation thread...</span>
+            </div>
+          )}
+
+          {threadError && (
+            <div style={{ padding: "20px", textAlign: "center", color: "#ef4444", fontSize: 13 }}>
+              <AlertCircle size={20} style={{ margin: "0 auto 8px" }} />
+              <p>{threadError}</p>
+            </div>
+          )}
+
+          {!isFetchingThread && !threadError && threadMessages.length === 0 && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", minHeight: 200, padding: 20 }}>
+              <p style={{ fontSize: 12, color: "var(--muted-foreground)", margin: 0 }}>No messages found in this thread.</p>
+            </div>
+          )}
+
+          {!isFetchingThread && !threadError && threadMessages.map((msg, index) => {
+            const isSent = msg.direction === "sent";
+            const bubbleColor = isSent 
+              ? (isDark ? "linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)" : "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)")
+              : (isDark ? "#1f2937" : "#f3f4f6");
+            const textColor = isSent ? "#ffffff" : "var(--foreground)";
+            const alignSelf = isSent ? "flex-end" : "flex-start";
+            
+            return (
+              <div 
+                key={msg.id || index}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignSelf,
+                  maxWidth: "80%",
+                  alignItems: isSent ? "flex-end" : "flex-start",
+                }}
+              >
+                {/* Bubble */}
+                <div style={{
+                  padding: "10px 14px",
+                  borderRadius: 16,
+                  borderTopRightRadius: isSent ? 4 : 16,
+                  borderTopLeftRadius: isSent ? 16 : 4,
+                  background: bubbleColor,
+                  color: textColor,
+                  fontSize: 12.5,
+                  lineHeight: 1.6,
+                  whiteSpace: "pre-wrap",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+                }}>
+                  {msg.body}
+                </div>
+                {/* Timestamp */}
+                <span style={{ 
+                  fontSize: 9.5, 
+                  color: "var(--muted-foreground)", 
+                  marginTop: 4, 
+                  padding: "0 4px",
+                  opacity: 0.8
+                }}>
+                  {fmtTime(msg.sentAt)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Thread Footer (Reply form) */}
+        <div style={{
+          display: "flex",
+          gap: 8,
+          alignItems: "flex-end"
+        }}>
+          <textarea
+            value={replyText}
+            onChange={e => setReplyText(e.target.value)}
+            placeholder={`Reply to ${selectedMail.fromName || selectedMail.fromEmail}...`}
+            rows={2}
+            style={{
+              flex: 1,
+              boxSizing: "border-box",
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.1)"}`,
+              background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.025)",
+              color: "var(--foreground)",
+              fontSize: 13,
+              fontFamily: "inherit",
+              outline: "none",
+              resize: "none",
+            }}
+            onKeyDown={e => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSendReply();
+              }
+            }}
+          />
+          <button
+            onClick={handleSendReply}
+            disabled={isSendingReply || !replyText.trim()}
+            style={{
+              padding: "10px 16px",
+              height: 40,
+              borderRadius: 10,
+              border: "none",
+              background: replyText.trim() && !isSendingReply
+                ? "linear-gradient(135deg, #818cf8 0%, #6366f1 100%)"
+                : (isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.06)"),
+              color: replyText.trim() && !isSendingReply ? "#fff" : "var(--muted-foreground)",
+              cursor: replyText.trim() && !isSendingReply ? "pointer" : "not-allowed",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: replyText.trim() && !isSendingReply ? "0 4px 14px rgba(99,102,241,0.25)" : "none",
+              transition: "all 0.15s",
+            }}
+          >
+            {isSendingReply ? (
+              <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
+            ) : (
+              <Send size={16} />
+            )}
+          </button>
+        </div>
       </div>
     );
   }
@@ -833,6 +1100,7 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
                   isDark={isDark}
                   isStarred={starred.has(msg.messageId)}
                   onToggleStar={toggleStar}
+                  onClick={() => handleSelectMail(msg)}
                 />
               ))}
             </div>
