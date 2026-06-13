@@ -3,11 +3,13 @@
 // ─── MailAccountPanel ─────────────────────────────────────────────────────────
 // Revamped: Category tabs, paginated inbox, premium UI, send form.
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   Mail, Link2, Unlink, RefreshCw, Send, Inbox, CheckCircle2, AlertCircle,
   Loader2, ExternalLink, ShieldCheck, X, Star, Tag, Users, Briefcase,
   ChevronLeft, ChevronRight, Clock, Eye, EyeOff, Zap, Filter,
+  Bold, Italic, Underline, List, AlignLeft, Paperclip, Smile,
+  Maximize2, Minimize2, ChevronDown, AtSign, Trash2, FileText,
 } from "lucide-react";
 import { useMailAccount } from "../../hooks/useMailAccount";
 import {
@@ -490,6 +492,16 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
   const [threadError, setThreadError] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [isSendingReply, setIsSendingReply] = useState(false);
+  const [gmailThreadId, setGmailThreadId] = useState<string | null>(null); // actual Gmail thread ID
+  const [showCC, setShowCC]       = useState(false);
+  const [showBCC, setShowBCC]     = useState(false);
+  const [ccValue, setCcValue]     = useState("");
+  const [bccValue, setBccValue]   = useState("");
+  const [attachments, setAttachments] = useState<{name:string;size:number;type:string;data:string}[]>([]);
+  const [composerExpanded, setComposerExpanded] = useState(false);
+  const [replyError, setReplyError] = useState<string|null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef  = useRef<HTMLTextAreaElement>(null);
 
   // ── Fetch Thread ───────────────────────────────────────────────────────────
   const handleSelectMail = async (msg: MailMessage) => {
@@ -497,12 +509,14 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
     setIsFetchingThread(true);
     setThreadError(null);
     setThreadMessages([]);
+    setGmailThreadId(null);
     try {
-      let res: { success: boolean; messages?: ThreadMessage[]; error?: string };
+      let res: { success: boolean; messages?: ThreadMessage[]; error?: string; threadId?: string };
 
       if (msg.provider === "gmail") {
         // Gmail message — use Gmail thread API
         res = await fetchGmailThreadAction(userEmail, msg.messageId);
+        if (res.threadId) setGmailThreadId(res.threadId); // store actual Gmail thread ID for sending
       } else {
         // Zoho message — use Zoho thread search
         res = await getEmailThreadAction(userEmail, msg.messageId, msg.subject, msg.fromEmail);
@@ -520,24 +534,56 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
     }
   };
 
+  // ── Handle file attachment ─────────────────────────────────────────────────
+  const handleAttachFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const base64 = (ev.target?.result as string).split(",")[1] ?? "";
+        setAttachments(prev => [...prev, { name: file.name, size: file.size, type: file.type, data: base64 }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // ── Format text helper ─────────────────────────────────────────────────────
+  const applyFormat = (tag: string) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end   = el.selectionEnd;
+    const sel   = replyText.slice(start, end);
+    const markers: Record<string, string> = { bold: "**", italic: "_", underline: "__" };
+    const m = markers[tag] ?? "";
+    const newText = replyText.slice(0, start) + m + sel + m + replyText.slice(end);
+    setReplyText(newText);
+    setTimeout(() => { el.focus(); el.setSelectionRange(start + m.length, end + m.length); }, 0);
+  };
+
   // ── Send Thread Reply ──────────────────────────────────────────────────────
   const handleSendReply = async () => {
     if (!selectedMail || !replyText.trim()) return;
     setIsSendingReply(true);
+    setReplyError(null);
     try {
-      const lastMsg = threadMessages.length > 0 
-        ? threadMessages[threadMessages.length - 1] 
-        : null;
-      const replyToId = lastMsg?.zohoMsgId || selectedMail.messageId;
+      const lastMsg   = threadMessages.length > 0 ? threadMessages[threadMessages.length - 1] : null;
+      // For Gmail: use rfc822MsgId for In-Reply-To, gmailThreadId for thread grouping
+      // For Zoho:  use zohoMsgId as before
+      const replyToId = selectedMail.provider === "gmail"
+        ? (lastMsg?.rfc822MsgId || lastMsg?.zohoMsgId || selectedMail.messageId)
+        : (lastMsg?.zohoMsgId || selectedMail.messageId);
 
-      console.log("[MailAccountPanel] Replying to", selectedMail.fromEmail, "for subject", selectedMail.subject, "via", selectedMail.provider);
+      console.log("[MailAccountPanel] Replying to", selectedMail.fromEmail, "via", selectedMail.provider, "threadId:", gmailThreadId);
       const res = await sendThreadReplyAction(
         userEmail,
         selectedMail.fromEmail,
         selectedMail.subject,
         replyText,
         replyToId,
-        selectedMail.provider as "zoho" | "gmail"  // route to Corsair (Gmail) or Zoho
+        selectedMail.provider as "zoho" | "gmail",
+        gmailThreadId ?? undefined,  // pass actual Gmail thread ID
       );
 
       if (res.success) {
@@ -554,11 +600,15 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
         };
         setThreadMessages(prev => [...prev, newMsg]);
         setReplyText("");
+        setAttachments([]);
+        setCcValue(""); setBccValue("");
+        setShowCC(false); setShowBCC(false);
+        setComposerExpanded(false);
       } else {
-        alert(res.error ?? "Failed to send reply.");
+        setReplyError(res.error ?? "Failed to send reply.");
       }
     } catch (err: any) {
-      alert(err?.message ?? "Failed to send reply.");
+      setReplyError(err?.message ?? "Failed to send reply.");
     } finally {
       setIsSendingReply(false);
     }
@@ -983,29 +1033,74 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
           })}
         </div>
 
-        {/* Thread Footer (Reply form) */}
+        {/* ── Premium Mail Composer ── */}
+        <input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={handleAttachFile} />
         <div style={{
-          display: "flex",
-          gap: 8,
-          alignItems: "flex-end"
+          borderRadius: composerExpanded ? 16 : 14,
+          border: `1.5px solid ${isDark ? "rgba(99,102,241,0.3)" : "rgba(99,102,241,0.2)"}`,
+          background: isDark ? "rgba(20,20,35,0.95)" : "#fff",
+          boxShadow: composerExpanded ? "0 8px 40px rgba(99,102,241,0.18)" : "0 2px 12px rgba(0,0,0,0.08)",
+          transition: "all 0.2s ease",
+          overflow: "hidden",
         }}>
+
+          {/* ── Header: To / CC / BCC ── */}
+          <div style={{ padding: "8px 14px", borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` }}>
+            {/* To */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: showCC || showBCC ? 4 : 0 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", width: 28, flexShrink: 0 }}>To</span>
+              <span style={{ flex: 1, fontSize: 12.5, color: "var(--foreground)", fontWeight: 500 }}>{selectedMail.fromEmail}</span>
+              <div style={{ display: "flex", gap: 4 }}>
+                {!showCC && <button onClick={() => setShowCC(true)} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`, background: "transparent", color: "var(--muted-foreground)", cursor: "pointer", fontWeight: 600 }}>CC</button>}
+                {!showBCC && <button onClick={() => setShowBCC(true)} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`, background: "transparent", color: "var(--muted-foreground)", cursor: "pointer", fontWeight: 600 }}>BCC</button>}
+              </div>
+            </div>
+            {/* CC */}
+            {showCC && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", width: 28, flexShrink: 0 }}>CC</span>
+                <input value={ccValue} onChange={e => setCcValue(e.target.value)} placeholder="Add CC recipients..." style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontSize: 12.5, color: "var(--foreground)" }} />
+                <button onClick={() => { setShowCC(false); setCcValue(""); }} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted-foreground)", display: "flex" }}><X size={13} /></button>
+              </div>
+            )}
+            {/* BCC */}
+            {showBCC && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", width: 28, flexShrink: 0 }}>BCC</span>
+                <input value={bccValue} onChange={e => setBccValue(e.target.value)} placeholder="Add BCC recipients..." style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontSize: 12.5, color: "var(--foreground)" }} />
+                <button onClick={() => { setShowBCC(false); setBccValue(""); }} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted-foreground)", display: "flex" }}><X size={13} /></button>
+              </div>
+            )}
+          </div>
+
+          {/* ── Subject (read-only, shows Re: prefix) ── */}
+          <div style={{ padding: "5px 14px", borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", width: 50, flexShrink: 0 }}>Subject</span>
+            <span style={{ fontSize: 12.5, color: "var(--foreground)", opacity: 0.8 }}>
+              {selectedMail.subject.toLowerCase().startsWith("re:") ? selectedMail.subject : `Re: ${selectedMail.subject}`}
+            </span>
+          </div>
+
+          {/* ── Body textarea ── */}
           <textarea
+            ref={textareaRef}
             value={replyText}
             onChange={e => setReplyText(e.target.value)}
-            placeholder={`Reply to ${selectedMail.fromName || selectedMail.fromEmail}...`}
-            rows={2}
+            placeholder={`Write your reply to ${selectedMail.fromName || selectedMail.fromEmail}...\n\nTip: Shift+Enter for new line, Enter to send`}
+            rows={composerExpanded ? 10 : 4}
             style={{
-              flex: 1,
+              width: "100%",
               boxSizing: "border-box",
-              padding: "10px 12px",
-              borderRadius: 10,
-              border: `1px solid ${isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.1)"}`,
-              background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.025)",
+              padding: "12px 14px",
+              border: "none",
+              background: "transparent",
               color: "var(--foreground)",
-              fontSize: 13,
+              fontSize: 13.5,
               fontFamily: "inherit",
+              lineHeight: 1.6,
               outline: "none",
               resize: "none",
+              display: "block",
             }}
             onKeyDown={e => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -1014,32 +1109,124 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
               }
             }}
           />
-          <button
-            onClick={handleSendReply}
-            disabled={isSendingReply || !replyText.trim()}
-            style={{
-              padding: "10px 16px",
-              height: 40,
-              borderRadius: 10,
-              border: "none",
-              background: replyText.trim() && !isSendingReply
-                ? "linear-gradient(135deg, #818cf8 0%, #6366f1 100%)"
-                : (isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.06)"),
-              color: replyText.trim() && !isSendingReply ? "#fff" : "var(--muted-foreground)",
-              cursor: replyText.trim() && !isSendingReply ? "pointer" : "not-allowed",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: replyText.trim() && !isSendingReply ? "0 4px 14px rgba(99,102,241,0.25)" : "none",
-              transition: "all 0.15s",
-            }}
-          >
-            {isSendingReply ? (
-              <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
-            ) : (
-              <Send size={16} />
-            )}
-          </button>
+
+          {/* ── Attachments preview ── */}
+          {attachments.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "0 14px 8px" }}>
+              {attachments.map((a, i) => (
+                <div key={i} style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  padding: "3px 8px 3px 6px", borderRadius: 6,
+                  background: isDark ? "rgba(99,102,241,0.12)" : "rgba(99,102,241,0.08)",
+                  border: `1px solid ${isDark ? "rgba(99,102,241,0.25)" : "rgba(99,102,241,0.2)"}`,
+                  fontSize: 11, color: "var(--foreground)",
+                }}>
+                  <FileText size={11} style={{ color: "#6366f1" }} />
+                  <span style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+                  <span style={{ color: "var(--muted-foreground)", fontSize: 10 }}>({(a.size/1024).toFixed(0)}KB)</span>
+                  <button onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted-foreground)", display: "flex", padding: 0 }}><X size={11} /></button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Error ── */}
+          {replyError && (
+            <div style={{ margin: "0 14px 8px", padding: "6px 10px", borderRadius: 6, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", fontSize: 12, color: "#ef4444", display: "flex", alignItems: "center", gap: 6 }}>
+              <AlertCircle size={13} /> {replyError}
+            </div>
+          )}
+
+          {/* ── Bottom toolbar ── */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "8px 10px",
+            borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+            background: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)",
+          }}>
+            {/* Left: Format tools */}
+            <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+              {([
+                { icon: <Bold size={14} />, label: "Bold", action: () => applyFormat("bold") },
+                { icon: <Italic size={14} />, label: "Italic", action: () => applyFormat("italic") },
+                { icon: <Underline size={14} />, label: "Underline", action: () => applyFormat("underline") },
+              ] as const).map((tool, i) => (
+                <button key={i} onClick={tool.action} title={tool.label} style={{
+                  background: "transparent", border: "none", cursor: "pointer",
+                  color: "var(--muted-foreground)", padding: "4px 6px", borderRadius: 5,
+                  display: "flex", alignItems: "center",
+                  transition: "background 0.12s",
+                }}>
+                  {tool.icon}
+                </button>
+              ))}
+              <div style={{ width: 1, height: 16, background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", margin: "0 4px" }} />
+              {/* Attach file */}
+              <button onClick={() => fileInputRef.current?.click()} title="Attach file" style={{
+                background: "transparent", border: "none", cursor: "pointer",
+                color: "var(--muted-foreground)", padding: "4px 6px", borderRadius: 5,
+                display: "flex", alignItems: "center",
+              }}>
+                <Paperclip size={14} />
+              </button>
+              {/* Emoji */}
+              <button title="Emoji" onClick={() => setReplyText(t => t + " 😊")} style={{
+                background: "transparent", border: "none", cursor: "pointer",
+                color: "var(--muted-foreground)", padding: "4px 6px", borderRadius: 5,
+                display: "flex", alignItems: "center",
+              }}>
+                <Smile size={14} />
+              </button>
+              {/* Expand */}
+              <button onClick={() => setComposerExpanded(e => !e)} title={composerExpanded ? "Collapse" : "Expand"} style={{
+                background: "transparent", border: "none", cursor: "pointer",
+                color: "var(--muted-foreground)", padding: "4px 6px", borderRadius: 5,
+                display: "flex", alignItems: "center",
+              }}>
+                {composerExpanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+              </button>
+            </div>
+
+            {/* Right: char count + Discard + Send */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {replyText.length > 0 && (
+                <span style={{ fontSize: 10, color: "var(--muted-foreground)", opacity: 0.6 }}>{replyText.length} chars</span>
+              )}
+              {replyText.trim() && (
+                <button onClick={() => { setReplyText(""); setAttachments([]); setReplyError(null); }} title="Discard" style={{
+                  background: "transparent", border: "none", cursor: "pointer",
+                  color: "var(--muted-foreground)", padding: "4px 6px", borderRadius: 5,
+                  display: "flex", alignItems: "center", fontSize: 11, gap: 3,
+                }}>
+                  <Trash2 size={13} />
+                </button>
+              )}
+              <button
+                onClick={handleSendReply}
+                disabled={isSendingReply || !replyText.trim()}
+                style={{
+                  padding: "7px 18px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: replyText.trim() && !isSendingReply
+                    ? "linear-gradient(135deg, #818cf8 0%, #6366f1 100%)"
+                    : (isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.06)"),
+                  color: replyText.trim() && !isSendingReply ? "#fff" : "var(--muted-foreground)",
+                  cursor: replyText.trim() && !isSendingReply ? "pointer" : "not-allowed",
+                  display: "flex", alignItems: "center", gap: 6,
+                  fontSize: 12.5, fontWeight: 700,
+                  boxShadow: replyText.trim() && !isSendingReply ? "0 4px 14px rgba(99,102,241,0.35)" : "none",
+                  transition: "all 0.15s",
+                }}
+              >
+                {isSendingReply ? (
+                  <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Sending...</>
+                ) : (
+                  <><Send size={13} /> Send</>  
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );

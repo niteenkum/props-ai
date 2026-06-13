@@ -434,7 +434,7 @@ export async function fetchUnifiedInboxAction(
 export async function fetchGmailThreadAction(
   userEmail:  string,
   messageId:  string,   // Gmail message ID (e.g. "19e95b7b3648b5cc")
-): Promise<{ success: boolean; messages?: ThreadMessage[]; error?: string }> {
+): Promise<{ success: boolean; messages?: ThreadMessage[]; error?: string; threadId?: string }> {
   try {
     const { corsair } = await import("../utils/corsair");
     const tenant = corsair.withTenant(userEmail);
@@ -524,6 +524,8 @@ export async function fetchGmailThreadAction(
       const toEmail   = getH("To");
       const subject   = getH("Subject") || "(no subject)";
       const dateStr   = getH("Date");
+      // RFC 2822 Message-ID — needed for proper In-Reply-To threading
+      const rfc822MsgId = getH("Message-ID") || getH("Message-Id");
 
       // isSent: check From header match OR Gmail's SENT label (handles edge cases)
       const labelIds  = (m.labelIds ?? []) as string[];
@@ -533,22 +535,24 @@ export async function fetchGmailThreadAction(
       const body      = stripQuotes(rawBody || m.snippet || "");
 
       return {
-        id:        m.id,
-        direction: isSent ? "sent" : "received",
+        id:           m.id,
+        direction:    isSent ? "sent" : "received",
         fromEmail,
         fromName,
         toEmail,
         subject,
         body,
-        sentAt:    dateStr ? new Date(dateStr).toISOString() : new Date().toISOString(),
-        zohoMsgId: m.id, // repurposed field — holds Gmail message ID for reply
+        sentAt:       dateStr ? new Date(dateStr).toISOString() : new Date().toISOString(),
+        zohoMsgId:    m.id,       // Gmail message ID (for identifying messages)
+        rfc822MsgId,              // RFC 2822 Message-ID (for threading In-Reply-To)
+        gmailThreadId: threadId,  // Gmail thread ID (for messages.send threadId param)
       } as ThreadMessage;
     });
 
     // Sort oldest first (thread order)
     messages.sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime());
-    console.log(`[fetchGmailThreadAction] ✅ Got ${messages.length} thread messages via Corsair`);
-    return { success: true, messages };
+    console.log(`[fetchGmailThreadAction] ✅ Got ${messages.length} thread messages via Corsair (threadId: ${threadId})`);
+    return { success: true, messages, threadId };  // return threadId so UI can use it for send
   } catch (err: any) {
     console.error("[fetchGmailThreadAction] Error:", err);
     return { success: false, error: err?.message ?? "Failed to fetch Gmail thread." };
@@ -809,15 +813,17 @@ export async function getSentEmailsForJobAction(
 // that share the same thread (searched by subject line).
 
 export interface ThreadMessage {
-  id:        string;
-  direction: "sent" | "received";
-  fromEmail: string;
-  fromName?: string;
-  toEmail:   string;
-  subject:   string;
-  body:      string;
-  sentAt:    string;  // ISO string
-  zohoMsgId?: string;
+  id:             string;
+  direction:      "sent" | "received";
+  fromEmail:      string;
+  fromName?:      string;
+  toEmail:        string;
+  subject:        string;
+  body:           string;
+  sentAt:         string;  // ISO string
+  zohoMsgId?:     string;
+  rfc822MsgId?:   string;  // RFC 2822 Message-ID header (for In-Reply-To when replying)
+  gmailThreadId?: string;  // Gmail thread ID (different from message ID)
 }
 
 export async function getEmailThreadForJobAction(
@@ -1333,14 +1339,15 @@ export async function getEmailThreadAction(
 // ─── 12. Send a general thread reply ──────────────────────────────────────────
 
 export async function sendThreadReplyAction(
-  userEmail:    string,
-  to:           string,
-  subject:      string,
-  body:         string,
-  inReplyToId:  string,
-  provider?:    "zoho" | "gmail",  // optional — auto-detected if omitted
+  userEmail:     string,
+  to:            string,
+  subject:       string,
+  body:          string,
+  inReplyToId:   string,   // RFC 2822 Message-ID of the message being replied to
+  provider?:     "zoho" | "gmail",
+  gmailThreadId?: string,  // actual Gmail thread ID (from fetchGmailThreadAction)
 ): Promise<{ success: boolean; error?: string; zohoMsgId?: string; sentAt?: string }> {
-  console.log(`[sendThreadReplyAction] 🚀 Reply: to=${to}, subject="${subject}", provider=${provider ?? "auto"}`);
+  console.log(`[sendThreadReplyAction] 🚀 Reply: to=${to}, subject="${subject}", provider=${provider ?? "auto"}, gmailThreadId=${gmailThreadId}`);
 
   // ── Auto-detect provider if not passed ──────────────────────────────────────
   // Gmail message IDs are hex strings (no dashes), Zoho IDs are numeric
@@ -1355,28 +1362,35 @@ export async function sendThreadReplyAction(
 
       const replySubject = subject.toLowerCase().startsWith("re:") ? subject : `Re: ${subject}`;
 
-      // Build RFC 2822 email string with threading headers
+      // Use RFC 2822 Message-ID for In-Reply-To (inReplyToId may already have <> or not)
+      // Normalize: strip existing angle brackets then re-add
+      const rfc822Id = inReplyToId.startsWith("<")
+        ? inReplyToId
+        : `<${inReplyToId}>`;
+
+      // Build RFC 2822 raw email string
       const emailLines = [
         `From: ${userEmail}`,
         `To: ${to}`,
         `Subject: ${replySubject}`,
-        `In-Reply-To: <${inReplyToId}>`,
-        `References: <${inReplyToId}>`,
+        `In-Reply-To: ${rfc822Id}`,
+        `References: ${rfc822Id}`,
         `Content-Type: text/plain; charset=UTF-8`,
         ``,
         body,
       ];
-      const rawEmail   = emailLines.join("\r\n");
-      const base64Raw  = Buffer.from(rawEmail)
+      const rawEmail  = emailLines.join("\r\n");
+      const base64Raw = Buffer.from(rawEmail)
         .toString("base64")
         .replace(/\+/g, "-")
         .replace(/\//g, "_")
         .replace(/=+$/, "");
 
-      await tenant.gmail.api.messages.send({
-        raw: base64Raw,
-        threadId: inReplyToId,   // keeps it in the same Gmail thread
-      } as any);
+      // gmailThreadId is passed separately — it's the actual thread ID, not message ID
+      const sendPayload: any = { raw: base64Raw };
+      if (gmailThreadId) sendPayload.threadId = gmailThreadId;
+
+      await tenant.gmail.api.messages.send(sendPayload);
 
       // Persist to SentEmail table
       const sent = await rawInsertSentEmail({
