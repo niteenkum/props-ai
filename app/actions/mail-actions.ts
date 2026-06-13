@@ -577,6 +577,122 @@ export async function fetchGmailThreadAction(
 
 
 
+// ─── 4e. Mark Gmail message as read ──────────────────────────────────────────
+// Called automatically when user opens a thread.
+// Uses Corsair messages.modify to remove the UNREAD label.
+
+export async function gmailMarkAsReadAction(
+  userEmail: string,
+  messageId: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { corsair } = await import("../utils/corsair");
+    const tenant = corsair.withTenant(userEmail);
+    await (tenant.gmail.api.messages.modify as any)({
+      id: messageId,
+      removeLabelIds: ["UNREAD"],
+    });
+    console.log(`[gmailMarkAsRead] ✅ Marked ${messageId} as read`);
+    return { success: true };
+  } catch (err: any) {
+    // Non-critical — don't surface to user
+    console.warn("[gmailMarkAsRead] Failed (non-critical):", err?.message);
+    return { success: false, error: err?.message };
+  }
+}
+
+// ─── 4f. Star / Unstar a Gmail message ───────────────────────────────────────
+// Toggles the STARRED label via Corsair messages.modify.
+
+export async function gmailToggleStarAction(
+  userEmail:  string,
+  messageId:  string,
+  starred:    boolean,   // true = star it, false = unstar it
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { corsair } = await import("../utils/corsair");
+    const tenant = corsair.withTenant(userEmail);
+    await (tenant.gmail.api.messages.modify as any)({
+      id: messageId,
+      addLabelIds:    starred ? ["STARRED"] : [],
+      removeLabelIds: starred ? [] : ["STARRED"],
+    });
+    console.log(`[gmailToggleStar] ✅ ${starred ? "⭐ Starred" : "☆ Unstarred"} ${messageId}`);
+    return { success: true };
+  } catch (err: any) {
+    console.error("[gmailToggleStar] Error:", err?.message);
+    return { success: false, error: err?.message };
+  }
+}
+
+// ─── 4g. Trash a Gmail message ────────────────────────────────────────────────
+// Moves the message to Trash via Corsair messages.trash.
+// Message can be restored from Trash within 30 days.
+
+export async function gmailTrashAction(
+  userEmail:  string,
+  messageId:  string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { corsair } = await import("../utils/corsair");
+    const tenant = corsair.withTenant(userEmail);
+    await (tenant.gmail.api.messages.trash as any)({ id: messageId });
+    console.log(`[gmailTrash] ✅ Trashed ${messageId}`);
+    return { success: true };
+  } catch (err: any) {
+    console.error("[gmailTrash] Error:", err?.message);
+    return { success: false, error: err?.message };
+  }
+}
+
+
+// ─── 4h. Star / Unstar a Zoho message ────────────────────────────────────────
+// Uses Zoho updatemessage API: PUT /accounts/{accountId}/updatemessage
+// mode=setFlag + flagid=important → stars the message (yellow flag in Zoho)
+// mode=removeFlag + flagid=important → removes the star
+
+export async function zohoToggleStarAction(
+  userEmail: string,
+  messageId: string,
+  starred:   boolean,  // true = star it, false = unstar
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const auth = await getValidAccessToken(userEmail);
+    if (!auth) return { success: false, error: "Zoho account not connected." };
+
+    const { token, accountId, apiBase } = auth;
+    if (!accountId) return { success: false, error: "Zoho account ID not found." };
+
+    const body = {
+      mode:      starred ? "setFlag" : "removeFlag",
+      messageId: [messageId],
+      flagid:    "important",  // "important" = star icon in Zoho Mail UI
+    };
+
+    const res = await fetch(`${apiBase}/api/accounts/${accountId}/updatemessage`, {
+      method:  "PUT",
+      headers: {
+        Authorization: `Zoho-oauthtoken ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.error(`[zohoToggleStar] ❌ HTTP ${res.status}:`, err.slice(0, 200));
+      return { success: false, error: `Zoho API error (${res.status})` };
+    }
+
+    console.log(`[zohoToggleStar] ✅ ${starred ? "⭐ Starred" : "☆ Unstarred"} Zoho message ${messageId}`);
+    return { success: true };
+  } catch (err: any) {
+    console.error("[zohoToggleStar] Error:", err?.message);
+    return { success: false, error: err?.message };
+  }
+}
+
+
 // ─── 5. Send an email ────────────────────────────────────────────────────────
 // Optional `attachment` attaches a file (e.g. resume PDF) via multipart/form-data.
 

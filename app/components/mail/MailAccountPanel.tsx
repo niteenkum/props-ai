@@ -17,6 +17,10 @@ import {
   sendThreadReplyAction,
   fetchGmailThreadAction,
   sendGmailNewAction,
+  gmailMarkAsReadAction,
+  gmailToggleStarAction,
+  gmailTrashAction,
+  zohoToggleStarAction,
   type MailMessage,
   type ThreadMessage,
 } from "../../actions/mail-actions";
@@ -131,21 +135,23 @@ function AvatarBubble({ name, email, size = 36 }: { name: string; email: string;
 // ─── MessageRow ───────────────────────────────────────────────────────────────
 
 function MessageRow({
-  msg, isDark, isStarred, onToggleStar, onClick,
+  msg, isDark, isStarred, onToggleStar, onClick, onTrash,
 }: {
   msg: MailMessage;
   isDark: boolean;
   isStarred: boolean;
   onToggleStar: (id: string) => void;
   onClick: () => void;
+  onTrash?: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [hovered, setHovered]   = useState(false);
   const color = avatarColor(msg.fromEmail);
 
   return (
     <div
       style={{
-        borderRadius: 12,
+        borderRadius: 12, position: "relative",
         border: `1px solid ${
           !msg.isRead
             ? (isDark ? `${color}30` : `${color}20`)
@@ -159,12 +165,14 @@ function MessageRow({
         overflow: "hidden",
       }}
       onMouseEnter={e => {
+        setHovered(true);
         (e.currentTarget as HTMLDivElement).style.borderColor = isDark
           ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.14)";
         (e.currentTarget as HTMLDivElement).style.background = isDark
           ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.025)";
       }}
       onMouseLeave={e => {
+        setHovered(false);
         (e.currentTarget as HTMLDivElement).style.borderColor = !msg.isRead
           ? (isDark ? `${color}30` : `${color}20`)
           : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)");
@@ -183,7 +191,8 @@ function MessageRow({
         {/* Content */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+            {/* Left: unread dot + sender name */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
               {!msg.isRead && (
                 <span style={{
                   width: 6, height: 6, borderRadius: "50%",
@@ -199,22 +208,47 @@ function MessageRow({
                 {msg.fromName || msg.fromEmail.split("@")[0]}
               </span>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-              <span style={{ fontSize: 10, color: "var(--muted-foreground)", whiteSpace: "nowrap" }}>
-                {fmtTime(msg.receivedAt)}
-              </span>
-              {/* Provider Badge */}
+
+            {/* Right: time → on hover shows icon actions */}
+            <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+              {/* Time — hide on hover so icons have space */}
+              {!hovered && (
+                <span style={{ fontSize: 10, color: "var(--muted-foreground)", whiteSpace: "nowrap" }}>
+                  {fmtTime(msg.receivedAt)}
+                </span>
+              )}
+              {/* Provider Badge — always visible */}
               {msg.provider && <ProviderBadge provider={msg.provider} />}
-              {/* Star toggle */}
+              {/* Trash icon — only for Gmail, only on hover */}
+              {hovered && onTrash && msg.provider === "gmail" && (
+                <button
+                  onClick={e => { e.stopPropagation(); onTrash(msg.messageId); }}
+                  title="Move to Trash"
+                  style={{
+                    background: "none", border: "none", cursor: "pointer",
+                    padding: 3, color: "#ef4444",
+                    display: "flex", alignItems: "center",
+                    borderRadius: 4,
+                    transition: "all 0.15s",
+                  }}
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
+              {/* Star toggle — always visible, dim when unstarred */}
               <button
                 onClick={e => { e.stopPropagation(); onToggleStar(msg.messageId); }}
+                title={isStarred ? "Unstar" : "Star"}
                 style={{
                   background: "none", border: "none", cursor: "pointer",
-                  padding: 2, color: isStarred ? "#f59e0b" : "var(--muted-foreground)",
-                  transition: "color 0.15s", opacity: isStarred ? 1 : 0.45,
+                  padding: 3,
+                  color: isStarred ? "#f59e0b" : "var(--muted-foreground)",
+                  opacity: isStarred ? 1 : (hovered ? 0.7 : 0.35),
+                  display: "flex", alignItems: "center",
+                  transition: "all 0.15s",
                 }}
               >
-                <Star size={12} fill={isStarred ? "#f59e0b" : "none"} />
+                <Star size={13} fill={isStarred ? "#f59e0b" : "none"} />
               </button>
             </div>
           </div>
@@ -364,7 +398,7 @@ function QuickSendForm({
             <button
               onClick={() => setProvider("gmail")}
               style={{
-                flex:1, padding:"9px 0", borderRadius:10, border:"none", cursor:"pointer",
+                flex:1, padding:"9px 0", borderRadius:10, cursor:"pointer",
                 fontWeight:700, fontSize:12.5, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
                 background: provider==="gmail"
                   ? "linear-gradient(135deg, #ea4335 0%, #c5221f 100%)"
@@ -387,7 +421,7 @@ function QuickSendForm({
             <button
               onClick={() => setProvider("zoho")}
               style={{
-                flex:1, padding:"9px 0", borderRadius:10, border:"none", cursor:"pointer",
+                flex:1, padding:"9px 0", borderRadius:10, cursor:"pointer",
                 fontWeight:700, fontSize:12.5, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
                 background: provider==="zoho"
                   ? "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)"
@@ -621,6 +655,8 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
   const [category,    setCategory]    = useState<Category>("all");
   const [page,        setPage]        = useState(1);
   const [starred,     setStarred]     = useState<Set<string>>(new Set());
+  const [localRead,   setLocalRead]   = useState<Set<string>>(new Set()); // optimistic read tracking
+  const [trashed,     setTrashed]     = useState<Set<string>>(new Set()); // optimistically hidden trashed msgs
   const [search,      setSearch]      = useState("");
 
   const [selectedMail, setSelectedMail] = useState<MailMessage | null>(null);
@@ -654,6 +690,13 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
         // Gmail message — use Gmail thread API
         res = await fetchGmailThreadAction(userEmail, msg.messageId);
         if (res.threadId) setGmailThreadId(res.threadId); // store actual Gmail thread ID for sending
+
+        // Auto mark-as-read via Corsair (fire-and-forget, non-blocking)
+        if (!msg.isRead && !localRead.has(msg.messageId)) {
+          gmailMarkAsReadAction(userEmail, msg.messageId).then(r => {
+            if (r.success) setLocalRead(prev => new Set(prev).add(msg.messageId));
+          });
+        }
       } else {
         // Zoho message — use Zoho thread search
         res = await getEmailThreadAction(userEmail, msg.messageId, msg.subject, msg.fromEmail);
@@ -751,17 +794,51 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
     }
   };
 
-  // ── Toggle star ────────────────────────────────────────────────────────────
+
+  // ── Toggle star (Gmail + Zoho: sync to respective APIs) ──────────────────
   const toggleStar = useCallback((id: string) => {
+    const willStar = !starred.has(id);
+    // Optimistic update immediately
     setStarred(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      willStar ? next.add(id) : next.delete(id);
       return next;
     });
-  }, []);
+    const revert = () => setStarred(prev => {
+      const next = new Set(prev);
+      willStar ? next.delete(id) : next.add(id);
+      return next;
+    });
+    const msg = mail.inbox.find(m => m.messageId === id);
+    if (msg?.provider === "gmail") {
+      // Gmail: sync via Corsair messages.modify
+      gmailToggleStarAction(userEmail, id, willStar).catch(revert);
+    } else if (msg?.provider === "zoho") {
+      // Zoho: sync via updatemessage setFlag/removeFlag API
+      zohoToggleStarAction(userEmail, id, willStar).catch(revert);
+    }
+  }, [starred, mail.inbox, userEmail]);
+
+  // ── Trash Gmail message ──────────────────────────────────────────
+  const handleTrash = useCallback(async (messageId: string) => {
+    // Optimistically hide from UI right away
+    setTrashed(prev => new Set(prev).add(messageId));
+    // Close thread pane if this mail was open
+    if (selectedMail?.messageId === messageId) {
+      setSelectedMail(null);
+      setThreadMessages([]);
+    }
+    // Call Gmail trash API via Corsair
+    const r = await gmailTrashAction(userEmail, messageId);
+    if (!r.success) {
+      // Revert the optimistic hide on failure
+      setTrashed(prev => { const n = new Set(prev); n.delete(messageId); return n; });
+    }
+  }, [userEmail, selectedMail]);
 
   // ── Filter messages ────────────────────────────────────────────────────────
   const filteredMessages = mail.inbox.filter(msg => {
+    if (trashed.has(msg.messageId)) return false;   // hide optimistically trashed
     const cats = classifyMessage(msg);
     const isInCat = category === "starred" ? starred.has(msg.messageId) : cats.includes(category);
     if (!isInCat) return false;
@@ -773,7 +850,8 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
       msg.fromName.toLowerCase().includes(q) ||
       (msg.summary ?? "").toLowerCase().includes(q)
     );
-  });
+  // Apply localRead override so opened Gmail mails show as read immediately
+  }).map(msg => localRead.has(msg.messageId) ? { ...msg, isRead: true } : msg);
 
   const totalPages  = Math.ceil(filteredMessages.length / PAGE_SIZE);
   const currentPage = Math.min(page, Math.max(1, totalPages));
@@ -1724,6 +1802,7 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
                   isDark={isDark}
                   isStarred={starred.has(msg.messageId)}
                   onToggleStar={toggleStar}
+                  onTrash={handleTrash}
                   onClick={() => handleSelectMail(msg)}
                 />
               ))}
