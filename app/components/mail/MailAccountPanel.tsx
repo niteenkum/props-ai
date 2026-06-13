@@ -16,6 +16,7 @@ import {
   getEmailThreadAction,
   sendThreadReplyAction,
   fetchGmailThreadAction,
+  sendGmailNewAction,
   type MailMessage,
   type ThreadMessage,
 } from "../../actions/mail-actions";
@@ -271,116 +272,252 @@ function MessageRow({
 // ─── QuickSendForm ────────────────────────────────────────────────────────────
 
 function QuickSendForm({
-  onSend, isSending, sendError, lastSendSuccess, onClear, isDark,
+  onSendZoho, onSendGmail, isSending, sendError, lastSendSuccess, onClear, isDark,
+  hasGmail, hasZoho,
 }: {
-  onSend: (to: string, subject: string, body: string) => void;
-  isSending: boolean;
-  sendError: string | null;
+  onSendZoho:  (to: string, subject: string, body: string, cc?: string, bcc?: string) => void;
+  onSendGmail: (to: string, subject: string, body: string, cc?: string, bcc?: string) => void;
+  isSending:       boolean;
+  sendError:       string | null;
   lastSendSuccess: boolean;
-  onClear: () => void;
-  isDark: boolean;
+  onClear:         () => void;
+  isDark:          boolean;
+  hasGmail:        boolean;
+  hasZoho:         boolean;
 }) {
-  const [to,      setTo]      = useState("");
-  const [subject, setSubject] = useState("");
-  const [body,    setBody]    = useState("");
+  const [to,       setTo]       = useState("");
+  const [subject,  setSubject]  = useState("");
+  const [body,     setBody]     = useState("");
+  const [cc,       setCc]       = useState("");
+  const [bcc,      setBcc]      = useState("");
+  const [showCc,   setShowCc]   = useState(false);
+  const [showBcc,  setShowBcc]  = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [attachments, setAttachments] = useState<{name:string;size:number;data:string;type:string}[]>([]);
+  // Default to gmail if available, else zoho
+  const [provider, setProvider] = useState<"gmail"|"zoho">(hasGmail ? "gmail" : "zoho");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const canSend = to.trim() && subject.trim() && body.trim() && !isSending;
 
-  const input: React.CSSProperties = {
-    width: "100%", boxSizing: "border-box",
-    padding: "10px 13px", borderRadius: 10,
-    border: `1px solid ${isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.1)"}`,
-    background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.025)",
-    color: "var(--foreground)", fontSize: 13, fontFamily: "inherit",
-    outline: "none", transition: "border-color 0.15s",
+  const handleAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
+    Array.from(e.target.files ?? []).forEach(f => {
+      const r = new FileReader();
+      r.onload = ev => setAttachments(p => [...p, { name: f.name, size: f.size, type: f.type, data: (ev.target?.result as string).split(",")[1] ?? "" }]);
+      r.readAsDataURL(f);
+    });
+    if (fileRef.current) fileRef.current.value = "";
   };
 
+  const applyFmt = (tag: string) => {
+    const el = bodyRef.current; if (!el) return;
+    const s = el.selectionStart, e = el.selectionEnd;
+    const m: Record<string,string> = { bold:"**", italic:"_", underline:"__" };
+    const mark = m[tag] ?? "";
+    setBody(v => v.slice(0,s) + mark + v.slice(s,e) + mark + v.slice(e));
+    setTimeout(() => { el.focus(); el.setSelectionRange(s+mark.length, e+mark.length); }, 0);
+  };
+
+  const handleSend = () => {
+    if (!canSend) return;
+    const ccVal  = showCc  ? cc.trim()  : undefined;
+    const bccVal = showBcc ? bcc.trim() : undefined;
+    if (provider === "gmail") {
+      onSendGmail(to.trim(), subject.trim(), body.trim(), ccVal, bccVal);
+    } else {
+      onSendZoho(to.trim(), subject.trim(), body.trim(), ccVal, bccVal);
+    }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    flex: 1, background: "transparent", border: "none", outline: "none",
+    fontSize: 13, color: "var(--foreground)", fontFamily: "inherit",
+  };
+  const divider = <div style={{ width: 1, height: 14, background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", margin: "0 3px" }} />;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <input ref={fileRef} type="file" multiple style={{ display:"none" }} onChange={handleAttach} />
 
-      {/* Status banners */}
+      {/* ── Success / Error ── */}
       {lastSendSuccess && (
-        <div style={{
-          padding: "10px 14px", borderRadius: 10,
-          background: isDark ? "rgba(34,197,94,0.08)" : "#f0fdf4",
-          border: `1px solid ${isDark ? "rgba(34,197,94,0.25)" : "#bbf7d0"}`,
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <CheckCircle2 size={13} style={{ color: "#22c55e" }} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: isDark ? "#4ade80" : "#16a34a" }}>
-              Email sent successfully!
-            </span>
+        <div style={{ padding:"10px 14px", borderRadius:10, background: isDark?"rgba(34,197,94,0.08)":"#f0fdf4", border:`1px solid ${isDark?"rgba(34,197,94,0.25)":"#bbf7d0"}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+            <CheckCircle2 size={13} style={{ color:"#22c55e" }} />
+            <span style={{ fontSize:12, fontWeight:600, color: isDark?"#4ade80":"#16a34a" }}>Email sent successfully!</span>
           </div>
-          <button onClick={onClear} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted-foreground)", padding: 2 }}>
-            <X size={12} />
-          </button>
+          <button onClick={onClear} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted-foreground)", padding:2 }}><X size={12}/></button>
         </div>
       )}
-
       {sendError && (
-        <div style={{
-          padding: "10px 14px", borderRadius: 10,
-          background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.25)",
-          display: "flex", alignItems: "center", gap: 7,
-        }}>
-          <AlertCircle size={13} style={{ color: "#ef4444" }} />
-          <span style={{ fontSize: 12, color: "#ef4444" }}>{sendError}</span>
+        <div style={{ padding:"10px 14px", borderRadius:10, background:"rgba(239,68,68,0.07)", border:"1px solid rgba(239,68,68,0.25)", display:"flex", alignItems:"center", gap:7 }}>
+          <AlertCircle size={13} style={{ color:"#ef4444" }} />
+          <span style={{ fontSize:12, color:"#ef4444" }}>{sendError}</span>
         </div>
       )}
 
-      {/* Fields */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        <label style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, color: "var(--muted-foreground)", marginBottom: 4 }}>
-          To
-        </label>
-        <input
-          type="email" placeholder="recipient@example.com" value={to}
-          onChange={e => setTo(e.target.value)} style={input}
-        />
-      </div>
+      {/* ── Provider Selector ── */}
+      {(hasGmail || hasZoho) && (
+        <div style={{ display:"flex", gap:6, marginBottom:2 }}>
+          {hasGmail && (
+            <button
+              onClick={() => setProvider("gmail")}
+              style={{
+                flex:1, padding:"9px 0", borderRadius:10, border:"none", cursor:"pointer",
+                fontWeight:700, fontSize:12.5, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                background: provider==="gmail"
+                  ? "linear-gradient(135deg, #ea4335 0%, #c5221f 100%)"
+                  : (isDark ? "rgba(234,67,53,0.07)" : "rgba(234,67,53,0.05)"),
+                color: provider==="gmail" ? "#fff" : "#ea4335",
+                border: provider==="gmail" ? "none" : "1.5px solid rgba(234,67,53,0.3)",
+                boxShadow: provider==="gmail" ? "0 4px 14px rgba(234,67,53,0.25)" : "none",
+                transition:"all 0.15s",
+              }}
+            >
+              {/* Gmail icon */}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 010 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.909 1.528-1.145C21.69 2.28 24 3.434 24 5.457z" fill="currentColor"/>
+              </svg>
+              Send via Gmail
+              {provider==="gmail" && <span style={{ fontSize:9, background:"rgba(255,255,255,0.2)", padding:"1px 5px", borderRadius:4 }}>Corsair</span>}
+            </button>
+          )}
+          {hasZoho && (
+            <button
+              onClick={() => setProvider("zoho")}
+              style={{
+                flex:1, padding:"9px 0", borderRadius:10, border:"none", cursor:"pointer",
+                fontWeight:700, fontSize:12.5, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                background: provider==="zoho"
+                  ? "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)"
+                  : (isDark ? "rgba(245,158,11,0.07)" : "rgba(245,158,11,0.05)"),
+                color: provider==="zoho" ? "#fff" : "#f59e0b",
+                border: provider==="zoho" ? "none" : "1.5px solid rgba(245,158,11,0.3)",
+                boxShadow: provider==="zoho" ? "0 4px 14px rgba(245,158,11,0.25)" : "none",
+                transition:"all 0.15s",
+              }}
+            >
+              <Mail size={14}/>
+              Send via Zoho
+            </button>
+          )}
+        </div>
+      )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        <label style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, color: "var(--muted-foreground)", marginBottom: 4 }}>
-          Subject
-        </label>
-        <input
-          type="text" placeholder="What's this about?" value={subject}
-          onChange={e => setSubject(e.target.value)} style={input}
-        />
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        <label style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, color: "var(--muted-foreground)", marginBottom: 4 }}>
-          Message
-        </label>
+      {/* ── Composer Card ── */}
+      <div style={{
+        borderRadius:14,
+        border:`1.5px solid ${provider==="gmail" ? "rgba(234,67,53,0.25)" : "rgba(245,158,11,0.25)"}`,
+        background: isDark ? "rgba(16,16,28,0.95)" : "#fff",
+        boxShadow: expanded ? "0 8px 40px rgba(0,0,0,0.12)" : "0 2px 12px rgba(0,0,0,0.06)",
+        overflow:"hidden", transition:"all 0.2s ease",
+      }}>
+        {/* To */}
+        <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 14px", borderBottom:`1px solid ${isDark?"rgba(255,255,255,0.05)":"rgba(0,0,0,0.05)"}` }}>
+          <span style={{ fontSize:11, fontWeight:700, color:"var(--muted-foreground)", width:40, flexShrink:0 }}>To</span>
+          <input type="email" placeholder="recipient@example.com" value={to} onChange={e=>setTo(e.target.value)} style={inputStyle} />
+          <div style={{ display:"flex", gap:4 }}>
+            {!showCc  && <button onClick={()=>setShowCc(true)}  style={{ fontSize:10, padding:"2px 7px", borderRadius:4, border:`1px solid ${isDark?"rgba(255,255,255,0.1)":"rgba(0,0,0,0.1)"}`, background:"transparent", color:"var(--muted-foreground)", cursor:"pointer", fontWeight:600 }}>CC</button>}
+            {!showBcc && <button onClick={()=>setShowBcc(true)} style={{ fontSize:10, padding:"2px 7px", borderRadius:4, border:`1px solid ${isDark?"rgba(255,255,255,0.1)":"rgba(0,0,0,0.1)"}`, background:"transparent", color:"var(--muted-foreground)", cursor:"pointer", fontWeight:600 }}>BCC</button>}
+          </div>
+        </div>
+        {/* CC */}
+        {showCc && (
+          <div style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 14px", borderBottom:`1px solid ${isDark?"rgba(255,255,255,0.05)":"rgba(0,0,0,0.05)"}` }}>
+            <span style={{ fontSize:11, fontWeight:700, color:"var(--muted-foreground)", width:40, flexShrink:0 }}>CC</span>
+            <input placeholder="cc@example.com" value={cc} onChange={e=>setCc(e.target.value)} style={inputStyle} />
+            <button onClick={()=>{setShowCc(false);setCc("");}} style={{ background:"transparent", border:"none", cursor:"pointer", color:"var(--muted-foreground)", display:"flex" }}><X size={13}/></button>
+          </div>
+        )}
+        {/* BCC */}
+        {showBcc && (
+          <div style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 14px", borderBottom:`1px solid ${isDark?"rgba(255,255,255,0.05)":"rgba(0,0,0,0.05)"}` }}>
+            <span style={{ fontSize:11, fontWeight:700, color:"var(--muted-foreground)", width:40, flexShrink:0 }}>BCC</span>
+            <input placeholder="bcc@example.com" value={bcc} onChange={e=>setBcc(e.target.value)} style={inputStyle} />
+            <button onClick={()=>{setShowBcc(false);setBcc("");}} style={{ background:"transparent", border:"none", cursor:"pointer", color:"var(--muted-foreground)", display:"flex" }}><X size={13}/></button>
+          </div>
+        )}
+        {/* Subject */}
+        <div style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 14px", borderBottom:`1px solid ${isDark?"rgba(255,255,255,0.05)":"rgba(0,0,0,0.05)"}` }}>
+          <span style={{ fontSize:11, fontWeight:700, color:"var(--muted-foreground)", width:40, flexShrink:0 }}>Sub</span>
+          <input placeholder="Subject" value={subject} onChange={e=>setSubject(e.target.value)} style={inputStyle} />
+        </div>
+        {/* Body */}
         <textarea
-          rows={5} placeholder="Write your message..." value={body}
-          onChange={e => setBody(e.target.value)}
-          style={{ ...input, resize: "vertical", lineHeight: 1.65 }}
+          ref={bodyRef}
+          rows={expanded ? 12 : 6}
+          placeholder={`Compose your email...\n\nTip: Select text and use formatting tools below`}
+          value={body}
+          onChange={e=>setBody(e.target.value)}
+          style={{ width:"100%", boxSizing:"border-box", padding:"12px 14px", border:"none", background:"transparent", color:"var(--foreground)", fontSize:13.5, fontFamily:"inherit", lineHeight:1.65, outline:"none", resize:"none", display:"block" }}
+          onKeyDown={e=>{ if(e.key==="Enter" && e.ctrlKey){ e.preventDefault(); handleSend(); } }}
         />
+        {/* Attachments */}
+        {attachments.length > 0 && (
+          <div style={{ display:"flex", flexWrap:"wrap", gap:6, padding:"0 14px 10px" }}>
+            {attachments.map((a,i)=>(
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:5, padding:"3px 8px 3px 6px", borderRadius:6, background: isDark?"rgba(99,102,241,0.12)":"rgba(99,102,241,0.07)", border:"1px solid rgba(99,102,241,0.2)", fontSize:11 }}>
+                <FileText size={11} style={{ color:"#6366f1" }}/>
+                <span style={{ maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{a.name}</span>
+                <span style={{ color:"var(--muted-foreground)", fontSize:10 }}>({(a.size/1024).toFixed(0)}KB)</span>
+                <button onClick={()=>setAttachments(p=>p.filter((_,j)=>j!==i))} style={{ background:"transparent", border:"none", cursor:"pointer", color:"var(--muted-foreground)", display:"flex", padding:0 }}><X size={11}/></button>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* Toolbar */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 10px", borderTop:`1px solid ${isDark?"rgba(255,255,255,0.05)":"rgba(0,0,0,0.05)"}`, background: isDark?"rgba(255,255,255,0.015)":"rgba(0,0,0,0.012)" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:1 }}>
+            <button onClick={()=>applyFmt("bold")}      title="Bold"      style={{ background:"transparent", border:"none", cursor:"pointer", color:"var(--muted-foreground)", padding:"4px 6px", borderRadius:5, display:"flex" }}><Bold size={13}/></button>
+            <button onClick={()=>applyFmt("italic")}    title="Italic"    style={{ background:"transparent", border:"none", cursor:"pointer", color:"var(--muted-foreground)", padding:"4px 6px", borderRadius:5, display:"flex" }}><Italic size={13}/></button>
+            <button onClick={()=>applyFmt("underline")} title="Underline" style={{ background:"transparent", border:"none", cursor:"pointer", color:"var(--muted-foreground)", padding:"4px 6px", borderRadius:5, display:"flex" }}><Underline size={13}/></button>
+            {divider}
+            <button onClick={()=>fileRef.current?.click()} title="Attach" style={{ background:"transparent", border:"none", cursor:"pointer", color:"var(--muted-foreground)", padding:"4px 6px", borderRadius:5, display:"flex" }}><Paperclip size={13}/></button>
+            <button onClick={()=>setBody(t=>t+"😊")}      title="Emoji"  style={{ background:"transparent", border:"none", cursor:"pointer", color:"var(--muted-foreground)", padding:"4px 6px", borderRadius:5, display:"flex" }}><Smile size={13}/></button>
+            {divider}
+            <button onClick={()=>setExpanded(e=>!e)} title={expanded?"Collapse":"Expand"} style={{ background:"transparent", border:"none", cursor:"pointer", color:"var(--muted-foreground)", padding:"4px 6px", borderRadius:5, display:"flex" }}>
+              {expanded ? <Minimize2 size={12}/> : <Maximize2 size={12}/>}
+            </button>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+            {body.length > 0 && <span style={{ fontSize:10, color:"var(--muted-foreground)", opacity:0.5 }}>{body.length} chars</span>}
+            {(to||subject||body) && (
+              <button onClick={()=>{setTo("");setSubject("");setBody("");setCc("");setBcc("");setAttachments([]);}} title="Discard" style={{ background:"transparent", border:"none", cursor:"pointer", color:"var(--muted-foreground)", padding:"4px 6px", borderRadius:5, display:"flex" }}><Trash2 size={13}/></button>
+            )}
+            <button
+              onClick={handleSend}
+              disabled={!canSend}
+              style={{
+                padding:"7px 20px", borderRadius:8, border:"none",
+                background: canSend
+                  ? (provider==="gmail"
+                    ? "linear-gradient(135deg, #ea4335 0%, #c5221f 100%)"
+                    : "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)")
+                  : (isDark?"rgba(255,255,255,0.05)":"rgba(0,0,0,0.06)"),
+                color: canSend ? "#fff" : "var(--muted-foreground)",
+                cursor: canSend ? "pointer" : "not-allowed",
+                display:"flex", alignItems:"center", gap:6,
+                fontSize:12.5, fontWeight:700,
+                boxShadow: canSend ? "0 4px 14px rgba(0,0,0,0.2)" : "none",
+                transition:"all 0.15s",
+              }}
+            >
+              {isSending
+                ? <><Loader2 size={13} style={{ animation:"spin 1s linear infinite" }}/> Sending...</>
+                : <><Send size={13}/> Send</>
+              }
+            </button>
+          </div>
+        </div>
       </div>
 
-      <button
-        onClick={() => { if (canSend) onSend(to.trim(), subject.trim(), body.trim()); }}
-        disabled={!canSend}
-        style={{
-          padding: "11px 0", borderRadius: 11, border: "none", width: "100%",
-          background: canSend
-            ? "linear-gradient(135deg, #818cf8 0%, #6366f1 100%)"
-            : (isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.06)"),
-          color: canSend ? "#fff" : "var(--muted-foreground)",
-          fontSize: 13, fontWeight: 700, cursor: canSend ? "pointer" : "not-allowed",
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-          boxShadow: canSend ? "0 4px 18px rgba(99,102,241,0.3)" : "none",
-          transition: "all 0.2s",
-        }}
-      >
-        {isSending
-          ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Sending...</>
-          : <><Send size={13} /> Send Email</>
-        }
-      </button>
+      <p style={{ fontSize:11, color:"var(--muted-foreground)", textAlign:"center", opacity:0.6, margin:0 }}>
+        {provider === "gmail"
+          ? "✦ Sending via Gmail · Powered by Corsair"
+          : "✦ Sending via Zoho Mail"}
+        &nbsp;·&nbsp;Ctrl+Enter to send
+      </p>
     </div>
   );
 }
@@ -1617,16 +1754,30 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
       )}
 
       {/* ── SEND TAB ── */}
-      {activeTab === "send" && (
-        <QuickSendForm
-          onSend={mail.sendEmail}
-          isSending={mail.isSending}
-          sendError={mail.sendError}
-          lastSendSuccess={mail.lastSendSuccess}
-          onClear={mail.clearSendStatus}
-          isDark={isDark}
-        />
-      )}
+      {activeTab === "send" && (() => {
+        const hasGmail = mail.mailAccounts.some(a => a.provider === "gmail");
+        const hasZoho  = mail.mailAccounts.some(a => a.provider === "zoho");
+
+        const handleSendGmail = async (to: string, subject: string, body: string, cc?: string, bcc?: string) => {
+          const res = await sendGmailNewAction(userEmail, to, subject, body, cc, bcc);
+          if (!res.success) alert(res.error ?? "Failed to send via Gmail.");
+          else mail.clearSendStatus(); // trigger success state via hook
+        };
+
+        return (
+          <QuickSendForm
+            onSendZoho={mail.sendEmail}
+            onSendGmail={handleSendGmail}
+            isSending={mail.isSending}
+            sendError={mail.sendError}
+            lastSendSuccess={mail.lastSendSuccess}
+            onClear={mail.clearSendStatus}
+            isDark={isDark}
+            hasGmail={hasGmail}
+            hasZoho={hasZoho}
+          />
+        );
+      })()}
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }

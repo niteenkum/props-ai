@@ -398,14 +398,28 @@ export async function fetchGmailInboxAction(
 
 export async function fetchUnifiedInboxAction(
   userEmail: string,
-  limit = 30
+  limit = 50
 ): Promise<{ success: boolean; messages?: MailMessage[]; error?: string }> {
   const perProvider = Math.ceil(limit / 2);
+
+  console.log(`[fetchUnifiedInbox] Fetching ${perProvider} messages per provider for ${userEmail}`);
 
   const [zohoResult, gmailResult] = await Promise.allSettled([
     fetchInboxAction(userEmail, perProvider),
     fetchGmailInboxAction(userEmail, perProvider),
   ]);
+
+  // Log each result so we can debug issues
+  if (zohoResult.status === "fulfilled") {
+    console.log(`[fetchUnifiedInbox] Zoho: ${zohoResult.value.success ? `✅ ${zohoResult.value.messages?.length ?? 0} msgs` : `❌ ${zohoResult.value.error}`}`);
+  } else {
+    console.log(`[fetchUnifiedInbox] Zoho: ❌ rejected:`, zohoResult.reason);
+  }
+  if (gmailResult.status === "fulfilled") {
+    console.log(`[fetchUnifiedInbox] Gmail: ${gmailResult.value.success ? `✅ ${gmailResult.value.messages?.length ?? 0} msgs` : `❌ ${gmailResult.value.error}`}`);
+  } else {
+    console.log(`[fetchUnifiedInbox] Gmail: ❌ rejected:`, gmailResult.reason);
+  }
 
   const all: MailMessage[] = [];
 
@@ -416,15 +430,17 @@ export async function fetchUnifiedInboxAction(
     all.push(...(gmailResult.value.messages ?? []));
   }
 
-  if (all.length === 0) {
-    const zohoErr  = zohoResult.status  === "fulfilled" ? zohoResult.value.error  : "Zoho fetch failed";
-    const gmailErr = gmailResult.status === "fulfilled" ? gmailResult.value.error : "Gmail fetch failed";
-    return { success: false, error: [zohoErr, gmailErr].filter(Boolean).join(" | ") };
+  // Return whatever we have — even if one provider failed
+  if (all.length > 0) {
+    all.sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
+    console.log(`[fetchUnifiedInbox] ✅ Combined: ${all.length} messages total`);
+    return { success: true, messages: all.slice(0, limit) };
   }
 
-  // Sort combined feed newest first
-  all.sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
-  return { success: true, messages: all.slice(0, limit) };
+  // Both failed
+  const zohoErr  = zohoResult.status  === "fulfilled" ? zohoResult.value.error  : "Zoho fetch failed";
+  const gmailErr = gmailResult.status === "fulfilled" ? gmailResult.value.error : "Gmail fetch failed";
+  return { success: false, error: [zohoErr, gmailErr].filter(Boolean).join(" | ") };
 }
 
 // ─── 4d. Fetch a Gmail thread (click-to-open) ────────────────────────────────
@@ -690,6 +706,49 @@ export async function sendMailAction(
     return { success: false, error: err?.message ?? "Unexpected send error." };
   }
 }
+
+// ─── 5b. Send NEW email via Gmail (Corsair) ───────────────────────────────────
+// Composes and sends a brand-new email (not a reply) via Corsair Gmail SDK.
+
+export async function sendGmailNewAction(
+  userEmail: string,
+  to:        string,
+  subject:   string,
+  body:      string,
+  cc?:       string,
+  bcc?:      string,
+): Promise<SendResult> {
+  try {
+    const { corsair } = await import("../utils/corsair");
+    const tenant = corsair.withTenant(userEmail);
+
+    const headerLines = [
+      `From: ${userEmail}`,
+      `To: ${to}`,
+      ...(cc  ? [`Cc: ${cc}`]  : []),
+      ...(bcc ? [`Bcc: ${bcc}`] : []),
+      `Subject: ${subject}`,
+      `Content-Type: text/plain; charset=UTF-8`,
+      ``,
+      body,
+    ];
+    const rawEmail  = headerLines.join("\r\n");
+    const base64Raw = Buffer.from(rawEmail)
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+
+    await tenant.gmail.api.messages.send({ raw: base64Raw } as any);
+
+    console.log(`[sendGmailNew] ✅ Sent via Gmail/Corsair: ${userEmail} → ${to}`);
+    return { success: true };
+  } catch (err: any) {
+    console.error("[sendGmailNew] Error:", err);
+    return { success: false, error: err?.message ?? "Failed to send via Gmail." };
+  }
+}
+
 
 
 // ─── 6. Send email linked to a job post ──────────────────────────────────────

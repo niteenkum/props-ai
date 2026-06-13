@@ -151,7 +151,7 @@ model MailAccount {
   provider        String   @default("zoho")       // "zoho" | "gmail"
   accountEmail    String                          // the actual mailbox address linked
   accessToken     String   @db.Text
-  refreshToken    String   @db.Text
+  refreshToken    String?  @db.Text
   expiresAt       DateTime                        // when the access token expires
   zohoAccountId   String?                         // Zoho internal account ID (zoho only)
   apiBase         String?                         // Region-correct API base (zoho only)
@@ -223,4 +223,58 @@ model WhatsAppMessage {
   @@index([groupId])
   @@index([whatsappMessageId])
   @@index([userEmail, groupId])
+}
+
+// ─── Corsair SDK Tables (DO NOT MODIFY / DO NOT DROP) ─────────────────────────
+// These tables are managed by the Corsair SDK (@corsair-dev/gmail).
+// Prisma must not migrate or drop them — they are declared here only to
+// prevent `prisma db push` from treating them as unknown tables.
+// The actual schema is managed by the Corsair SDK internally.
+
+model CorsairAccount {
+  id         String   @id
+  tenantId   String   @map("tenant_id")
+  plugin     String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("corsair_accounts")
+  @@ignore
+}
+
+model CorsairIntegration {
+  id        String   @id
+  accountId String   @map("account_id")
+  plugin    String
+  config    Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("corsair_integrations")
+  @@ignore
+}
+
+model CorsairEntity {
+  id         String   @id
+  accountId  String   @map("account_id")
+  plugin     String
+  entityType String   @map("entity_type")
+  data       Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("corsair_entities")
+  @@ignore
+}
+
+model CorsairEvent {
+  id        String   @id
+  accountId String   @map("account_id")
+  plugin    String
+  eventType String   @map("event_type")
+  data      Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("corsair_events")
+  @@ignore
 }

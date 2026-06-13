@@ -56,8 +56,8 @@ export async function GET(req: NextRequest) {
   console.log(`[Zoho Callback] Using accounts-server: ${accountsServer}`);
 
   // ── Exchange authorization code for tokens ────────────────────────────────
-  let accessToken: string;
-  let refreshToken: string;
+  let accessToken:  string;
+  let refreshToken: string | null;  // Zoho only sends this on first auth
   let expiresInSec: number;
 
   try {
@@ -83,7 +83,8 @@ export async function GET(req: NextRequest) {
     }
 
     accessToken  = tokenData.access_token;
-    refreshToken = tokenData.refresh_token;
+    // Zoho only returns refresh_token on first-time auth, not on re-auth
+    refreshToken = tokenData.refresh_token ?? null;
     expiresInSec = tokenData.expires_in ?? 3600;
   } catch (err) {
     console.error("[Zoho Callback] Token exchange error:", err);
@@ -146,7 +147,7 @@ export async function GET(req: NextRequest) {
         provider:      "zoho",
         accountEmail,
         accessToken,
-        refreshToken,
+        refreshToken:  refreshToken ?? "",  // empty string if not provided (required field)
         expiresAt,
         zohoAccountId: zohoAccountId || null,
         apiBase:       mailBase,
@@ -154,7 +155,8 @@ export async function GET(req: NextRequest) {
       update: {
         accountEmail,
         accessToken,
-        refreshToken,
+        // Only update refreshToken if Zoho sent a new one; preserve existing otherwise
+        ...(refreshToken ? { refreshToken } : {}),
         expiresAt,
         zohoAccountId: zohoAccountId || null,
         apiBase:       mailBase,

@@ -160,6 +160,9 @@ export function useMailAccount(userEmail: string | null): UseMailAccountReturn {
   }, [userEmail, mailAccounts, isZohoConnected, isGmailConnected]);
 
   // ── Auto-fetch inbox when accounts load ──────────────────────────────────
+  // Watch the full provider list — not just length — so adding Zoho after Gmail
+  // (or vice versa) properly triggers a unified re-fetch.
+  const providerKey = mailAccounts.map(a => a.provider).sort().join(",");
   useEffect(() => {
     if (userEmail && mailAccounts.length > 0) {
       fetchInbox();
@@ -167,7 +170,7 @@ export function useMailAccount(userEmail: string | null): UseMailAccountReturn {
       setInbox([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userEmail, mailAccounts.length]);
+  }, [userEmail, providerKey]);
 
   // ── Send email (via Zoho — default provider for sending) ─────────────────
   const sendEmail = useCallback(async (
