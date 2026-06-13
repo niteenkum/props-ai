@@ -1,14 +1,16 @@
 "use client";
 
 // ─── useMailAccount Hook ───────────────────────────────────────────────────
-// Manages the full lifecycle of a user's linked mail account.
-// Handles: connection status, inbox fetching, sending, and disconnecting.
+// Manages the full lifecycle of a user's linked mail accounts (Zoho + Gmail).
+// Handles: connection status per provider, unified inbox fetching, sending, and disconnecting.
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  getMailAccountAction,
+  getMailAccountsAction,
   disconnectMailAction,
   fetchInboxAction,
+  fetchGmailInboxAction,
+  fetchUnifiedInboxAction,
   sendMailAction,
   type MailAccountInfo,
   type MailMessage,
@@ -19,8 +21,11 @@ import {
 
 export interface UseMailAccountReturn {
   // State
-  mailAccount:       MailAccountInfo | null;
-  isLoading:         boolean;         // initial load
+  mailAccount:       MailAccountInfo | null;  // legacy — first linked account (compat)
+  mailAccounts:      MailAccountInfo[];        // all linked accounts
+  isZohoConnected:   boolean;
+  isGmailConnected:  boolean;
+  isLoading:         boolean;
   // Inbox
   inbox:             MailMessage[];
   isFetchingInbox:   boolean;
@@ -32,8 +37,10 @@ export interface UseMailAccountReturn {
   // Disconnect
   isDisconnecting:   boolean;
   // Actions
-  connect:           () => void;
-  disconnect:        () => Promise<void>;
+  connect:           () => void;          // legacy — connects Zoho
+  connectZoho:       () => void;
+  connectGmail:      () => void;
+  disconnect:        (provider?: "zoho" | "gmail") => Promise<void>;
   fetchInbox:        () => Promise<void>;
   sendEmail:         (to: string, subject: string, body: string) => Promise<SendResult>;
   clearSendStatus:   () => void;
@@ -42,7 +49,7 @@ export interface UseMailAccountReturn {
 // ─── Hook ──────────────────────────────────────────────────────────────────
 
 export function useMailAccount(userEmail: string | null): UseMailAccountReturn {
-  const [mailAccount,     setMailAccount]     = useState<MailAccountInfo | null>(null);
+  const [mailAccounts,    setMailAccounts]    = useState<MailAccountInfo[]>([]);
   const [isLoading,       setIsLoading]       = useState(true);
   const [inbox,           setInbox]           = useState<MailMessage[]>([]);
   const [isFetchingInbox, setIsFetchingInbox] = useState(false);
@@ -52,43 +59,34 @@ export function useMailAccount(userEmail: string | null): UseMailAccountReturn {
   const [lastSendSuccess, setLastSendSuccess] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
 
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const isZohoConnected  = mailAccounts.some(a => a.provider === "zoho");
+  const isGmailConnected = mailAccounts.some(a => a.provider === "gmail");
+  const mailAccount      = mailAccounts[0] ?? null; // legacy compat
+
   // ── Load account status on mount ─────────────────────────────────────────
   useEffect(() => {
-    console.log("[useMailAccount] Hook mounted/updated with userEmail:", userEmail);
     if (!userEmail) {
-      console.warn("[useMailAccount] No userEmail provided to hook yet.");
       setIsLoading(false);
       return;
     }
-
-    console.log("[useMailAccount] Fetching mail account info for:", userEmail);
     setIsLoading(true);
-    getMailAccountAction(userEmail)
-      .then((account) => {
-        console.log("[useMailAccount] getMailAccountAction resolved:", account);
-        setMailAccount(account);
-      })
-      .catch((err) => {
-        console.error("[useMailAccount] getMailAccountAction error:", err);
-        setMailAccount(null);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+    getMailAccountsAction(userEmail)
+      .then(setMailAccounts)
+      .catch(() => setMailAccounts([]))
+      .finally(() => setIsLoading(false));
   }, [userEmail]);
 
-  // ── Handle ?connected=true redirect from callback ─────────────────────────
+  // ── Handle ?connected=... redirect from OAuth callback ──────────────────
   useEffect(() => {
     if (typeof window === "undefined" || !userEmail) return;
 
     const params = new URLSearchParams(window.location.search);
-    if (params.get("connected") === "true") {
-      console.log("[useMailAccount] OAuth callback detected. Reloading mail account...");
-      // Re-load account info after OAuth success
-      getMailAccountAction(userEmail).then((account) => {
-        console.log("[useMailAccount] Reloaded mail account after OAuth:", account);
-        setMailAccount(account);
-      });
+    const connectedParam = params.get("connected");
+
+    if (connectedParam === "true" || connectedParam === "gmail" || connectedParam === "zoho") {
+      console.log("[useMailAccount] OAuth callback detected. Reloading accounts...");
+      getMailAccountsAction(userEmail).then(setMailAccounts);
       // Clean up the URL
       const clean = new URL(window.location.href);
       clean.searchParams.delete("connected");
@@ -96,69 +94,82 @@ export function useMailAccount(userEmail: string | null): UseMailAccountReturn {
     }
   }, [userEmail]);
 
-  // ── Connect: redirect to OAuth flow ──────────────────────────────────────
-  const connect = useCallback(() => {
+  // ── Connect: Zoho OAuth ──────────────────────────────────────────────────
+  const connectZoho = useCallback(() => {
     if (!userEmail) return;
-    const url = `/api/mail/zoho/connect?email=${encodeURIComponent(userEmail)}`;
-    console.log("[useMailAccount] Redirecting to connection URL:", url);
-    window.location.href = url;
+    window.location.href = `/api/mail/zoho/connect?email=${encodeURIComponent(userEmail)}`;
   }, [userEmail]);
 
-  // ── Disconnect ────────────────────────────────────────────────────────────
-  const disconnect = useCallback(async () => {
+  // ── Connect: Gmail OAuth via Corsair ─────────────────────────────────────
+  const connectGmail = useCallback(() => {
     if (!userEmail) return;
-    console.log("[useMailAccount] Disconnecting mail account for:", userEmail);
+    window.location.href = `/api/mail/gmail/connect?email=${encodeURIComponent(userEmail)}`;
+  }, [userEmail]);
+
+  // Legacy connect = Zoho (backward compat)
+  const connect = connectZoho;
+
+  // ── Disconnect ────────────────────────────────────────────────────────────
+  const disconnect = useCallback(async (provider: "zoho" | "gmail" = "zoho") => {
+    if (!userEmail) return;
     setIsDisconnecting(true);
     try {
-      const result = await disconnectMailAction(userEmail);
-      console.log("[useMailAccount] Disconnect result:", result);
+      const result = await disconnectMailAction(userEmail, provider);
       if (result.success) {
-        setMailAccount(null);
-        setInbox([]);
+        setMailAccounts(prev => prev.filter(a => a.provider !== provider));
+        if (provider === "zoho" || mailAccounts.length <= 1) {
+          setInbox([]);
+        }
       }
     } finally {
       setIsDisconnecting(false);
     }
-  }, [userEmail]);
+  }, [userEmail, mailAccounts]);
 
-  // ── Fetch inbox ──────────────────────────────────────────────────────────────
+  // ── Fetch inbox (unified: Zoho + Gmail) ──────────────────────────────────
   const fetchInbox = useCallback(async () => {
-    console.log("[useMailAccount] fetchInbox called", { userEmail, mailAccount });
-    if (!userEmail) { console.warn("[useMailAccount] fetchInbox aborted: no userEmail"); return; }
-    if (!mailAccount) { console.warn("[useMailAccount] fetchInbox aborted: mailAccount is null"); return; }
+    if (!userEmail) return;
+    if (mailAccounts.length === 0) return;
+
     setIsFetchingInbox(true);
     setInboxError(null);
+
     try {
-      console.log("[useMailAccount] Calling fetchInboxAction for", userEmail);
-      const result = await fetchInboxAction(userEmail, 20);
-      console.log("[useMailAccount] fetchInboxAction result:", result);
+      // If both accounts connected: unified fetch
+      // If only one: fetch that provider
+      let result: { success: boolean; messages?: MailMessage[]; error?: string };
+
+      if (isZohoConnected && isGmailConnected) {
+        result = await fetchUnifiedInboxAction(userEmail, 100);
+      } else if (isGmailConnected) {
+        result = await fetchGmailInboxAction(userEmail, 50);
+      } else {
+        result = await fetchInboxAction(userEmail, 50);
+      }
+
       if (result.success && result.messages) {
         setInbox(result.messages);
-        console.log(`[useMailAccount] ✅ Inbox loaded: ${result.messages.length} messages`);
       } else {
         setInboxError(result.error ?? "Failed to fetch inbox.");
-        console.error("[useMailAccount] ❌ fetchInboxAction error:", result.error);
       }
     } catch (err: any) {
-      console.error("[useMailAccount] ❌ fetchInbox exception:", err);
       setInboxError(err?.message ?? "Unexpected error.");
     } finally {
       setIsFetchingInbox(false);
     }
-  }, [userEmail, mailAccount]);
+  }, [userEmail, mailAccounts, isZohoConnected, isGmailConnected]);
 
-  // ── Auto-fetch inbox when mailAccount is loaded ──────────────────────────
+  // ── Auto-fetch inbox when accounts load ──────────────────────────────────
   useEffect(() => {
-    if (userEmail && mailAccount) {
-      console.log("[useMailAccount] Auto-fetching inbox since mailAccount is active...", { userEmail, mailAccount });
+    if (userEmail && mailAccounts.length > 0) {
       fetchInbox();
     } else {
-      console.log("[useMailAccount] Auto-fetch skipped:", { userEmail, mailAccount: !!mailAccount });
+      setInbox([]);
     }
-  }, [userEmail, mailAccount, fetchInbox]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userEmail, mailAccounts.length]);
 
-
-  // ── Send email ────────────────────────────────────────────────────────────
+  // ── Send email (via Zoho — default provider for sending) ─────────────────
   const sendEmail = useCallback(async (
     to: string,
     subject: string,
@@ -185,7 +196,7 @@ export function useMailAccount(userEmail: string | null): UseMailAccountReturn {
     }
   }, [userEmail]);
 
-  // ── Clear send status (call after user dismisses toast) ──────────────────
+  // ── Clear send status ────────────────────────────────────────────────────
   const clearSendStatus = useCallback(() => {
     setSendError(null);
     setLastSendSuccess(false);
@@ -193,6 +204,9 @@ export function useMailAccount(userEmail: string | null): UseMailAccountReturn {
 
   return {
     mailAccount,
+    mailAccounts,
+    isZohoConnected,
+    isGmailConnected,
     isLoading,
     inbox,
     isFetchingInbox,
@@ -202,6 +216,8 @@ export function useMailAccount(userEmail: string | null): UseMailAccountReturn {
     lastSendSuccess,
     isDisconnecting,
     connect,
+    connectZoho,
+    connectGmail,
     disconnect,
     fetchInbox,
     sendEmail,

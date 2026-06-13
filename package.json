@@ -11,10 +11,12 @@
     "wa:dev": "node --watch wa-service/index.js"
   },
   "dependencies": {
+    "@corsair-dev/gmail": "^0.1.4",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@radix-ui/react-dialog": "^1.1.15",
     "clsx": "^2.1.1",
+    "corsair": "^0.1.76",
     "lucide-react": "^1.16.0",
     "next": "16.2.6",
     "pg": "^8.21.0",

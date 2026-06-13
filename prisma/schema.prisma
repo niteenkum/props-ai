@@ -141,22 +141,25 @@ model AiUsageLog {
   @@index([userEmail])
 }
 
-// ─── Linked Mail Account ───────────────────────────────────────────────────
-// Stores OAuth tokens for a user's linked mail account (Zoho, later Gmail etc.)
-// One account per user (userEmail is unique).
+// ─── Linked Mail Account ─────────────────────────────────────────────
+// Stores OAuth tokens for a user's linked mail accounts.
+// Supports MULTIPLE accounts per user — one row per (userEmail, provider).
+// provider: "zoho" | "gmail"
 model MailAccount {
-  id            String   @id @default(uuid())
-  userEmail     String   @unique           // one linked account per PropAI user
-  provider      String   @default("zoho")  // "zoho" | "gmail" | "outlook"
-  accountEmail  String                     // the actual mailbox address linked
-  accessToken   String   @db.Text
-  refreshToken  String   @db.Text
-  expiresAt     DateTime                   // when the access token expires
-  zohoAccountId String?                    // Zoho internal account ID for API calls
-  apiBase       String?                    // Region-correct API base e.g. https://mail.zoho.in
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String   @id @default(uuid())
+  userEmail       String                          // PropAI user email
+  provider        String   @default("zoho")       // "zoho" | "gmail"
+  accountEmail    String                          // the actual mailbox address linked
+  accessToken     String   @db.Text
+  refreshToken    String   @db.Text
+  expiresAt       DateTime                        // when the access token expires
+  zohoAccountId   String?                         // Zoho internal account ID (zoho only)
+  apiBase         String?                         // Region-correct API base (zoho only)
+  corsairTenantId String?                         // Corsair tenant ID (gmail only)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
+  @@unique([userEmail, provider])  // one account per user per provider
   @@index([userEmail])
 }
 

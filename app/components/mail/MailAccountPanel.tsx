@@ -13,9 +13,28 @@ import { useMailAccount } from "../../hooks/useMailAccount";
 import {
   getEmailThreadAction,
   sendThreadReplyAction,
+  fetchGmailThreadAction,
   type MailMessage,
   type ThreadMessage,
 } from "../../actions/mail-actions";
+
+// ─── Provider Badge ───────────────────────────────────────────────────────────
+
+function ProviderBadge({ provider }: { provider: "zoho" | "gmail" | string }) {
+  const isGmail = provider === "gmail";
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 3,
+      padding: "1px 7px", borderRadius: 20, fontSize: 9.5, fontWeight: 700,
+      letterSpacing: 0.3, flexShrink: 0,
+      background: isGmail ? "rgba(234,67,53,0.09)" : "rgba(245,158,11,0.09)",
+      border:     `1px solid ${isGmail ? "rgba(234,67,53,0.28)" : "rgba(245,158,11,0.28)"}`,
+      color:      isGmail ? "#ea4335" : "#d97706",
+    }}>
+      {isGmail ? "Gmail" : "Zoho"}
+    </span>
+  );
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -181,6 +200,8 @@ function MessageRow({
               <span style={{ fontSize: 10, color: "var(--muted-foreground)", whiteSpace: "nowrap" }}>
                 {fmtTime(msg.receivedAt)}
               </span>
+              {/* Provider Badge */}
+              {msg.provider && <ProviderBadge provider={msg.provider} />}
               {/* Star toggle */}
               <button
                 onClick={e => { e.stopPropagation(); onToggleStar(msg.messageId); }}
@@ -455,6 +476,7 @@ interface MailAccountPanelProps {
 
 export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanelProps) {
   const mail = useMailAccount(userEmail);
+  const { isZohoConnected, isGmailConnected, connectZoho, connectGmail } = mail;
 
   const [activeTab,   setActiveTab]   = useState<"inbox" | "send">("inbox");
   const [category,    setCategory]    = useState<Category>("all");
@@ -476,8 +498,16 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
     setThreadError(null);
     setThreadMessages([]);
     try {
-      console.log("[MailAccountPanel] Fetching thread for message:", msg.messageId);
-      const res = await getEmailThreadAction(userEmail, msg.messageId, msg.subject, msg.fromEmail);
+      let res: { success: boolean; messages?: ThreadMessage[]; error?: string };
+
+      if (msg.provider === "gmail") {
+        // Gmail message — use Gmail thread API
+        res = await fetchGmailThreadAction(userEmail, msg.messageId);
+      } else {
+        // Zoho message — use Zoho thread search
+        res = await getEmailThreadAction(userEmail, msg.messageId, msg.subject, msg.fromEmail);
+      }
+
       if (res.success && res.messages) {
         setThreadMessages(res.messages);
       } else {
@@ -500,13 +530,14 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
         : null;
       const replyToId = lastMsg?.zohoMsgId || selectedMail.messageId;
 
-      console.log("[MailAccountPanel] Replying to", selectedMail.fromEmail, "for subject", selectedMail.subject);
+      console.log("[MailAccountPanel] Replying to", selectedMail.fromEmail, "for subject", selectedMail.subject, "via", selectedMail.provider);
       const res = await sendThreadReplyAction(
         userEmail,
         selectedMail.fromEmail,
         selectedMail.subject,
         replyText,
-        replyToId
+        replyToId,
+        selectedMail.provider as "zoho" | "gmail"  // route to Corsair (Gmail) or Zoho
       );
 
       if (res.success) {
@@ -595,8 +626,8 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
     );
   }
 
-  // ── Not connected ──────────────────────────────────────────────────────────
-  if (!mail.mailAccount) {
+  // ── Not connected (or partially connected) ─────────────────────────────
+  if (!isZohoConnected && !isGmailConnected) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
@@ -615,7 +646,7 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
             Connect Your Mailbox
           </h3>
           <p style={{ fontSize: 13, color: "var(--muted-foreground)", lineHeight: 1.65, margin: 0 }}>
-            Link Zoho Mail to read job leads and send outreach proposals without leaving PropAI.
+            Link your mail account to read job leads and send outreach directly from PropAI.
           </p>
         </div>
 
@@ -639,33 +670,185 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
           ))}
         </div>
 
-        {/* Connect button */}
-        <button
-          onClick={mail.connect}
-          style={{
-            width: "100%", padding: "14px", borderRadius: 12, border: "none",
-            background: "linear-gradient(135deg, #818cf8, #6366f1)",
-            color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 9,
-            boxShadow: "0 4px 20px rgba(99,102,241,0.38)",
-            transition: "opacity 0.2s, transform 0.15s",
-          }}
-          onMouseEnter={e => { e.currentTarget.style.opacity = "0.88"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-          onMouseLeave={e => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.transform = "translateY(0)"; }}
-        >
-          <Link2 size={15} />
-          Link Zoho Mail Account
-          <ExternalLink size={12} style={{ opacity: 0.7 }} />
-        </button>
+        {/* Two provider connect cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
 
-        <p style={{ fontSize: 10, textAlign: "center", color: "var(--muted-foreground)", opacity: 0.5, margin: 0 }}>
-          Gmail & Outlook support coming soon.
-        </p>
+          {/* Gmail Card */}
+          <button
+            onClick={connectGmail}
+            style={{
+              padding: "16px 12px", borderRadius: 14, cursor: "pointer",
+              background: isDark
+                ? "linear-gradient(135deg, rgba(234,67,53,0.12), rgba(234,67,53,0.04))"
+                : "linear-gradient(135deg, rgba(234,67,53,0.07), rgba(234,67,53,0.02))",
+              border: `1.5px solid ${isDark ? "rgba(234,67,53,0.3)" : "rgba(234,67,53,0.2)"}`,
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.transform = "translateY(-2px)";
+              e.currentTarget.style.boxShadow = "0 6px 22px rgba(234,67,53,0.18)";
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "none";
+            }}
+          >
+            {/* Gmail icon */}
+            <div style={{
+              width: 44, height: 44, borderRadius: 12,
+              background: "linear-gradient(135deg, #ea4335, #c5221f)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 3px 12px rgba(234,67,53,0.35)",
+            }}>
+              <Mail size={20} style={{ color: "#fff" }} />
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <p style={{ fontSize: 13, fontWeight: 800, color: "var(--foreground)", margin: "0 0 2px" }}>
+                Google Gmail
+              </p>
+              <p style={{ fontSize: 10.5, color: "var(--muted-foreground)", margin: 0 }}>
+                Connect Gmail inbox
+              </p>
+            </div>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 5,
+              padding: "7px 14px", borderRadius: 8,
+              background: "linear-gradient(135deg, #ea4335, #c5221f)",
+              color: "#fff", fontSize: 11.5, fontWeight: 700,
+              boxShadow: "0 2px 8px rgba(234,67,53,0.3)",
+            }}>
+              <Link2 size={11} /> Link Gmail
+            </div>
+          </button>
+
+          {/* Zoho Card */}
+          <button
+            onClick={connectZoho}
+            style={{
+              padding: "16px 12px", borderRadius: 14, cursor: "pointer",
+              background: isDark
+                ? "linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.04))"
+                : "linear-gradient(135deg, rgba(245,158,11,0.07), rgba(245,158,11,0.02))",
+              border: `1.5px solid ${isDark ? "rgba(245,158,11,0.3)" : "rgba(245,158,11,0.2)"}`,
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.transform = "translateY(-2px)";
+              e.currentTarget.style.boxShadow = "0 6px 22px rgba(245,158,11,0.18)";
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "none";
+            }}
+          >
+            {/* Zoho icon */}
+            <div style={{
+              width: 44, height: 44, borderRadius: 12,
+              background: "linear-gradient(135deg, #f59e0b, #d97706)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 3px 12px rgba(245,158,11,0.35)",
+            }}>
+              <Mail size={20} style={{ color: "#fff" }} />
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <p style={{ fontSize: 13, fontWeight: 800, color: "var(--foreground)", margin: "0 0 2px" }}>
+                Zoho Mail
+              </p>
+              <p style={{ fontSize: 10.5, color: "var(--muted-foreground)", margin: 0 }}>
+                Connect Zoho inbox
+              </p>
+            </div>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 5,
+              padding: "7px 14px", borderRadius: 8,
+              background: "linear-gradient(135deg, #f59e0b, #d97706)",
+              color: "#fff", fontSize: 11.5, fontWeight: 700,
+              boxShadow: "0 2px 8px rgba(245,158,11,0.3)",
+            }}>
+              <Link2 size={11} /> Link Zoho
+            </div>
+          </button>
+        </div>
 
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
+
+  // ── Email body renderer ─────────────────────────────────────────────────────
+  // Converts raw email text to readable JSX:
+  //   • [label](url)  → clickable link showing only label
+  //   • bare https:// → "🔗 hostname" pill button
+  //   • Paragraphs split on double-newline, single newlines kept as <br/>
+  const renderEmailBody = (text: string, isSent: boolean) => {
+    if (!text) return null;
+
+    const linkColor  = isSent ? "rgba(255,255,255,0.9)" : "#6366f1";
+    const linkBg     = isSent ? "rgba(255,255,255,0.15)" : (isDark ? "rgba(99,102,241,0.12)" : "rgba(99,102,241,0.07)");
+    const linkBorder = isSent ? "rgba(255,255,255,0.3)"  : (isDark ? "rgba(99,102,241,0.35)" : "rgba(99,102,241,0.22)");
+
+    const linkStyle: React.CSSProperties = {
+      display: "inline-flex", alignItems: "center", gap: 3,
+      padding: "1px 8px", borderRadius: 6, margin: "0 2px",
+      background: linkBg, border: `1px solid ${linkBorder}`,
+      color: linkColor, fontSize: 11, fontWeight: 600,
+      textDecoration: "none", whiteSpace: "nowrap",
+      verticalAlign: "middle",
+    };
+
+    const paragraphs = text.split(/\n{2,}/);
+
+    return paragraphs.map((para, pi) => {
+      const lines = para.split(/\n/);
+
+      const renderedLines = lines.map((line, li) => {
+        const parts: React.ReactNode[] = [];
+        // Combined regex: [label](url) OR bare url
+        const re = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s\]\[)]+)/g;
+        let last = 0;
+        let m: RegExpExecArray | null;
+
+        while ((m = re.exec(line)) !== null) {
+          if (m.index > last) parts.push(line.slice(last, m.index));
+
+          if (m[1] && m[2]) {
+            // [label](url) format
+            parts.push(
+              <a key={`${pi}-${li}-${m.index}`} href={m[2]} target="_blank" rel="noopener noreferrer" style={linkStyle}>
+                {m[1]}
+              </a>
+            );
+          } else if (m[3]) {
+            // bare URL
+            let label = "Open Link";
+            try { label = new URL(m[3]).hostname.replace(/^www\./, ""); } catch {}
+            parts.push(
+              <a key={`${pi}-${li}-${m.index}`} href={m[3]} target="_blank" rel="noopener noreferrer" style={linkStyle}>
+                🔗 {label}
+              </a>
+            );
+          }
+          last = m.index + m[0].length;
+        }
+        if (last < line.length) parts.push(line.slice(last));
+
+        return (
+          <span key={`${pi}-${li}`}>
+            {parts.length > 0 ? parts : line}
+            {li < lines.length - 1 && <br />}
+          </span>
+        );
+      });
+
+      return (
+        <p key={`p-${pi}`} style={{ margin: pi === 0 ? 0 : "10px 0 0", lineHeight: 1.7 }}>
+          {renderedLines}
+        </p>
+      );
+    });
+  };
 
   // ── Connected ──────────────────────────────────────────────────────────────
   if (selectedMail) {
@@ -774,11 +957,16 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
                   background: bubbleColor,
                   color: textColor,
                   fontSize: 12.5,
-                  lineHeight: 1.6,
-                  whiteSpace: "pre-wrap",
+                  lineHeight: 1.65,
+                  wordBreak: "break-word",
+                  overflowWrap: "break-word",
+                  overflow: "hidden",
                   boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
                 }}>
-                  {msg.body}
+                  {/* Rendered body */}
+                  <div style={{ wordBreak: "break-word", overflowWrap: "break-word" }}>
+                    {renderEmailBody(msg.body, isSent)}
+                  </div>
                 </div>
                 {/* Timestamp */}
                 <span style={{ 
@@ -861,72 +1049,184 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
 
-      {/* ── Account badge ── */}
-      <div style={{
-        padding: "14px 16px", borderRadius: 14,
-        background: isDark ? "rgba(34,197,94,0.06)" : "#f0fdf4",
-        border: `1px solid ${isDark ? "rgba(34,197,94,0.18)" : "#bbf7d0"}`,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        marginBottom: 20,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{
-            width: 40, height: 40, borderRadius: "50%",
-            background: isDark ? "rgba(34,197,94,0.12)" : "#dcfce7",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <Mail size={18} style={{ color: isDark ? "#4ade80" : "#16a34a" }} />
-          </div>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--foreground)" }}>
-                {mail.mailAccount.accountEmail}
-              </span>
-              <span style={{
-                fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1,
-                padding: "2px 7px", borderRadius: 50,
-                background: isDark ? "rgba(34,197,94,0.15)" : "#dcfce7",
-                color: isDark ? "#4ade80" : "#16a34a",
-                border: `1px solid ${isDark ? "rgba(34,197,94,0.3)" : "#bbf7d0"}`,
-              }}>
-                Connected
-              </span>
-              {unreadCount > 0 && (
-                <span style={{
-                  fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 50,
-                  background: isDark ? "rgba(99,102,241,0.15)" : "rgba(99,102,241,0.08)",
-                  color: isDark ? "#818cf8" : "#6366f1",
-                  border: `1px solid ${isDark ? "rgba(99,102,241,0.3)" : "rgba(99,102,241,0.15)"}`,
-                }}>
-                  {unreadCount} unread
-                </span>
-              )}
-            </div>
-            <p style={{ fontSize: 11, color: "var(--muted-foreground)", margin: "2px 0 0", textTransform: "capitalize" }}>
-              {mail.mailAccount.provider} Mail
-            </p>
-          </div>
-        </div>
+      {/* ── Linked Accounts + Add Provider ── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
 
-        <button
-          onClick={mail.disconnect}
-          disabled={mail.isDisconnecting}
-          style={{
-            display: "flex", alignItems: "center", gap: 5,
-            padding: "6px 11px", borderRadius: 8,
-            border: `1px solid ${isDark ? "rgba(239,68,68,0.28)" : "#fecaca"}`,
-            background: isDark ? "rgba(239,68,68,0.07)" : "#fef2f2",
-            color: isDark ? "#f87171" : "#dc2626",
-            fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "all 0.15s",
-          }}
-          onMouseEnter={e => { e.currentTarget.style.opacity = "0.72"; }}
-          onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
-        >
-          {mail.isDisconnecting
-            ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} />
-            : <Unlink size={11} />}
-          {mail.isDisconnecting ? "Disconnecting…" : "Disconnect"}
-        </button>
+        {/* Render each linked account */}
+        {mail.mailAccounts.map(acct => (
+          <div key={acct.provider} style={{
+            padding: "12px 14px", borderRadius: 12,
+            background: isDark ? "rgba(34,197,94,0.06)" : "#f0fdf4",
+            border: `1px solid ${isDark ? "rgba(34,197,94,0.18)" : "#bbf7d0"}`,
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {/* Provider icon */}
+              <div style={{
+                width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
+                background: acct.provider === "gmail"
+                  ? "linear-gradient(135deg, #ea4335, #c5221f)"
+                  : "linear-gradient(135deg, #f59e0b, #d97706)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: acct.provider === "gmail"
+                  ? "0 2px 8px rgba(234,67,53,0.35)"
+                  : "0 2px 8px rgba(245,158,11,0.35)",
+              }}>
+                <Mail size={16} style={{ color: "#fff" }} />
+              </div>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>
+                    {acct.accountEmail}
+                  </span>
+                  <span style={{
+                    fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1,
+                    padding: "2px 6px", borderRadius: 50,
+                    background: isDark ? "rgba(34,197,94,0.15)" : "#dcfce7",
+                    color: isDark ? "#4ade80" : "#16a34a",
+                    border: `1px solid ${isDark ? "rgba(34,197,94,0.3)" : "#bbf7d0"}`,
+                  }}>
+                    Connected
+                  </span>
+                  <ProviderBadge provider={acct.provider} />
+                </div>
+                <p style={{ fontSize: 11, color: "var(--muted-foreground)", margin: "1px 0 0", textTransform: "capitalize" }}>
+                  {acct.provider} Mail
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => mail.disconnect(acct.provider as "zoho" | "gmail")}
+              disabled={mail.isDisconnecting}
+              style={{
+                display: "flex", alignItems: "center", gap: 5,
+                padding: "6px 11px", borderRadius: 8,
+                border: `1px solid ${isDark ? "rgba(239,68,68,0.28)" : "#fecaca"}`,
+                background: isDark ? "rgba(239,68,68,0.07)" : "#fef2f2",
+                color: isDark ? "#f87171" : "#dc2626",
+                fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "all 0.15s",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.opacity = "0.72"; }}
+              onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+            >
+              {mail.isDisconnecting ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} /> : <Unlink size={11} />}
+              Disconnect
+            </button>
+          </div>
+        ))}
+
+        {/* Show "Add Gmail" if Gmail not yet linked */}
+        {!isGmailConnected && (
+          <button
+            onClick={connectGmail}
+            style={{
+              display: "flex", alignItems: "center", gap: 9,
+              padding: "11px 14px", borderRadius: 12, cursor: "pointer",
+              border: `1.5px dashed ${isDark ? "rgba(234,67,53,0.35)" : "rgba(234,67,53,0.3)"}`,
+              background: isDark ? "rgba(234,67,53,0.05)" : "rgba(234,67,53,0.03)",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderStyle = "solid";
+              e.currentTarget.style.background = isDark ? "rgba(234,67,53,0.09)" : "rgba(234,67,53,0.06)";
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderStyle = "dashed";
+              e.currentTarget.style.background = isDark ? "rgba(234,67,53,0.05)" : "rgba(234,67,53,0.03)";
+            }}
+          >
+            <div style={{
+              width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+              background: "linear-gradient(135deg, #ea4335, #c5221f)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 2px 8px rgba(234,67,53,0.3)",
+            }}>
+              <Mail size={14} style={{ color: "#fff" }} />
+            </div>
+            <div style={{ textAlign: "left", flex: 1 }}>
+              <p style={{ fontSize: 12.5, fontWeight: 700, color: "var(--foreground)", margin: 0 }}>
+                Link Google Gmail
+              </p>
+              <p style={{ fontSize: 10.5, color: "var(--muted-foreground)", margin: 0 }}>
+                Add your Gmail inbox to unified feed
+              </p>
+            </div>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 4,
+              padding: "5px 10px", borderRadius: 7,
+              background: "linear-gradient(135deg, #ea4335, #c5221f)",
+              color: "#fff", fontSize: 11, fontWeight: 700,
+              boxShadow: "0 2px 8px rgba(234,67,53,0.3)",
+              flexShrink: 0,
+            }}>
+              <Link2 size={10} /> Link Gmail
+            </div>
+          </button>
+        )}
+
+        {/* Show "Add Zoho" if Zoho not yet linked */}
+        {!isZohoConnected && (
+          <button
+            onClick={connectZoho}
+            style={{
+              display: "flex", alignItems: "center", gap: 9,
+              padding: "11px 14px", borderRadius: 12, cursor: "pointer",
+              border: `1.5px dashed ${isDark ? "rgba(245,158,11,0.35)" : "rgba(245,158,11,0.3)"}`,
+              background: isDark ? "rgba(245,158,11,0.05)" : "rgba(245,158,11,0.03)",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderStyle = "solid";
+              e.currentTarget.style.background = isDark ? "rgba(245,158,11,0.09)" : "rgba(245,158,11,0.06)";
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderStyle = "dashed";
+              e.currentTarget.style.background = isDark ? "rgba(245,158,11,0.05)" : "rgba(245,158,11,0.03)";
+            }}
+          >
+            <div style={{
+              width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+              background: "linear-gradient(135deg, #f59e0b, #d97706)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 2px 8px rgba(245,158,11,0.3)",
+            }}>
+              <Mail size={14} style={{ color: "#fff" }} />
+            </div>
+            <div style={{ textAlign: "left", flex: 1 }}>
+              <p style={{ fontSize: 12.5, fontWeight: 700, color: "var(--foreground)", margin: 0 }}>
+                Link Zoho Mail
+              </p>
+              <p style={{ fontSize: 10.5, color: "var(--muted-foreground)", margin: 0 }}>
+                Add your Zoho inbox to unified feed
+              </p>
+            </div>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 4,
+              padding: "5px 10px", borderRadius: 7,
+              background: "linear-gradient(135deg, #f59e0b, #d97706)",
+              color: "#fff", fontSize: 11, fontWeight: 700,
+              boxShadow: "0 2px 8px rgba(245,158,11,0.3)",
+              flexShrink: 0,
+            }}>
+              <Link2 size={10} /> Link Zoho
+            </div>
+          </button>
+        )}
+
+        {/* Unread count badge */}
+        {unreadCount > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 4 }}>
+            <span style={{
+              fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 50,
+              background: isDark ? "rgba(99,102,241,0.15)" : "rgba(99,102,241,0.08)",
+              color: isDark ? "#818cf8" : "#6366f1",
+              border: `1px solid ${isDark ? "rgba(99,102,241,0.3)" : "rgba(99,102,241,0.15)"}`,
+            }}>
+              {unreadCount} unread
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ── Tab nav ── */}

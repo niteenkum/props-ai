@@ -97,6 +97,7 @@ export interface MailMessage {
   receivedAt: string;   // ISO string
   summary:    string;   // first ~120 chars of snippet
   isRead:     boolean;
+  provider:   "zoho" | "gmail"; // which account this message came from
 }
 
 export interface SendResult {
@@ -111,33 +112,44 @@ function zohoAuthBase(region: string): string {
   return `https://accounts.zoho.${region}`;
 }
 
-// ─── 1. Get linked mail account ───────────────────────────────────────────
+// ─── 1. Get all linked mail accounts ──────────────────────────────────────
 
+/** Returns ALL mail accounts linked for a user (Zoho + Gmail combined). */
+export async function getMailAccountsAction(
+  userEmail: string
+): Promise<MailAccountInfo[]> {
+  if (!userEmail) return [];
+
+  const accounts = await prisma.mailAccount.findMany({
+    where: { userEmail },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return accounts.map(a => ({
+    provider:     a.provider,
+    accountEmail: a.accountEmail,
+    connected:    true as const,
+  }));
+}
+
+/** Legacy single-account getter — returns first linked account (for backward compat). */
 export async function getMailAccountAction(
   userEmail: string
 ): Promise<MailAccountInfo | null> {
-  if (!userEmail) return null;
-
-  const account = await prisma.mailAccount.findUnique({
-    where: { userEmail },
-  });
-
-  if (!account) return null;
-
-  return {
-    provider:     account.provider,
-    accountEmail: account.accountEmail,
-    connected:    true,
-  };
+  const all = await getMailAccountsAction(userEmail);
+  return all[0] ?? null;
 }
 
-// ─── 2. Disconnect (delete tokens) ────────────────────────────────────────
+// ─── 2. Disconnect (delete tokens for a specific provider) ────────────────
 
 export async function disconnectMailAction(
-  userEmail: string
+  userEmail: string,
+  provider: "zoho" | "gmail" = "zoho",
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await prisma.mailAccount.delete({ where: { userEmail } });
+    await prisma.mailAccount.delete({
+      where: { userEmail_provider: { userEmail, provider } },
+    });
     return { success: true };
   } catch {
     return { success: false, error: "Account not found or already disconnected." };
@@ -151,7 +163,9 @@ export async function disconnectMailAction(
 export async function refreshZohoTokenAction(
   userEmail: string
 ): Promise<string | null> {
-  const account = await prisma.mailAccount.findUnique({ where: { userEmail } });
+  const account = await prisma.mailAccount.findUnique({
+    where: { userEmail_provider: { userEmail, provider: "zoho" } },
+  });
   if (!account || account.provider !== "zoho") return null;
 
   const clientId     = process.env.ZOHO_CLIENT_ID!;
@@ -183,7 +197,7 @@ export async function refreshZohoTokenAction(
 
     const expiresAt = new Date(Date.now() + (data.expires_in ?? 3600) * 1000);
     await prisma.mailAccount.update({
-      where:  { userEmail },
+      where:  { userEmail_provider: { userEmail, provider: "zoho" } },
       data:   { accessToken: data.access_token, expiresAt },
     });
 
@@ -199,7 +213,9 @@ export async function refreshZohoTokenAction(
 async function getValidAccessToken(
   userEmail: string
 ): Promise<{ token: string; accountId: string | null; apiBase: string; accountEmail: string } | null> {
-  const account = await prisma.mailAccount.findUnique({ where: { userEmail } });
+  const account = await prisma.mailAccount.findUnique({
+    where: { userEmail_provider: { userEmail, provider: "zoho" } },
+  });
   if (!account) return null;
 
   // Fall back to env region if apiBase was never stored (legacy rows)
@@ -263,7 +279,7 @@ export async function fetchInboxAction(
   try {
     // Call messages/view WITHOUT folderId — returns all recent mail (200 OK)
     const params = new URLSearchParams({
-      limit:  String(Math.min(limit, 50)),
+      limit:  String(Math.min(limit, 200)),
       sortBy: "date",
     });
     const url = `${apiBase}/api/accounts/${activeAccountId}/messages/view?${params}`;
@@ -295,6 +311,7 @@ export async function fetchInboxAction(
         : new Date().toISOString(),
       summary:    (m.summary ?? m.content ?? "").slice(0, 120),
       isRead:     m.isRead === true || m.status === "0" || m.status === "read",
+      provider:   "zoho" as const,
     }));
 
     return { success: true, messages };
@@ -303,6 +320,242 @@ export async function fetchInboxAction(
     return { success: false, error: err?.message ?? "Failed to fetch inbox." };
   }
 }
+
+// ─── 4b. Fetch Gmail inbox via Corsair SDK ───────────────────────────────────
+
+export async function fetchGmailInboxAction(
+  userEmail: string,
+  limit = 20
+): Promise<{ success: boolean; messages?: MailMessage[]; error?: string }> {
+  const account = await prisma.mailAccount.findUnique({
+    where: { userEmail_provider: { userEmail, provider: "gmail" } },
+  });
+  if (!account) return { success: false, error: "Gmail account not connected." };
+
+  try {
+    const { corsair } = await import("../utils/corsair");
+    const tenant = corsair.withTenant(userEmail);
+
+    // Corsair handles auth/token refresh automatically
+    const listRes = await tenant.gmail.api.messages.list({
+      maxResults: Math.min(limit, 100),
+      labelIds:   ["INBOX"],
+    }) as any;
+
+    const msgIds: string[] = (listRes.messages ?? []).map((m: any) => m.id).filter(Boolean);
+    if (msgIds.length === 0) return { success: true, messages: [] };
+
+    // Fetch metadata for each message (parallel)
+    const messages: MailMessage[] = [];
+    await Promise.all(
+      msgIds.map(async (id) => {
+        try {
+          const meta = await tenant.gmail.api.messages.get({
+            id,
+            format: "full",   // "metadata" wasn't returning payload.headers via Corsair
+          }) as any;
+
+          // Headers are in payload.headers with format:full
+          const headers = (meta?.payload?.headers ?? []) as { name: string; value: string }[];
+          const getH = (name: string) =>
+            headers.find((h: any) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
+
+          const fromRaw   = getH("From");
+          const fromMatch = fromRaw.match(/^(.+?)?\s*<([^>]+)>$/);
+          const fromName  = fromMatch?.[1]?.trim() || fromRaw.split("@")[0];
+          const fromEmail = fromMatch?.[2]?.trim() ?? fromRaw;
+          const subject   = getH("Subject");
+
+          // internalDate is Unix ms timestamp — more reliable than Date header
+          const receivedAt = meta?.internalDate
+            ? new Date(Number(meta.internalDate)).toISOString()
+            : (getH("Date") ? new Date(getH("Date")).toISOString() : new Date().toISOString());
+
+          messages.push({
+            messageId:  id,
+            subject:    subject || "(no subject)",
+            fromEmail,
+            fromName,
+            receivedAt,
+            summary:    (meta.snippet ?? "").slice(0, 120),
+            isRead:     !(meta.labelIds ?? []).includes("UNREAD"),
+            provider:   "gmail" as const,
+          });
+        } catch { /* skip failed message */ }
+      })
+    );
+
+    messages.sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
+    console.log(`[fetchGmailInbox] ✅ Got ${messages.length} messages from Gmail via Corsair`);
+    return { success: true, messages };
+  } catch (err: any) {
+    console.error("[fetchGmailInbox] Exception:", err);
+    return { success: false, error: err?.message ?? "Failed to fetch Gmail inbox." };
+  }
+}
+
+// ─── 4c. Unified inbox — Zoho + Gmail combined ────────────────────────────────
+
+export async function fetchUnifiedInboxAction(
+  userEmail: string,
+  limit = 30
+): Promise<{ success: boolean; messages?: MailMessage[]; error?: string }> {
+  const perProvider = Math.ceil(limit / 2);
+
+  const [zohoResult, gmailResult] = await Promise.allSettled([
+    fetchInboxAction(userEmail, perProvider),
+    fetchGmailInboxAction(userEmail, perProvider),
+  ]);
+
+  const all: MailMessage[] = [];
+
+  if (zohoResult.status === "fulfilled" && zohoResult.value.success) {
+    all.push(...(zohoResult.value.messages ?? []));
+  }
+  if (gmailResult.status === "fulfilled" && gmailResult.value.success) {
+    all.push(...(gmailResult.value.messages ?? []));
+  }
+
+  if (all.length === 0) {
+    const zohoErr  = zohoResult.status  === "fulfilled" ? zohoResult.value.error  : "Zoho fetch failed";
+    const gmailErr = gmailResult.status === "fulfilled" ? gmailResult.value.error : "Gmail fetch failed";
+    return { success: false, error: [zohoErr, gmailErr].filter(Boolean).join(" | ") };
+  }
+
+  // Sort combined feed newest first
+  all.sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
+  return { success: true, messages: all.slice(0, limit) };
+}
+
+// ─── 4d. Fetch a Gmail thread (click-to-open) ────────────────────────────────
+// Fetches the full thread for a clicked Gmail message.
+// Returns ThreadMessage[] in the same shape as the Zoho thread action.
+
+export async function fetchGmailThreadAction(
+  userEmail:  string,
+  messageId:  string,   // Gmail message ID (e.g. "19e95b7b3648b5cc")
+): Promise<{ success: boolean; messages?: ThreadMessage[]; error?: string }> {
+  try {
+    const { corsair } = await import("../utils/corsair");
+    const tenant = corsair.withTenant(userEmail);
+
+    // 1. Get the threadId for this message via Corsair SDK
+    // Use format:full — Corsair doesn't pass metadataHeaders correctly to Gmail API
+    const msgData  = await tenant.gmail.api.messages.get({
+      id: messageId,
+      format: "full",
+    }) as any;
+
+    const threadId = msgData.threadId as string;
+
+    // 2. Fetch the full thread via Corsair SDK
+    const threadData = await tenant.gmail.api.threads.get({
+      id: threadId,
+      format: "full",
+    }) as any;
+    const rawMsgs: any[] = (threadData as any).messages ?? [];
+
+    // 3. Get the linked Gmail account email (to determine sent vs received)
+    const account = await prisma.mailAccount.findUnique({
+      where: { userEmail_provider: { userEmail, provider: "gmail" } },
+    });
+    const myEmail = (account?.accountEmail ?? userEmail).toLowerCase();
+
+    // Helper: decode base64url Gmail body
+    function decodeBody(part: any): string {
+      if (!part) return "";
+      if (part.body?.data) {
+        return Buffer.from(part.body.data, "base64").toString("utf-8");
+      }
+      if (part.parts) {
+        // Prefer text/plain, then text/html
+        const plain = part.parts.find((p: any) => p.mimeType === "text/plain");
+        const html  = part.parts.find((p: any) => p.mimeType === "text/html");
+        if (plain?.body?.data) return Buffer.from(plain.body.data, "base64").toString("utf-8");
+        if (html?.body?.data)  return decodeHtml(Buffer.from(html.body.data, "base64").toString("utf-8"));
+      }
+      return "";
+    }
+
+    function decodeHtml(html: string): string {
+      return html
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/p>/gi, "\n\n")
+        .replace(/<\/div>/gi, "\n")
+        .replace(/<[^>]+>/g, "")
+        .replace(/&nbsp;/gi, " ")
+        .replace(/&amp;/gi, "&")
+        .replace(/&lt;/gi, "<")
+        .replace(/&gt;/gi, ">")
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    }
+
+    // Strip quoted reply sections
+    function stripQuotes(text: string): string {
+      const patterns = [
+        /\n?\s*On\s+.{10,80}\s+wrote:\s*\n?[\s\S]*/i,
+        /\n?\s*-{3,}\s*Original Message\s*-{3,}\s*\n?[\s\S]*/i,
+        /\n?\s*From:\s+.+\n\s*Sent:\s+.+\n[\s\S]*/i,
+        /\n?\s*_{3,}\s*\n[\s\S]*/,
+      ];
+      for (const p of patterns) {
+        const m = text.match(p);
+        if (m && m.index !== undefined) {
+          const before = text.slice(0, m.index).trim();
+          if (before.length > 0) return before;
+        }
+      }
+      return text;
+    }
+
+    // 4. Build ThreadMessage[] from raw Gmail messages
+    const messages: ThreadMessage[] = rawMsgs.map((m: any) => {
+      const headers = (m.payload?.headers ?? []) as { name: string; value: string }[];
+      const getH    = (name: string) => headers.find((h: any) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";
+
+      const fromRaw   = getH("From");
+      const fromMatch = fromRaw.match(/^(.+?)?\s*<([^>]+)>$/);
+      const fromName  = fromMatch?.[1]?.trim() ?? fromRaw;
+      const fromEmail = fromMatch?.[2]?.trim() ?? fromRaw;
+      const toEmail   = getH("To");
+      const subject   = getH("Subject") || "(no subject)";
+      const dateStr   = getH("Date");
+
+      // isSent: check From header match OR Gmail's SENT label (handles edge cases)
+      const labelIds  = (m.labelIds ?? []) as string[];
+      const isSent    = fromEmail.toLowerCase() === myEmail
+                        || labelIds.includes("SENT");
+      const rawBody   = decodeBody(m.payload);
+      const body      = stripQuotes(rawBody || m.snippet || "");
+
+      return {
+        id:        m.id,
+        direction: isSent ? "sent" : "received",
+        fromEmail,
+        fromName,
+        toEmail,
+        subject,
+        body,
+        sentAt:    dateStr ? new Date(dateStr).toISOString() : new Date().toISOString(),
+        zohoMsgId: m.id, // repurposed field — holds Gmail message ID for reply
+      } as ThreadMessage;
+    });
+
+    // Sort oldest first (thread order)
+    messages.sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime());
+    console.log(`[fetchGmailThreadAction] ✅ Got ${messages.length} thread messages via Corsair`);
+    return { success: true, messages };
+  } catch (err: any) {
+    console.error("[fetchGmailThreadAction] Error:", err);
+    return { success: false, error: err?.message ?? "Failed to fetch Gmail thread." };
+  }
+}
+
+
 
 // ─── 5. Send an email ────────────────────────────────────────────────────────
 // Optional `attachment` attaches a file (e.g. resume PDF) via multipart/form-data.
@@ -494,8 +747,10 @@ export async function sendJobEmailAction(
   const result = await sendMailAction(userEmail, to, subject, body, attachment, cc, bcc);
   if (!result.success) return result;
 
-  // 3. Get sender address
-  const account   = await prisma.mailAccount.findUnique({ where: { userEmail } });
+  // 3. Get sender address (Zoho account)
+  const account   = await prisma.mailAccount.findUnique({
+    where: { userEmail_provider: { userEmail, provider: "zoho" } },
+  });
   const fromEmail = account?.accountEmail ?? userEmail;
 
   // 4. Save SentEmail via raw pg (bypasses stale Next.js-bundled Prisma client)
@@ -903,7 +1158,9 @@ export async function sendReplyEmailAction(
     const zohoMsgId = String(resData?.data?.messageId ?? resData?.messageId ?? "") || undefined;
 
     // Persist the reply to SentEmail table
-    const account   = await prisma.mailAccount.findUnique({ where: { userEmail } });
+    const account   = await prisma.mailAccount.findUnique({
+      where: { userEmail_provider: { userEmail, provider: "zoho" } },
+    });
     const fromEmail = account?.accountEmail ?? userEmail;
 
     const sent = await rawInsertSentEmail({
@@ -1081,8 +1338,67 @@ export async function sendThreadReplyAction(
   subject:      string,
   body:         string,
   inReplyToId:  string,
+  provider?:    "zoho" | "gmail",  // optional — auto-detected if omitted
 ): Promise<{ success: boolean; error?: string; zohoMsgId?: string; sentAt?: string }> {
-  console.log(`[sendThreadReplyAction] 🚀 Reply requested: to=${to}, subject="${subject}", inReplyToId=${inReplyToId}`);
+  console.log(`[sendThreadReplyAction] 🚀 Reply: to=${to}, subject="${subject}", provider=${provider ?? "auto"}`);
+
+  // ── Auto-detect provider if not passed ──────────────────────────────────────
+  // Gmail message IDs are hex strings (no dashes), Zoho IDs are numeric
+  const detectedProvider = provider
+    ?? (/^[0-9a-f]{16,}$/i.test(inReplyToId) ? "gmail" : "zoho");
+
+  // ── Gmail reply via Corsair SDK ──────────────────────────────────────────────
+  if (detectedProvider === "gmail") {
+    try {
+      const { corsair } = await import("../utils/corsair");
+      const tenant = corsair.withTenant(userEmail);
+
+      const replySubject = subject.toLowerCase().startsWith("re:") ? subject : `Re: ${subject}`;
+
+      // Build RFC 2822 email string with threading headers
+      const emailLines = [
+        `From: ${userEmail}`,
+        `To: ${to}`,
+        `Subject: ${replySubject}`,
+        `In-Reply-To: <${inReplyToId}>`,
+        `References: <${inReplyToId}>`,
+        `Content-Type: text/plain; charset=UTF-8`,
+        ``,
+        body,
+      ];
+      const rawEmail   = emailLines.join("\r\n");
+      const base64Raw  = Buffer.from(rawEmail)
+        .toString("base64")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+
+      await tenant.gmail.api.messages.send({
+        raw: base64Raw,
+        threadId: inReplyToId,   // keeps it in the same Gmail thread
+      } as any);
+
+      // Persist to SentEmail table
+      const sent = await rawInsertSentEmail({
+        userEmail,
+        jobPostId: null,
+        provider:  "gmail",
+        fromEmail: userEmail,
+        toEmail:   to,
+        subject:   replySubject,
+        body,
+        zohoMsgId: null,
+      });
+
+      console.log(`[sendThreadReplyAction] ✅ Gmail reply sent via Corsair to ${to}`);
+      return { success: true, sentAt: sent.sentAt };
+    } catch (err: any) {
+      console.error("[sendThreadReplyAction] Gmail/Corsair error:", err);
+      return { success: false, error: err?.message ?? "Failed to send Gmail reply." };
+    }
+  }
+
+  // ── Zoho reply (existing logic) ──────────────────────────────────────────────
   const auth = await getValidAccessToken(userEmail);
   if (!auth) return { success: false, error: "Mail account not connected or token expired." };
 
@@ -1119,7 +1435,9 @@ export async function sendThreadReplyAction(
     const resData   = await res.json().catch(() => ({}));
     const zohoMsgId = String(resData?.data?.messageId ?? resData?.messageId ?? "") || undefined;
 
-    const account   = await prisma.mailAccount.findUnique({ where: { userEmail } });
+    const account   = await prisma.mailAccount.findUnique({
+      where: { userEmail_provider: { userEmail, provider: "zoho" } },
+    });
     const fromEmail = account?.accountEmail ?? userEmail;
 
     const sent = await rawInsertSentEmail({
@@ -1133,7 +1451,7 @@ export async function sendThreadReplyAction(
       zohoMsgId: zohoMsgId ?? null,
     });
 
-    console.log(`[sendThreadReplyAction] ✅ Reply sent to ${to} (msgId: ${zohoMsgId})`);
+    console.log(`[sendThreadReplyAction] ✅ Zoho reply sent to ${to} (msgId: ${zohoMsgId})`);
     return { success: true, zohoMsgId, sentAt: sent.sentAt };
   } catch (err: any) {
     console.error("[sendThreadReplyAction] Error:", err);

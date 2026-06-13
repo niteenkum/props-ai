@@ -140,7 +140,7 @@ export async function GET(req: NextRequest) {
 
   try {
     await prisma.mailAccount.upsert({
-      where:  { userEmail },
+      where:  { userEmail_provider: { userEmail, provider: "zoho" } },
       create: {
         userEmail,
         provider:      "zoho",
