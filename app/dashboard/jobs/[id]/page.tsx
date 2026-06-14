@@ -26,6 +26,8 @@ import { cardStyle, inputStyle, labelStyle } from "../../styles";
 import type { JobPost } from "../../../utils/db";
 import EmailComposeDrawer from "../../EmailComposeDrawer";
 import JobDrawer from "../../new/JobDrawer";
+import ScheduleCallModal from "../../../components/ScheduleCallModal";
+import { getJobFollowUpsAction, type FollowUpWithJob } from "../../../actions/calendar-actions";
 
 // ── Platform tab metadata ─────────────────────────────────────────────────────
 const PLATFORM_META: Record<string, { label: string; icon: string }> = {
@@ -127,6 +129,10 @@ export default function JobDetailPage() {
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [composeBody,   setComposeBody]   = useState("");
 
+  // ─ Book a Call modal ────────────────────────────────────────────────────────
+  const [isCallModalOpen, setIsCallModalOpen] = useState(false);
+  const [jobFollowUps, setJobFollowUps]       = useState<FollowUpWithJob[]>([]);
+
   // ─ Job scanner (reuses the same drawer as New Scan page) ──────────────────────
   const scanner = useJobScanner(userEmail, profile);
 
@@ -137,6 +143,8 @@ export default function JobDetailPage() {
       if (!j) { setNotFound(true); setLoading(false); return; }
       setJob(j);
       setNotes(j.notes ?? "");
+      // Load existing follow-ups for this job
+      getJobFollowUpsAction(userEmail, j.id).then(setJobFollowUps).catch(() => {});
       // Pre-load the job text into scanner so drawer can re-analyze it
       scanner.setPasteText(j.originalText);
       // auto-select first available template tab
@@ -523,6 +531,80 @@ export default function JobDetailPage() {
                 <Zap style={{ width: 12, height: 12 }} />
                 Generate Proposals
               </button>
+              {/* Book a Call — shows status if already scheduled */}
+              {(() => {
+                const pendingCall = jobFollowUps.find(f => f.status === "pending");
+                if (pendingCall) {
+                  // Already scheduled — show the booked call info
+                  const scheduledAt = new Date(pendingCall.scheduledAt);
+                  const timeStr = scheduledAt.toLocaleString("en-IN", {
+                    month: "short", day: "numeric",
+                    hour: "2-digit", minute: "2-digit", hour12: true,
+                  });
+                  return (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {/* Scheduled badge */}
+                      <div style={{
+                        display: "flex", alignItems: "center", gap: 6, padding: "6px 12px",
+                        borderRadius: 8, fontSize: 11, fontWeight: 700,
+                        border: `1px solid ${isDark ? "rgba(34,197,94,0.3)" : "#bbf7d0"}`,
+                        background: isDark ? "rgba(34,197,94,0.08)" : "#f0fdf4",
+                        color: isDark ? "#4ade80" : "#16a34a",
+                      }}>
+                        ✅ {timeStr}
+                      </div>
+                      {/* Meet link if available */}
+                      {pendingCall.meetLink && (
+                        <a
+                          href={pendingCall.meetLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: "flex", alignItems: "center", gap: 5, padding: "6px 12px",
+                            borderRadius: 8, fontSize: 11, fontWeight: 700, textDecoration: "none",
+                            border: "1px solid rgba(99,102,241,0.3)",
+                            background: isDark ? "rgba(99,102,241,0.1)" : "rgba(99,102,241,0.06)",
+                            color: isDark ? "#818cf8" : "#6366f1",
+                          }}
+                        >
+                          🎥 Join Meet
+                        </a>
+                      )}
+                      {/* Book another */}
+                      <button
+                        onClick={() => setIsCallModalOpen(true)}
+                        title="Book another call"
+                        style={{
+                          display: "flex", alignItems: "center", gap: 5, padding: "6px 10px",
+                          borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                          border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+                          background: "transparent", color: "var(--muted-foreground)",
+                        }}
+                      >
+                        + More
+                      </button>
+                    </div>
+                  );
+                }
+                // No pending call — show Book a Call button
+                return (
+                  <button
+                    onClick={() => setIsCallModalOpen(true)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 7, padding: "8px 16px",
+                      borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      border: `1px solid ${isDark ? "rgba(34,197,94,0.3)" : "#bbf7d0"}`,
+                      background: isDark ? "rgba(34,197,94,0.06)" : "#f0fdf4",
+                      color: isDark ? "#4ade80" : "#16a34a",
+                      transition: "all 0.2s",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = "0.85"; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+                  >
+                    📞 Book a Call
+                  </button>
+                );
+              })()}
               <button
                 onClick={handleRegenerate}
                 disabled={regenerating}
@@ -1348,6 +1430,24 @@ export default function JobDetailPage() {
         isSavingJob={false}
         onSaveAndClose={handleSaveGeneratedToJob}
         onRegenerate={handleOpenGeneratorDrawer}
+      />
+
+      {/* ── Schedule Call Modal (Google Meet via Corsair Calendar) ── */}
+      <ScheduleCallModal
+        isOpen={isCallModalOpen}
+        onClose={() => setIsCallModalOpen(false)}
+        isDark={isDark}
+        userEmail={userEmail}
+        jobId={job.id}
+        jobRole={job.role}
+        jobCompany={job.company}
+        defaultAttendeeEmail={job.contactEmail ?? ""}
+        onBooked={async (meetLink, gcalEventUrl) => {
+          console.log("[JobDetail] ✅ Call booked:", meetLink, gcalEventUrl);
+          // Refresh follow-ups so the button flips to scheduled status immediately
+          const updated = await getJobFollowUpsAction(userEmail, job.id);
+          setJobFollowUps(updated);
+        }}
       />
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>

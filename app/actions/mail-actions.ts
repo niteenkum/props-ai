@@ -399,7 +399,7 @@ export async function fetchGmailInboxAction(
 export async function fetchUnifiedInboxAction(
   userEmail: string,
   limit = 50
-): Promise<{ success: boolean; messages?: MailMessage[]; error?: string }> {
+): Promise<{ success: boolean; messages?: MailMessage[]; error?: string; providerErrors?: Record<string, string> }> {
   const perProvider = Math.ceil(limit / 2);
 
   console.log(`[fetchUnifiedInbox] Fetching ${perProvider} messages per provider for ${userEmail}`);
@@ -422,25 +422,32 @@ export async function fetchUnifiedInboxAction(
   }
 
   const all: MailMessage[] = [];
+  const providerErrors: Record<string, string> = {};
 
   if (zohoResult.status === "fulfilled" && zohoResult.value.success) {
     all.push(...(zohoResult.value.messages ?? []));
+  } else {
+    const err = zohoResult.status === "fulfilled" ? zohoResult.value.error : "Zoho fetch failed";
+    if (err) providerErrors["zoho"] = err;
   }
   if (gmailResult.status === "fulfilled" && gmailResult.value.success) {
     all.push(...(gmailResult.value.messages ?? []));
+  } else {
+    const err = gmailResult.status === "fulfilled" ? gmailResult.value.error : "Gmail fetch failed";
+    if (err) providerErrors["gmail"] = err;
   }
 
   // Return whatever we have — even if one provider failed
   if (all.length > 0) {
     all.sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
     console.log(`[fetchUnifiedInbox] ✅ Combined: ${all.length} messages total`);
-    return { success: true, messages: all.slice(0, limit) };
+    return { success: true, messages: all.slice(0, limit), providerErrors: Object.keys(providerErrors).length > 0 ? providerErrors : undefined };
   }
 
   // Both failed
   const zohoErr  = zohoResult.status  === "fulfilled" ? zohoResult.value.error  : "Zoho fetch failed";
   const gmailErr = gmailResult.status === "fulfilled" ? gmailResult.value.error : "Gmail fetch failed";
-  return { success: false, error: [zohoErr, gmailErr].filter(Boolean).join(" | ") };
+  return { success: false, error: [zohoErr, gmailErr].filter(Boolean).join(" | "), providerErrors };
 }
 
 // ─── 4d. Fetch a Gmail thread (click-to-open) ────────────────────────────────

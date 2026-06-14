@@ -1455,68 +1455,112 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
 
         {/* Render each linked account */}
-        {mail.mailAccounts.map(acct => (
-          <div key={acct.provider} style={{
-            padding: "12px 14px", borderRadius: 12,
-            background: isDark ? "rgba(34,197,94,0.06)" : "#f0fdf4",
-            border: `1px solid ${isDark ? "rgba(34,197,94,0.18)" : "#bbf7d0"}`,
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {/* Provider icon */}
-              <div style={{
-                width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
-                background: acct.provider === "gmail"
-                  ? "linear-gradient(135deg, #ea4335, #c5221f)"
-                  : "linear-gradient(135deg, #f59e0b, #d97706)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: acct.provider === "gmail"
-                  ? "0 2px 8px rgba(234,67,53,0.35)"
-                  : "0 2px 8px rgba(245,158,11,0.35)",
-              }}>
-                <Mail size={16} style={{ color: "#fff" }} />
-              </div>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>
-                    {acct.accountEmail}
-                  </span>
-                  <span style={{
-                    fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1,
-                    padding: "2px 6px", borderRadius: 50,
-                    background: isDark ? "rgba(34,197,94,0.15)" : "#dcfce7",
-                    color: isDark ? "#4ade80" : "#16a34a",
-                    border: `1px solid ${isDark ? "rgba(34,197,94,0.3)" : "#bbf7d0"}`,
-                  }}>
-                    Connected
-                  </span>
-                  <ProviderBadge provider={acct.provider} />
+        {mail.mailAccounts.map(acct => {
+          const hasError = !!(mail.providerErrors ?? {})[acct.provider];
+
+          return (
+            <div key={acct.provider} style={{
+              padding: "12px 14px", borderRadius: 12,
+              background: hasError
+                ? (isDark ? "rgba(245,158,11,0.07)" : "rgba(254,243,199,0.6)")
+                : (isDark ? "rgba(34,197,94,0.06)" : "#f0fdf4"),
+              border: `1px solid ${hasError
+                ? (isDark ? "rgba(245,158,11,0.28)" : "#fde68a")
+                : (isDark ? "rgba(34,197,94,0.18)" : "#bbf7d0")}`,
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {/* Provider icon */}
+                <div style={{
+                  width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
+                  background: acct.provider === "gmail"
+                    ? "linear-gradient(135deg, #ea4335, #c5221f)"
+                    : "linear-gradient(135deg, #f59e0b, #d97706)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: acct.provider === "gmail"
+                    ? "0 2px 8px rgba(234,67,53,0.35)"
+                    : "0 2px 8px rgba(245,158,11,0.35)",
+                }}>
+                  <Mail size={16} style={{ color: "#fff" }} />
                 </div>
-                <p style={{ fontSize: 11, color: "var(--muted-foreground)", margin: "1px 0 0", textTransform: "capitalize" }}>
-                  {acct.provider} Mail
-                </p>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>
+                      {acct.accountEmail}
+                    </span>
+                    {hasError ? (
+                      <span style={{
+                        fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1,
+                        padding: "2px 6px", borderRadius: 50,
+                        background: isDark ? "rgba(245,158,11,0.18)" : "#fef3c7",
+                        color: isDark ? "#fbbf24" : "#92400e",
+                        border: `1px solid ${isDark ? "rgba(245,158,11,0.35)" : "#fde68a"}`,
+                      }}>
+                        ⚠ Token Expired
+                      </span>
+                    ) : (
+                      <span style={{
+                        fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1,
+                        padding: "2px 6px", borderRadius: 50,
+                        background: isDark ? "rgba(34,197,94,0.15)" : "#dcfce7",
+                        color: isDark ? "#4ade80" : "#16a34a",
+                        border: `1px solid ${isDark ? "rgba(34,197,94,0.3)" : "#bbf7d0"}`,
+                      }}>
+                        Connected
+                      </span>
+                    )}
+                    <ProviderBadge provider={acct.provider} />
+                  </div>
+                  <p style={{ fontSize: 11, color: "var(--muted-foreground)", margin: "1px 0 0", textTransform: "capitalize" }}>
+                    {hasError ? "Session expired — please reconnect" : `${acct.provider} Mail`}
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 6 }}>
+                {hasError && (
+                  <button
+                    onClick={() => {
+                      mail.dismissProviderError(acct.provider);
+                      window.location.href = acct.provider === "gmail"
+                        ? `/api/mail/gmail/connect?email=${encodeURIComponent(userEmail)}`
+                        : `/api/mail/zoho/connect?email=${encodeURIComponent(userEmail)}`;
+                    }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 5,
+                      padding: "6px 11px", borderRadius: 8,
+                      border: `1px solid ${isDark ? "rgba(245,158,11,0.35)" : "#fde68a"}`,
+                      background: isDark ? "rgba(245,158,11,0.12)" : "#fef3c7",
+                      color: isDark ? "#fbbf24" : "#92400e",
+                      fontSize: 11, fontWeight: 700, cursor: "pointer",
+                    }}
+                  >
+                    🔗 Reconnect
+                  </button>
+                )}
+                <button
+                  onClick={() => mail.disconnect(acct.provider as "zoho" | "gmail")}
+                  disabled={mail.isDisconnecting}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 5,
+                    padding: "6px 11px", borderRadius: 8,
+                    border: `1px solid ${isDark ? "rgba(239,68,68,0.28)" : "#fecaca"}`,
+                    background: isDark ? "rgba(239,68,68,0.07)" : "#fef2f2",
+                    color: isDark ? "#f87171" : "#dc2626",
+                    fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "all 0.15s",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.opacity = "0.72"; }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+                >
+                  {mail.isDisconnecting ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} /> : <Unlink size={11} />}
+                  Disconnect
+                </button>
               </div>
             </div>
+          );
+        })}
 
-            <button
-              onClick={() => mail.disconnect(acct.provider as "zoho" | "gmail")}
-              disabled={mail.isDisconnecting}
-              style={{
-                display: "flex", alignItems: "center", gap: 5,
-                padding: "6px 11px", borderRadius: 8,
-                border: `1px solid ${isDark ? "rgba(239,68,68,0.28)" : "#fecaca"}`,
-                background: isDark ? "rgba(239,68,68,0.07)" : "#fef2f2",
-                color: isDark ? "#f87171" : "#dc2626",
-                fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "all 0.15s",
-              }}
-              onMouseEnter={e => { e.currentTarget.style.opacity = "0.72"; }}
-              onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
-            >
-              {mail.isDisconnecting ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} /> : <Unlink size={11} />}
-              Disconnect
-            </button>
-          </div>
-        ))}
+
 
         {/* Show "Add Gmail" if Gmail not yet linked */}
         {!isGmailConnected && (
@@ -1773,6 +1817,71 @@ export default function MailAccountPanel({ userEmail, isDark }: MailAccountPanel
               <span style={{ fontSize: 12, color: "#ef4444" }}>{mail.inboxError}</span>
             </div>
           )}
+
+          {/* ── Per-provider reconnect banners ── */}
+          {Object.entries(mail.providerErrors ?? {}).map(([provider, errMsg]) => {
+            const isZoho  = provider === "zoho";
+            const label   = isZoho ? "Zoho Mail" : "Gmail";
+            const icon    = isZoho ? "📮" : "📧";
+            const onReconnect = () => {
+              mail.dismissProviderError(provider);
+              if (isZoho) {
+                window.location.href = `/api/mail/zoho/connect?email=${encodeURIComponent(userEmail)}`;
+              } else {
+                window.location.href = `/api/mail/gmail/connect?email=${encodeURIComponent(userEmail)}`;
+              }
+            };
+            // Only show for known token-expired patterns
+            const isTokenErr = errMsg?.toLowerCase().includes("token") || errMsg?.toLowerCase().includes("connect") || errMsg?.toLowerCase().includes("invalid");
+            if (!isTokenErr && !errMsg) return null;
+
+            return (
+              <div key={provider} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "10px 14px", borderRadius: 10, marginBottom: 10,
+                background: isDark ? "rgba(245,158,11,0.08)" : "rgba(245,158,11,0.06)",
+                border: `1px solid ${isDark ? "rgba(245,158,11,0.28)" : "rgba(245,158,11,0.3)"}`,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
+                  <span style={{ fontSize: 15 }}>{icon}</span>
+                  <div>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: isDark ? "#fbbf24" : "#b45309", margin: 0 }}>
+                      {label} session expired
+                    </p>
+                    <p style={{ fontSize: 11, color: "var(--muted-foreground)", margin: "2px 0 0" }}>
+                      Your {label} token is no longer valid. Please reconnect to sync your inbox.
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: 10 }}>
+                  <button
+                    onClick={onReconnect}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 5,
+                      padding: "5px 12px", borderRadius: 8,
+                      border: "none", cursor: "pointer",
+                      background: isDark ? "rgba(245,158,11,0.2)" : "rgba(245,158,11,0.15)",
+                      color: isDark ? "#fbbf24" : "#92400e",
+                      fontSize: 11, fontWeight: 700,
+                    }}
+                  >
+                    🔗 Reconnect
+                  </button>
+                  <button
+                    onClick={() => mail.dismissProviderError(provider)}
+                    style={{
+                      width: 22, height: 22, borderRadius: 6, border: "none",
+                      background: "transparent", cursor: "pointer", display: "flex",
+                      alignItems: "center", justifyContent: "center",
+                      color: "var(--muted-foreground)", fontSize: 13,
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            );
+          })}
 
           {/* Empty state — no inbox loaded */}
           {mail.inbox.length === 0 && !mail.isFetchingInbox && !mail.inboxError && (

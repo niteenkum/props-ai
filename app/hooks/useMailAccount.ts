@@ -21,29 +21,31 @@ import {
 
 export interface UseMailAccountReturn {
   // State
-  mailAccount:       MailAccountInfo | null;  // legacy — first linked account (compat)
-  mailAccounts:      MailAccountInfo[];        // all linked accounts
-  isZohoConnected:   boolean;
-  isGmailConnected:  boolean;
-  isLoading:         boolean;
+  mailAccount:         MailAccountInfo | null;
+  mailAccounts:        MailAccountInfo[];
+  isZohoConnected:     boolean;
+  isGmailConnected:    boolean;
+  isLoading:           boolean;
   // Inbox
-  inbox:             MailMessage[];
-  isFetchingInbox:   boolean;
-  inboxError:        string | null;
+  inbox:               MailMessage[];
+  isFetchingInbox:     boolean;
+  inboxError:          string | null;
+  providerErrors:      Record<string, string>;   // per-provider errors (e.g. zoho token expired)
+  dismissProviderError:(provider: string) => void;
   // Send
-  isSending:         boolean;
-  sendError:         string | null;
-  lastSendSuccess:   boolean;
+  isSending:           boolean;
+  sendError:           string | null;
+  lastSendSuccess:     boolean;
   // Disconnect
-  isDisconnecting:   boolean;
+  isDisconnecting:     boolean;
   // Actions
-  connect:           () => void;          // legacy — connects Zoho
-  connectZoho:       () => void;
-  connectGmail:      () => void;
-  disconnect:        (provider?: "zoho" | "gmail") => Promise<void>;
-  fetchInbox:        () => Promise<void>;
-  sendEmail:         (to: string, subject: string, body: string) => Promise<SendResult>;
-  clearSendStatus:   () => void;
+  connect:             () => void;
+  connectZoho:         () => void;
+  connectGmail:        () => void;
+  disconnect:          (provider?: "zoho" | "gmail") => Promise<void>;
+  fetchInbox:          () => Promise<void>;
+  sendEmail:           (to: string, subject: string, body: string) => Promise<SendResult>;
+  clearSendStatus:     () => void;
 }
 
 // ─── Hook ──────────────────────────────────────────────────────────────────
@@ -54,6 +56,7 @@ export function useMailAccount(userEmail: string | null): UseMailAccountReturn {
   const [inbox,           setInbox]           = useState<MailMessage[]>([]);
   const [isFetchingInbox, setIsFetchingInbox] = useState(false);
   const [inboxError,      setInboxError]      = useState<string | null>(null);
+  const [providerErrors,  setProviderErrors]  = useState<Record<string, string>>({});
   const [isSending,       setIsSending]       = useState(false);
   const [sendError,       setSendError]       = useState<string | null>(null);
   const [lastSendSuccess, setLastSendSuccess] = useState(false);
@@ -149,8 +152,13 @@ export function useMailAccount(userEmail: string | null): UseMailAccountReturn {
 
       if (result.success && result.messages) {
         setInbox(result.messages);
+        // Update per-provider errors (e.g. Zoho token expired while Gmail OK)
+        setProviderErrors((result as any).providerErrors ?? {});
       } else {
         setInboxError(result.error ?? "Failed to fetch inbox.");
+        if ((result as any).providerErrors) {
+          setProviderErrors((result as any).providerErrors);
+        }
       }
     } catch (err: any) {
       setInboxError(err?.message ?? "Unexpected error.");
@@ -199,10 +207,19 @@ export function useMailAccount(userEmail: string | null): UseMailAccountReturn {
     }
   }, [userEmail]);
 
-  // ── Clear send status ────────────────────────────────────────────────────
+  // ── Clear send status ─────────────────────────────────────────────────────────────────────────────────
   const clearSendStatus = useCallback(() => {
     setSendError(null);
     setLastSendSuccess(false);
+  }, []);
+
+  // ── Dismiss provider error (after user clicks reconnect) ─────────────────────────────────
+  const dismissProviderError = useCallback((provider: string) => {
+    setProviderErrors(prev => {
+      const next = { ...prev };
+      delete next[provider];
+      return next;
+    });
   }, []);
 
   return {
@@ -214,6 +231,8 @@ export function useMailAccount(userEmail: string | null): UseMailAccountReturn {
     inbox,
     isFetchingInbox,
     inboxError,
+    providerErrors,
+    dismissProviderError,
     isSending,
     sendError,
     lastSendSuccess,

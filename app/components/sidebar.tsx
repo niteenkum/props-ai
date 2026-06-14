@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FilePlus2, LogOut, Sparkles, User, Sun, Moon, BarChart3, Mail, MessageCircle } from "lucide-react";
+import { LayoutDashboard, FilePlus2, LogOut, Sparkles, User, Sun, Moon, BarChart3, Mail, MessageCircle, CalendarDays } from "lucide-react";
 import { useTheme } from "./theme-provider";
 
 interface SidebarProps {
@@ -18,6 +18,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; ex
   { href: "/dashboard/profile",   label: "Candidate Profile", icon: User },
   { href: "/dashboard/whatsapp",  label: "WhatsApp Groups",  icon: MessageCircle, accent: "#25d366" },
   { href: "/dashboard/mail",      label: "Mail Account",     icon: Mail },
+  { href: "/dashboard/followups", label: "Follow-ups & Calls", icon: CalendarDays, accent: "#10b981" },
   { href: "/dashboard/expense",   label: "AI Expense",       icon: BarChart3 },
 ];
 

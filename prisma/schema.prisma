@@ -56,6 +56,7 @@ model JobPost {
   matchedSkills      String[]                         // skills from profile matching the job
   missingSkills      String[]                         // skills job needs that profile lacks
   sentEmails         SentEmail[]
+  followUps          FollowUp[]                       // scheduled calls and reminders
   whatsappSource     WhatsAppMessage?                 // reverse link from WA message
 }
 
@@ -141,10 +142,43 @@ model AiUsageLog {
   @@index([userEmail])
 }
 
+// ─── Follow-Up Tracker ───────────────────────────────────────────────────
+// Tracks all follow-ups for a job: scheduled calls (with Meet links), email
+// follow-up reminders, and manual notes. Status lifecycle: pending → done/cancelled.
+model FollowUp {
+  id            String   @id @default(uuid())
+  userEmail     String                          // PropAI user
+  jobId         String                          // linked job post
+  jobPost       JobPost  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  type          String   @default("call")       // "call" | "email" | "manual"
+  title         String                          // e.g. "Interview call with Stripe"
+  scheduledAt   DateTime                        // when is the call/follow-up due?
+  durationMin   Int      @default(30)           // call duration in minutes
+
+  // Google Calendar / Meet (populated after Corsair calendar.events.create)
+  gcalEventId   String?                         // Google Calendar event ID
+  meetLink      String?                         // meet.google.com/xxx — from hangoutLink
+  gcalEventUrl  String?                         // htmlLink to Google Calendar event
+  attendeeEmail String?                         // recruiter's email (invited to Meet)
+
+  // Status
+  status        String   @default("pending")    // "pending" | "done" | "cancelled" | "rescheduled"
+  notes         String?  @db.Text
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userEmail])
+  @@index([jobId])
+  @@index([scheduledAt])
+  @@index([userEmail, status])
+}
+
 // ─── Linked Mail Account ─────────────────────────────────────────────
 // Stores OAuth tokens for a user's linked mail accounts.
 // Supports MULTIPLE accounts per user — one row per (userEmail, provider).
-// provider: "zoho" | "gmail"
+// provider: "zoho" | "gmail" | "googlecalendar"
 model MailAccount {
   id              String   @id @default(uuid())
   userEmail       String                          // PropAI user email
