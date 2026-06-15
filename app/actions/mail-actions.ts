@@ -98,6 +98,9 @@ export interface MailMessage {
   summary:    string;   // first ~120 chars of snippet
   isRead:     boolean;
   provider:   "zoho" | "gmail"; // which account this message came from
+  emailType?: string;
+  aiSummary?: string;
+  sentiment?: string;
 }
 
 export interface SendResult {
@@ -182,7 +185,7 @@ export async function refreshZohoTokenAction(
       method:  "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body:    new URLSearchParams({
-        refresh_token: account.refreshToken,
+        refresh_token: account.refreshToken ?? "",
         client_id:     clientId,
         client_secret: clientSecret,
         grant_type:    "refresh_token",
@@ -235,21 +238,110 @@ async function getValidAccessToken(
 // NOTE: The /folders API requires ZohoMail.folders.READ scope (not granted).
 // /messages/view with NO folderId returns all recent mail — this works fine.
 
-export async function fetchInboxAction(
+// ─── 4. Sync Helpers & Database Storage ──────────────────────────────────────
+
+async function classifyEmailWithAI(
   userEmail: string,
-  limit = 20
-): Promise<{ success: boolean; messages?: MailMessage[]; error?: string }> {
-  console.log(`\n[fetchInbox] 🚀 CALLED for ${userEmail}, limit=${limit}`);
+  subject: string,
+  fromEmail: string,
+  fromName: string,
+  snippet: string
+): Promise<{ type: string; summary: string; sentiment: string }> {
+  try {
+    const { getProvider } = await import("../utils/ai/service");
+    const provider = getProvider();
+    if (!provider) {
+      const type = runHeuristicClassification(subject, fromEmail, snippet);
+      return { type, summary: snippet.slice(0, 120), sentiment: "neutral" };
+    }
+
+    const systemPrompt = `You are an AI assistant that analyzes incoming email messages for a professional developer's application tracker.
+Analyze the email and categorize it into one of these types:
+- interview_call: Interview invitations, scheduling requests, technical test details, or meeting links.
+- freelance_opportunity: Freelance projects, contract work offers, gig offers, or project proposals.
+- remote_opportunity: Full-time or part-time remote job offers, recruiting requests for remote roles.
+- rejection: Rejections, updates saying the application won't proceed, or closing/filling the position.
+- offer_letter: Formal job offers, employment offers, or letters of intent.
+- general: General updates, newsletters, confirmations of application receipt, or other updates.
+
+Also, write a concise, 1-sentence summary of the email's key message or action item, and determine the overall sentiment (positive, neutral, or negative).
+
+You must respond with a valid JSON object only. Do not include markdown code block formatting (e.g. no \`\`\`json).
+The response JSON schema must match exactly:
+{
+  "type": "interview_call" | "freelance_opportunity" | "remote_opportunity" | "rejection" | "offer_letter" | "general",
+  "summary": "1-sentence summary of the email",
+  "sentiment": "positive" | "neutral" | "negative"
+}`;
+
+    const userPrompt = `Subject: ${subject}
+From: ${fromName} <${fromEmail}>
+Snippet: ${snippet}`;
+
+    const rawResponse = await provider.generate({
+      systemPrompt,
+      userPrompt,
+      temperature: 0.2,
+      maxTokens: 256,
+      apiType: "email_classification",
+      jsonMode: true,
+      userEmail,
+    });
+
+    let jsonStr = rawResponse.trim();
+    if (jsonStr.startsWith("```")) {
+      jsonStr = jsonStr.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+    }
+
+    const parsed = JSON.parse(jsonStr);
+    return {
+      type: parsed.type || "general",
+      summary: parsed.summary || snippet.slice(0, 120),
+      sentiment: parsed.sentiment || "neutral",
+    };
+  } catch (error) {
+    console.error("[AI Classification] Failed, falling back to heuristics:", error);
+    const type = runHeuristicClassification(subject, fromEmail, snippet);
+    return { type, summary: snippet.slice(0, 120), sentiment: "neutral" };
+  }
+}
+
+function runHeuristicClassification(subject: string, fromEmail: string, snippet: string): string {
+  const subjectLower = subject.toLowerCase();
+  const bodyLower = snippet.toLowerCase();
+
+  const interviewKeywords = ["interview", "schedule", "zoom", "meet.google", "google meet", "calendar", "calendly", "call invitation", "availability"];
+  const freelanceKeywords = ["freelance", "contract", "gig", "upwork", "fiverr", "toptal", "hourly rate", "part-time project"];
+  const remoteKeywords = ["remote", "wfh", "work from home", "anywhere", "distributed"];
+  const rejectionKeywords = ["not proceeding", "thank you for your time", "unable to move forward", "decided to move forward with other", "unsuccessful", "rejection", "unfortunately"];
+  const offerKeywords = ["offer letter", "formal offer", "job offer", "employment agreement", "onboarding"];
+
+  if (interviewKeywords.some(k => subjectLower.includes(k) || bodyLower.includes(k))) {
+    return "interview_call";
+  }
+  if (freelanceKeywords.some(k => subjectLower.includes(k) || bodyLower.includes(k))) {
+    return "freelance_opportunity";
+  }
+  if (remoteKeywords.some(k => subjectLower.includes(k) || bodyLower.includes(k))) {
+    return "remote_opportunity";
+  }
+  if (rejectionKeywords.some(k => subjectLower.includes(k) || bodyLower.includes(k))) {
+    return "rejection";
+  }
+  if (offerKeywords.some(k => subjectLower.includes(k) || bodyLower.includes(k))) {
+    return "offer_letter";
+  }
+  return "general";
+}
+
+async function syncZohoEmails(userEmail: string): Promise<{ success: boolean; error?: string }> {
+  console.log(`[syncZohoEmails] 🚀 Starting sync for ${userEmail}`);
   const auth = await getValidAccessToken(userEmail);
   if (!auth) {
-    console.error("[fetchInbox] ❌ No valid token");
-    return { success: false, error: "Mail account not connected or token expired." };
+    return { success: false, error: "Zoho account not connected or token expired." };
   }
 
   const { token, accountId, apiBase } = auth;
-  console.log(`[fetchInbox] ✅ Token OK | accountId=${accountId} | apiBase=${apiBase}`);
-
-  // Ensure we have the accountId
   let activeAccountId = accountId;
   if (!activeAccountId) {
     try {
@@ -262,71 +354,115 @@ export async function fetchInboxAction(
         activeAccountId = String(firstAcc?.accountId ?? firstAcc?.accountID ?? "");
         if (activeAccountId) {
           await prisma.mailAccount.update({
-            where: { userEmail },
+            where: { userEmail_provider: { userEmail, provider: "zoho" } },
             data:  { zohoAccountId: activeAccountId },
           });
-          console.log(`[fetchInbox] ✅ Resolved accountId: ${activeAccountId}`);
         }
       }
     } catch { /* proceed */ }
   }
 
   if (!activeAccountId) {
-    console.error("[fetchInbox] ❌ Cannot resolve Zoho account ID");
     return { success: false, error: "Could not determine Zoho account ID." };
   }
 
   try {
-    // Call messages/view WITHOUT folderId — returns all recent mail (200 OK)
+    const cursor = await prisma.emailSyncCursor.findUnique({
+      where: { userEmail_provider: { userEmail, provider: "zoho" } }
+    });
+
     const params = new URLSearchParams({
-      limit:  String(Math.min(limit, 200)),
+      limit: "50",
       sortBy: "date",
     });
     const url = `${apiBase}/api/accounts/${activeAccountId}/messages/view?${params}`;
-    console.log(`[fetchInbox] 📡 GET ${url}`);
-
     const res = await fetch(url, {
       headers: { Authorization: `Zoho-oauthtoken ${token}` },
     });
 
-    const bodyText = await res.text();
-    console.log(`[fetchInbox] Response status: ${res.status}`);
-
     if (!res.ok) {
-      console.error(`[fetchInbox] ❌ Zoho error (${res.status}):`, bodyText.slice(0, 400));
       return { success: false, error: `Zoho API error (${res.status})` };
     }
 
-    const data = JSON.parse(bodyText);
+    const data = await res.json();
     const raw: any[] = data?.data ?? [];
-    console.log(`[fetchInbox] ✅ Got ${raw.length} messages from Zoho`);
+    console.log(`[syncZohoEmails] Fetched ${raw.length} messages from Zoho`);
 
-    const messages: MailMessage[] = raw.map((m: any) => ({
-      messageId:  String(m.messageId   ?? m.msgId ?? ""),
-      subject:    m.subject            ?? "(no subject)",
-      fromEmail:  m.fromAddress        ?? m.sender ?? "",
-      fromName:   m.fromDisplayString  ?? m.senderDisplayName ?? m.sender ?? "",
-      receivedAt: m.receivedTime
-        ? new Date(Number(m.receivedTime)).toISOString()
-        : new Date().toISOString(),
-      summary:    (m.summary ?? m.content ?? "").slice(0, 120),
-      isRead:     m.isRead === true || m.status === "0" || m.status === "read",
-      provider:   "zoho" as const,
-    }));
+    let newEmailsCount = 0;
+    let maxReceivedAt = cursor?.lastSyncAt ? new Date(cursor.lastSyncAt) : new Date(0);
 
-    return { success: true, messages };
+    for (const m of raw) {
+      const messageId = String(m.messageId ?? m.msgId ?? "");
+      if (!messageId) continue;
+
+      const receivedAt = m.receivedTime
+        ? new Date(Number(m.receivedTime))
+        : new Date();
+
+      if (cursor && receivedAt.getTime() <= new Date(cursor.lastSyncAt).getTime()) {
+        continue;
+      }
+
+      const exists = await prisma.syncedEmail.findUnique({
+        where: {
+          userEmail_provider_messageId: {
+            userEmail,
+            provider: "zoho",
+            messageId
+          }
+        }
+      });
+
+      if (exists) continue;
+
+      const subject = m.subject ?? "(no subject)";
+      const fromEmail = m.fromAddress ?? m.sender ?? "";
+      const fromName = m.fromDisplayString ?? m.senderDisplayName ?? m.sender ?? "";
+      const summary = (m.summary ?? m.content ?? "").slice(0, 120);
+
+      const aiResult = await classifyEmailWithAI(userEmail, subject, fromEmail, fromName, summary);
+
+      await prisma.syncedEmail.create({
+        data: {
+          userEmail,
+          provider: "zoho",
+          messageId,
+          subject,
+          fromEmail,
+          fromName,
+          receivedAt,
+          summary,
+          isRead: m.isRead === true || m.status === "0" || m.status === "read",
+          emailType: aiResult.type,
+          aiSummary: aiResult.summary,
+          sentiment: aiResult.sentiment,
+        }
+      });
+
+      newEmailsCount++;
+      if (receivedAt.getTime() > maxReceivedAt.getTime()) {
+        maxReceivedAt = receivedAt;
+      }
+    }
+
+    if (newEmailsCount > 0 || !cursor) {
+      await prisma.emailSyncCursor.upsert({
+        where: { userEmail_provider: { userEmail, provider: "zoho" } },
+        create: { userEmail, provider: "zoho", lastSyncAt: maxReceivedAt },
+        update: { lastSyncAt: maxReceivedAt }
+      });
+    }
+
+    console.log(`[syncZohoEmails] Sync completed. Saved ${newEmailsCount} new emails.`);
+    return { success: true };
   } catch (err: any) {
-    console.error("[fetchInbox] ❌ Exception:", err);
-    return { success: false, error: err?.message ?? "Failed to fetch inbox." };
+    console.error("[syncZohoEmails] Zoho sync exception:", err);
+    return { success: false, error: err?.message ?? "Zoho sync failed." };
   }
 }
 
-// ─── 4b. Fetch Gmail inbox via Corsair SDK ───────────────────────────────────
-
-export async function fetchGmailInboxAction(
-  userEmail: string,
-  limit = 20
-): Promise<{ success: boolean; messages?: MailMessage[]; error?: string }> {
+async function syncGmailEmails(userEmail: string): Promise<{ success: boolean; error?: string }> {
+  console.log(`[syncGmailEmails] 🚀 Starting sync for ${userEmail}`);
   const account = await prisma.mailAccount.findUnique({
     where: { userEmail_provider: { userEmail, provider: "gmail" } },
   });
@@ -336,119 +472,222 @@ export async function fetchGmailInboxAction(
     const { corsair } = await import("../utils/corsair");
     const tenant = corsair.withTenant(userEmail);
 
-    // Corsair handles auth/token refresh automatically
-    const listRes = await tenant.gmail.api.messages.list({
-      maxResults: Math.min(limit, 100),
-      labelIds:   ["INBOX"],
-    }) as any;
+    const cursor = await prisma.emailSyncCursor.findUnique({
+      where: { userEmail_provider: { userEmail, provider: "gmail" } }
+    });
 
+    let listParams: any = {
+      maxResults: 50,
+      labelIds: ["INBOX"],
+    };
+
+    if (cursor) {
+      const epochSecs = Math.floor(new Date(cursor.lastSyncAt).getTime() / 1000);
+      listParams.q = `after:${epochSecs}`;
+    }
+
+    const listRes = await tenant.gmail.api.messages.list(listParams) as any;
     const msgIds: string[] = (listRes.messages ?? []).map((m: any) => m.id).filter(Boolean);
-    if (msgIds.length === 0) return { success: true, messages: [] };
+    console.log(`[syncGmailEmails] Found ${msgIds.length} candidate Gmail messages since last sync`);
 
-    // Fetch metadata for each message (parallel)
-    const messages: MailMessage[] = [];
-    await Promise.all(
-      msgIds.map(async (id) => {
-        try {
-          const meta = await tenant.gmail.api.messages.get({
-            id,
-            format: "full",   // "metadata" wasn't returning payload.headers via Corsair
-          }) as any;
+    if (msgIds.length === 0) {
+      return { success: true };
+    }
 
-          // Headers are in payload.headers with format:full
-          const headers = (meta?.payload?.headers ?? []) as { name: string; value: string }[];
-          const getH = (name: string) =>
-            headers.find((h: any) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
+    let newEmailsCount = 0;
+    let maxReceivedAt = cursor?.lastSyncAt ? new Date(cursor.lastSyncAt) : new Date(0);
 
-          const fromRaw   = getH("From");
-          const fromMatch = fromRaw.match(/^(.+?)?\s*<([^>]+)>$/);
-          const fromName  = fromMatch?.[1]?.trim() || fromRaw.split("@")[0];
-          const fromEmail = fromMatch?.[2]?.trim() ?? fromRaw;
-          const subject   = getH("Subject");
+    for (const id of msgIds) {
+      try {
+        const exists = await prisma.syncedEmail.findUnique({
+          where: {
+            userEmail_provider_messageId: {
+              userEmail,
+              provider: "gmail",
+              messageId: id
+            }
+          }
+        });
 
-          // internalDate is Unix ms timestamp — more reliable than Date header
-          const receivedAt = meta?.internalDate
-            ? new Date(Number(meta.internalDate)).toISOString()
-            : (getH("Date") ? new Date(getH("Date")).toISOString() : new Date().toISOString());
+        if (exists) continue;
 
-          messages.push({
-            messageId:  id,
-            subject:    subject || "(no subject)",
+        const meta = await tenant.gmail.api.messages.get({
+          id,
+          format: "full",
+        }) as any;
+
+        const headers = (meta?.payload?.headers ?? []) as { name: string; value: string }[];
+        const getH = (name: string) =>
+          headers.find((h: any) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
+
+        const fromRaw   = getH("From");
+        const fromMatch = fromRaw.match(/^(.+?)?\s*<([^>]+)>$/);
+        const fromName  = fromMatch?.[1]?.trim() || fromRaw.split("@")[0];
+        const fromEmail = fromMatch?.[2]?.trim() ?? fromRaw;
+        const subject   = getH("Subject") || "(no subject)";
+
+        const receivedAt = meta?.internalDate
+          ? new Date(Number(meta.internalDate))
+          : (getH("Date") ? new Date(getH("Date")) : new Date());
+
+        const summary = (meta.snippet ?? "").slice(0, 120);
+
+        const aiResult = await classifyEmailWithAI(userEmail, subject, fromEmail, fromName, summary);
+
+        await prisma.syncedEmail.create({
+          data: {
+            userEmail,
+            provider: "gmail",
+            messageId: id,
+            subject,
             fromEmail,
             fromName,
             receivedAt,
-            summary:    (meta.snippet ?? "").slice(0, 120),
-            isRead:     !(meta.labelIds ?? []).includes("UNREAD"),
-            provider:   "gmail" as const,
-          });
-        } catch { /* skip failed message */ }
-      })
-    );
+            summary,
+            isRead: !(meta.labelIds ?? []).includes("UNREAD"),
+            emailType: aiResult.type,
+            aiSummary: aiResult.summary,
+            sentiment: aiResult.sentiment,
+          }
+        });
 
-    messages.sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
-    console.log(`[fetchGmailInbox] ✅ Got ${messages.length} messages from Gmail via Corsair`);
-    return { success: true, messages };
+        newEmailsCount++;
+        if (receivedAt.getTime() > maxReceivedAt.getTime()) {
+          maxReceivedAt = receivedAt;
+        }
+      } catch (errMsg) {
+        console.warn(`[syncGmailEmails] Skipping message ${id} due to error:`, errMsg);
+      }
+    }
+
+    if (newEmailsCount > 0 || !cursor) {
+      await prisma.emailSyncCursor.upsert({
+        where: { userEmail_provider: { userEmail, provider: "gmail" } },
+        create: { userEmail, provider: "gmail", lastSyncAt: maxReceivedAt },
+        update: { lastSyncAt: maxReceivedAt }
+      });
+    }
+
+    console.log(`[syncGmailEmails] Gmail sync completed. Saved ${newEmailsCount} new emails.`);
+    return { success: true };
   } catch (err: any) {
-    console.error("[fetchGmailInbox] Exception:", err);
-    return { success: false, error: err?.message ?? "Failed to fetch Gmail inbox." };
+    console.error("[syncGmailEmails] Gmail sync exception:", err);
+    return { success: false, error: err?.message ?? "Gmail sync failed." };
   }
 }
 
-// ─── 4c. Unified inbox — Zoho + Gmail combined ────────────────────────────────
+async function getSyncedEmailsFromDb(
+  userEmail: string,
+  provider?: "zoho" | "gmail",
+  limit = 50
+): Promise<MailMessage[]> {
+  const whereClause: any = { userEmail };
+  if (provider) {
+    whereClause.provider = provider;
+  }
+
+  const emails = await prisma.syncedEmail.findMany({
+    where: whereClause,
+    orderBy: { receivedAt: "desc" },
+    take: limit,
+  });
+
+  return emails.map(m => ({
+    messageId:  m.messageId,
+    subject:    m.subject,
+    fromEmail:  m.fromEmail,
+    fromName:   m.fromName,
+    receivedAt: m.receivedAt.toISOString(),
+    summary:    m.summary,
+    isRead:     m.isRead,
+    provider:   m.provider as "gmail" | "zoho",
+    emailType:  m.emailType,
+    aiSummary:  m.aiSummary ?? undefined,
+    sentiment:  m.sentiment ?? undefined,
+  }));
+}
+
+// ─── 4a. Fetch Zoho inbox messages (with Sync) ──────────────────────────────────
+
+export async function fetchInboxAction(
+  userEmail: string,
+  limit = 20
+): Promise<{ success: boolean; messages?: MailMessage[]; error?: string }> {
+  console.log(`\n[fetchInbox] 🚀 Sync & Fetch for Zoho: ${userEmail}`);
+  const syncRes = await syncZohoEmails(userEmail);
+  
+  try {
+    const messages = await getSyncedEmailsFromDb(userEmail, "zoho", limit);
+    return { 
+      success: true, 
+      messages,
+      error: syncRes.success ? undefined : syncRes.error 
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message ?? "Failed to query database." };
+  }
+}
+
+// ─── 4b. Fetch Gmail inbox messages (with Sync) ──────────────────────────────────
+
+export async function fetchGmailInboxAction(
+  userEmail: string,
+  limit = 20
+): Promise<{ success: boolean; messages?: MailMessage[]; error?: string }> {
+  console.log(`\n[fetchGmailInbox] 🚀 Sync & Fetch for Gmail: ${userEmail}`);
+  const syncRes = await syncGmailEmails(userEmail);
+  
+  try {
+    const messages = await getSyncedEmailsFromDb(userEmail, "gmail", limit);
+    return { 
+      success: true, 
+      messages,
+      error: syncRes.success ? undefined : syncRes.error 
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message ?? "Failed to query database." };
+  }
+}
+
+// ─── 4c. Unified inbox — Zoho + Gmail combined (with Sync) ───────────────────────
 
 export async function fetchUnifiedInboxAction(
   userEmail: string,
   limit = 50
 ): Promise<{ success: boolean; messages?: MailMessage[]; error?: string; providerErrors?: Record<string, string> }> {
   const perProvider = Math.ceil(limit / 2);
+  console.log(`[fetchUnifiedInbox] Syncing and fetching up to ${limit} emails for ${userEmail}`);
 
-  console.log(`[fetchUnifiedInbox] Fetching ${perProvider} messages per provider for ${userEmail}`);
-
-  const [zohoResult, gmailResult] = await Promise.allSettled([
-    fetchInboxAction(userEmail, perProvider),
-    fetchGmailInboxAction(userEmail, perProvider),
+  const [zohoSync, gmailSync] = await Promise.allSettled([
+    syncZohoEmails(userEmail),
+    syncGmailEmails(userEmail)
   ]);
 
-  // Log each result so we can debug issues
-  if (zohoResult.status === "fulfilled") {
-    console.log(`[fetchUnifiedInbox] Zoho: ${zohoResult.value.success ? `✅ ${zohoResult.value.messages?.length ?? 0} msgs` : `❌ ${zohoResult.value.error}`}`);
-  } else {
-    console.log(`[fetchUnifiedInbox] Zoho: ❌ rejected:`, zohoResult.reason);
-  }
-  if (gmailResult.status === "fulfilled") {
-    console.log(`[fetchUnifiedInbox] Gmail: ${gmailResult.value.success ? `✅ ${gmailResult.value.messages?.length ?? 0} msgs` : `❌ ${gmailResult.value.error}`}`);
-  } else {
-    console.log(`[fetchUnifiedInbox] Gmail: ❌ rejected:`, gmailResult.reason);
-  }
-
-  const all: MailMessage[] = [];
   const providerErrors: Record<string, string> = {};
-
-  if (zohoResult.status === "fulfilled" && zohoResult.value.success) {
-    all.push(...(zohoResult.value.messages ?? []));
-  } else {
-    const err = zohoResult.status === "fulfilled" ? zohoResult.value.error : "Zoho fetch failed";
-    if (err) providerErrors["zoho"] = err;
-  }
-  if (gmailResult.status === "fulfilled" && gmailResult.value.success) {
-    all.push(...(gmailResult.value.messages ?? []));
-  } else {
-    const err = gmailResult.status === "fulfilled" ? gmailResult.value.error : "Gmail fetch failed";
-    if (err) providerErrors["gmail"] = err;
+  if (zohoSync.status === "fulfilled" && !zohoSync.value.success) {
+    providerErrors["zoho"] = zohoSync.value.error ?? "Zoho sync failed";
+  } else if (zohoSync.status === "rejected") {
+    providerErrors["zoho"] = "Zoho sync failed";
   }
 
-  // Return whatever we have — even if one provider failed
-  if (all.length > 0) {
-    all.sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
-    console.log(`[fetchUnifiedInbox] ✅ Combined: ${all.length} messages total`);
-    return { success: true, messages: all.slice(0, limit), providerErrors: Object.keys(providerErrors).length > 0 ? providerErrors : undefined };
+  if (gmailSync.status === "fulfilled" && !gmailSync.value.success) {
+    providerErrors["gmail"] = gmailSync.value.error ?? "Gmail sync failed";
+  } else if (gmailSync.status === "rejected") {
+    providerErrors["gmail"] = "Gmail sync failed";
   }
 
-  // Both failed
-  const zohoErr  = zohoResult.status  === "fulfilled" ? zohoResult.value.error  : "Zoho fetch failed";
-  const gmailErr = gmailResult.status === "fulfilled" ? gmailResult.value.error : "Gmail fetch failed";
-  return { success: false, error: [zohoErr, gmailErr].filter(Boolean).join(" | "), providerErrors };
+  try {
+    const messages = await getSyncedEmailsFromDb(userEmail, undefined, limit);
+    return {
+      success: true,
+      messages,
+      providerErrors: Object.keys(providerErrors).length > 0 ? providerErrors : undefined
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message ?? "Failed to query database.", providerErrors };
+  }
 }
+
 
 // ─── 4d. Fetch a Gmail thread (click-to-open) ────────────────────────────────
 // Fetches the full thread for a clicked Gmail message.
@@ -599,6 +838,13 @@ export async function gmailMarkAsReadAction(
       id: messageId,
       removeLabelIds: ["UNREAD"],
     });
+
+    // Update DB state
+    await prisma.syncedEmail.updateMany({
+      where: { userEmail, provider: "gmail", messageId },
+      data: { isRead: true }
+    });
+
     console.log(`[gmailMarkAsRead] ✅ Marked ${messageId} as read`);
     return { success: true };
   } catch (err: any) {
@@ -644,6 +890,12 @@ export async function gmailTrashAction(
     const { corsair } = await import("../utils/corsair");
     const tenant = corsair.withTenant(userEmail);
     await (tenant.gmail.api.messages.trash as any)({ id: messageId });
+
+    // Delete from DB state
+    await prisma.syncedEmail.deleteMany({
+      where: { userEmail, provider: "gmail", messageId }
+    });
+
     console.log(`[gmailTrash] ✅ Trashed ${messageId}`);
     return { success: true };
   } catch (err: any) {

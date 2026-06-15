@@ -14,7 +14,9 @@ export async function GET(req: NextRequest) {
   const log: Record<string, any> = {};
 
   // 1. DB row
-  const account = await prisma.mailAccount.findUnique({ where: { userEmail } });
+  const account = await prisma.mailAccount.findUnique({
+    where: { userEmail_provider: { userEmail, provider: "zoho" } }
+  });
   if (!account) {
     return NextResponse.json({ error: "No mail account linked in DB for this email." });
   }
@@ -42,7 +44,7 @@ export async function GET(req: NextRequest) {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
-          refresh_token: account.refreshToken,
+          refresh_token: account.refreshToken ?? "",
           client_id:     process.env.ZOHO_CLIENT_ID!,
           client_secret: process.env.ZOHO_CLIENT_SECRET!,
           grant_type:    "refresh_token",

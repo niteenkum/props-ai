@@ -312,3 +312,43 @@ model CorsairEvent {
   @@map("corsair_events")
   @@ignore
 }
+
+// ─── Synced Email Engine ──────────────────────────────────────────────────
+// Stores AI-classified incoming emails for fast, incremental offline access.
+model SyncedEmail {
+  id            String   @id @default(uuid())
+  userEmail     String   // PropAI user email
+  provider      String   // "gmail" | "zoho"
+  messageId     String   // provider's message ID (for dedup)
+  subject       String   @db.Text
+  fromEmail     String
+  fromName      String
+  receivedAt    DateTime
+  summary       String   @db.Text // first ~120 chars
+  isRead        Boolean  @default(false)
+  
+  // AI-powered fields
+  emailType     String   // "interview_call" | "freelance_opportunity" | "remote_opportunity" | "rejection" | "offer_letter" | "general"
+  aiSummary     String?  @db.Text // 1-sentence summary by Gemini
+  sentiment     String?  // "positive" | "neutral" | "negative"
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userEmail, provider, messageId])
+  @@index([userEmail])
+  @@index([userEmail, receivedAt(sort: Desc)])
+  @@index([userEmail, emailType])
+}
+
+model EmailSyncCursor {
+  id            String   @id @default(uuid())
+  userEmail     String
+  provider      String   // "gmail" | "zoho"
+  lastSyncAt    DateTime // timestamp of last successfully synced email
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userEmail, provider])
+}
+

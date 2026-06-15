@@ -47,15 +47,32 @@ function ProviderBadge({ provider }: { provider: "zoho" | "gmail" | string }) {
 
 const PAGE_SIZE = 8;
 
-type Category = "all" | "unread" | "starred" | "jobs" | "people" | "updates";
+type Category =
+  | "all"
+  | "unread"
+  | "starred"
+  | "jobs"
+  | "people"
+  | "updates"
+  | "interview_call"
+  | "freelance_opportunity"
+  | "remote_opportunity"
+  | "rejection"
+  | "offer_letter"
+  | "general";
 
 const CATEGORIES: { id: Category; label: string; icon: React.ReactNode; desc: string }[] = [
-  { id: "all",     label: "All Mail",  icon: <Inbox    size={13} />, desc: "Everything" },
-  { id: "unread",  label: "Unread",    icon: <Eye      size={13} />, desc: "Unread only" },
-  { id: "starred", label: "Starred",   icon: <Star     size={13} />, desc: "Marked important" },
-  { id: "jobs",    label: "Jobs",      icon: <Briefcase size={13} />, desc: "Job-related" },
-  { id: "people",  label: "People",    icon: <Users    size={13} />, desc: "From contacts" },
-  { id: "updates", label: "Updates",   icon: <Tag      size={13} />, desc: "Notifications" },
+  { id: "all",                   label: "All Mail",    icon: <Inbox        size={13} />, desc: "Everything" },
+  { id: "unread",                label: "Unread",      icon: <Eye          size={13} />, desc: "Unread only" },
+  { id: "starred",               label: "Starred",     icon: <Star         size={13} />, desc: "Marked important" },
+  { id: "interview_call",        label: "Interviews",  icon: <Clock        size={13} />, desc: "Interview calls & invites" },
+  { id: "freelance_opportunity",  label: "Freelance",   icon: <Zap          size={13} />, desc: "Freelance opportunities" },
+  { id: "remote_opportunity",     label: "Remote",      icon: <Link2        size={13} />, desc: "Remote opportunities" },
+  { id: "offer_letter",          label: "Offers",      icon: <CheckCircle2 size={13} />, desc: "Offer letters" },
+  { id: "rejection",             label: "Rejections",  icon: <X            size={13} />, desc: "Application rejections" },
+  { id: "jobs",                  label: "Jobs",        icon: <Briefcase    size={13} />, desc: "Other job updates" },
+  { id: "people",                label: "People",      icon: <Users        size={13} />, desc: "Personal updates" },
+  { id: "updates",               label: "Updates",     icon: <Tag          size={13} />, desc: "Newsletters & updates" },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -63,6 +80,17 @@ const CATEGORIES: { id: Category; label: string; icon: React.ReactNode; desc: st
 function classifyMessage(msg: MailMessage): Category[] {
   const cats: Category[] = ["all"];
   if (!msg.isRead) cats.push("unread");
+
+  // If AI classification exists in database, map it directly
+  if (msg.emailType) {
+    cats.push(msg.emailType as Category);
+    // Backward compat mapping: if it is interview, freelance, remote, rejection, or offer,
+    // we also count it under "jobs" folder
+    if (["interview_call", "freelance_opportunity", "remote_opportunity", "rejection", "offer_letter"].includes(msg.emailType)) {
+      cats.push("jobs");
+    }
+    return cats;
+  }
 
   const subjectLower  = (msg.subject  ?? "").toLowerCase();
   const fromLower     = (msg.fromEmail ?? "").toLowerCase();
@@ -134,6 +162,63 @@ function AvatarBubble({ name, email, size = 36 }: { name: string; email: string;
 
 // ─── MessageRow ───────────────────────────────────────────────────────────────
 
+// ─── Email Type Badge ─────────────────────────────────────────────────────────
+
+function getEmailTypeBadge(type?: string, isDark?: boolean) {
+  if (!type || type === "general") return null;
+
+  let label = "";
+  let bg = "";
+  let border = "";
+  let color = "";
+
+  switch (type) {
+    case "interview_call":
+      label = "Interview Call";
+      bg = isDark ? "rgba(139, 92, 246, 0.12)" : "rgba(139, 92, 246, 0.08)";
+      border = isDark ? "rgba(139, 92, 246, 0.3)" : "rgba(139, 92, 246, 0.2)";
+      color = isDark ? "#c084fc" : "#7c3aed";
+      break;
+    case "freelance_opportunity":
+      label = "Freelance Opp";
+      bg = isDark ? "rgba(20, 184, 166, 0.12)" : "rgba(20, 184, 166, 0.08)";
+      border = isDark ? "rgba(20, 184, 166, 0.3)" : "rgba(20, 184, 166, 0.2)";
+      color = isDark ? "#2dd4bf" : "#0d9488";
+      break;
+    case "remote_opportunity":
+      label = "Remote Opp";
+      bg = isDark ? "rgba(59, 130, 246, 0.12)" : "rgba(59, 130, 246, 0.08)";
+      border = isDark ? "rgba(59, 130, 246, 0.3)" : "rgba(59, 130, 246, 0.2)";
+      color = isDark ? "#60a5fa" : "#2563eb";
+      break;
+    case "rejection":
+      label = "Rejection";
+      bg = isDark ? "rgba(239, 68, 68, 0.12)" : "rgba(239, 68, 68, 0.08)";
+      border = isDark ? "rgba(239, 68, 68, 0.3)" : "rgba(239, 68, 68, 0.2)";
+      color = isDark ? "#f87171" : "#dc2626";
+      break;
+    case "offer_letter":
+      label = "Offer Letter";
+      bg = isDark ? "rgba(34, 197, 94, 0.12)" : "rgba(34, 197, 94, 0.08)";
+      border = isDark ? "rgba(34, 197, 94, 0.3)" : "rgba(34, 197, 94, 0.2)";
+      color = isDark ? "#4ade80" : "#16a34a";
+      break;
+  }
+
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center",
+      padding: "1px 6px", borderRadius: 4, fontSize: 9.5, fontWeight: 700,
+      background: bg, border: `1px solid ${border}`, color,
+      marginLeft: 6, verticalAlign: "middle", whiteSpace: "nowrap"
+    }}>
+      {label}
+    </span>
+  );
+}
+
+// ─── MessageRow ───────────────────────────────────────────────────────────────
+
 function MessageRow({
   msg, isDark, isStarred, onToggleStar, onClick, onTrash,
 }: {
@@ -191,7 +276,7 @@ function MessageRow({
         {/* Content */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
-            {/* Left: unread dot + sender name */}
+            {/* Left: unread dot + sender name + AI Category badge */}
             <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
               {!msg.isRead && (
                 <span style={{
@@ -207,6 +292,7 @@ function MessageRow({
               }}>
                 {msg.fromName || msg.fromEmail.split("@")[0]}
               </span>
+              {getEmailTypeBadge(msg.emailType, isDark)}
             </div>
 
             {/* Right: time → on hover shows icon actions */}
@@ -263,14 +349,15 @@ function MessageRow({
             {msg.subject}
           </p>
 
-          {/* Preview */}
-          {!expanded && msg.summary && (
+          {/* Preview / AI Summary */}
+          {!expanded && (msg.aiSummary || msg.summary) && (
             <p style={{
-              fontSize: 11, color: "var(--muted-foreground)",
+              fontSize: 11, color: msg.aiSummary ? "var(--foreground)" : "var(--muted-foreground)",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              margin: 0, opacity: 0.75,
+              margin: 0, opacity: msg.aiSummary ? 0.9 : 0.75,
+              fontWeight: msg.aiSummary ? 500 : 400,
             }}>
-              {msg.summary}
+              {msg.aiSummary ? `✨ AI Summary: ${msg.aiSummary}` : msg.summary}
             </p>
           )}
         </div>

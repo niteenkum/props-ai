@@ -26,7 +26,8 @@ export type AiApiType =
   | "content_cold_email"
   | "content_proposal"
   | "content_linkedin"
-  | "content_cover_letter";
+  | "content_cover_letter"
+  | "email_classification";
 
 export type AiCategory =
   | "pdf_reading"
@@ -122,6 +123,7 @@ export function categoryForApiType(apiType: AiApiType): AiCategory {
     case "pdf_parse":           return "pdf_reading";
     case "job_analysis":        return "job_analysis";
     case "candidacy_analysis":  return "job_analysis";
+    case "email_classification":return "job_analysis";
     case "content_linkedin":    return "formalizing";
     case "content_cold_email":
     case "content_proposal":
