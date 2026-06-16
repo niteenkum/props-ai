@@ -152,6 +152,7 @@ export async function bookCallAction(
         const fetched = await (tenant as any).googlecalendar.api.events.get({
           calendarId: "primary",
           id: gcalEventId,
+          conferenceDataVersion: 1,
         });
         meetLink = extractMeetLink(fetched);
         console.log(`[bookCall] Re-fetched meetLink: ${meetLink}`);
@@ -201,6 +202,7 @@ export async function backfillMeetLinkAction(
     const event = await (tenant as any).googlecalendar.api.events.get({
       calendarId: "primary",
       id: fu.gcalEventId,
+      conferenceDataVersion: 1,
     });
 
     const meetLink = extractMeetLink(event);

@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FilePlus2, LogOut, Sparkles, User, Sun, Moon, BarChart3, Mail, MessageCircle, CalendarDays } from "lucide-react";
+import { LayoutDashboard, FilePlus2, LogOut, Sparkles, User, Sun, Moon, BarChart3, Mail, MessageCircle, CalendarDays, Bot } from "lucide-react";
 import { useTheme } from "./theme-provider";
 
 interface SidebarProps {
@@ -13,13 +13,14 @@ interface SidebarProps {
 }
 
 const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; exact?: boolean; accent?: string }[] = [
-  { href: "/dashboard",           label: "Dashboard",        icon: LayoutDashboard, exact: true },
-  { href: "/dashboard/new",       label: "New Scan / Paste", icon: FilePlus2 },
+  { href: "/dashboard/workspace", label: "Dashboard",         icon: LayoutDashboard },
+  { href: "/dashboard/your-bot",  label: "PropBot AI",        icon: Bot, accent: "#7c3aed" },
+  { href: "/dashboard/new",       label: "New Scan / Paste",  icon: FilePlus2 },
   { href: "/dashboard/profile",   label: "Candidate Profile", icon: User },
-  { href: "/dashboard/whatsapp",  label: "WhatsApp Groups",  icon: MessageCircle, accent: "#25d366" },
-  { href: "/dashboard/mail",      label: "Mail Account",     icon: Mail },
+  { href: "/dashboard/whatsapp",  label: "WhatsApp Groups",   icon: MessageCircle, accent: "#25d366" },
+  { href: "/dashboard/mail",      label: "Mail Account",      icon: Mail },
   { href: "/dashboard/followups", label: "Follow-ups & Calls", icon: CalendarDays, accent: "#10b981" },
-  { href: "/dashboard/expense",   label: "AI Expense",       icon: BarChart3 },
+  { href: "/dashboard/expense",   label: "AI Expense",        icon: BarChart3 },
 ];
 
 export default function Sidebar({
