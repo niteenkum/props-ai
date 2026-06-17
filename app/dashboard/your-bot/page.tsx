@@ -154,53 +154,29 @@ function PropBotContent() {
 
   return (
     <div style={styles.page}>
-      {/* ── Ciphy Header Card ────────────────────────────────────────────── */}
-      <div style={styles.header}>
-        <div style={styles.headerLeft}>
-          <div style={styles.headerDot} />
-          <div>
-            <h2 style={styles.headerTitle}>Create new multi-prompt</h2>
-            <p style={styles.headerSub}>Powered by Gemini · Gmail · Corsair</p>
-          </div>
-        </div>
-        
-        <div style={styles.headerRight}>
-          <button
-            onClick={clearChat}
-            style={styles.newTopicBtn}
-          >
-            <Plus size={15} />
-            New topic
-          </button>
-          
-          <div style={styles.divider} />
-          
-          <button style={styles.actionIconBtn} title="Share">
-            <Share2 size={15} />
-          </button>
-          <button style={styles.actionIconBtn} title="Settings">
-            <Settings size={15} />
-          </button>
-          <button style={styles.actionIconBtn} onClick={clearChat} title="Clear conversation">
-            <Trash2 size={15} />
-          </button>
-        </div>
-      </div>
 
       {/* ── Chat Content Scroll Area ─────────────────────────────────────── */}
       <div style={styles.body}>
         {/* EMPTY STATE */}
         {!hasMessages && !loading && (
           <div style={styles.emptyState}>
-            <PropBotOrb />
+            <PropBotOrb size={140} state="idle" />
             <div style={styles.greetingBlock}>
-              <h1 style={styles.greeting}>Hi! I'm The Pitchly AI.</h1>
+              <h1 style={styles.greeting}>Hi! I&apos;m The Pitchly AI.</h1>
               <p style={styles.greetingSub}>{customGreeting}</p>
               <p style={styles.greetingHint}>
                 Ask me anything — search Gmail, draft emails, view job metrics, and schedule outreach.
               </p>
             </div>
             <QuickActionsGrid onSelect={(p) => handleSend(p)} />
+          </div>
+        )}
+
+        {/* LOADING EMPTY STATE — orb shows thinking */}
+        {!hasMessages && loading && (
+          <div style={{ ...styles.emptyState, gap: 20 }}>
+            <PropBotOrb size={140} state="thinking" />
+            <p style={{ fontSize: 14, color: "var(--muted-foreground)", opacity: 0.7 }}>Thinking...</p>
           </div>
         )}
 
@@ -391,6 +367,9 @@ const styles: Record<string, React.CSSProperties> = {
     background: "var(--background)",
     scrollbarWidth: "thin" as const,
     scrollbarColor: "var(--border) transparent",
+    border: "1px solid var(--border)",
+    borderBottom: "none",
+    borderRadius: "16px 16px 0 0",
   },
   emptyState: {
     display: "flex",
