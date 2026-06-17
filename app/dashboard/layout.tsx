@@ -8,7 +8,6 @@ import { getUserProfileAction } from "../actions/db-actions";
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { userEmail, userName, isReady, logout } = useAuth({ requiredStatus: "ACTIVE" });
 
-  // Fetch profile name/role for sidebar display
   const [profileName, setProfileName] = useState<string | undefined>(undefined);
   const [profileRole, setProfileRole] = useState<string | undefined>(undefined);
 
@@ -26,10 +25,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div
       style={{
         display: "flex",
-        minHeight: "100vh",
+        height: "100vh",
+        maxHeight: "100vh",
+        overflow: "hidden",
         background: "var(--background)",
-        padding: 16,
-        gap: 24,
+        padding: 14,
+        gap: 18,
+        boxSizing: "border-box",
       }}
     >
       <Sidebar
@@ -43,16 +45,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           flex: 1,
           display: "flex",
           flexDirection: "column",
-          gap: 24,
-          maxHeight: "100vh",
+          gap: 20,
+          height: "100%",
+          maxHeight: "100%",
           overflowY: "auto",
-          paddingRight: 8,
+          paddingRight: 4,
         }}
       >
         {children}
       </main>
-
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

@@ -1,158 +1,262 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
+/* ══════════════════════════════════════════════════════════════════
+   PropAI — Wa (和) Tech Design System
+   Japanese-inspired aesthetic for IT Freelancers
+   Light: Mizu sky blue | Dark: Midnight indigo ink
+══════════════════════════════════════════════════════════════════ */
+
 :root {
-  /* Light Theme */
-  --background: #f7f7f7;
-  --foreground: #0f0f0f;
-  --card: #ffffff;
-  --card-foreground: #0f0f0f;
-  --popover: #ffffff;
-  --popover-foreground: #0f0f0f;
+  /* ── Background surfaces ── */
+  --background:         #EFF5FB;   /* Mizu sky — very light sky blue */
+  --card:               #FFFFFF;   /* Pure white card surface */
+  --card-foreground:    #1A1015;
+  --popover:            #FFFFFF;
+  --popover-foreground: #1A1015;
 
-  --primary: #0f0f0f;
-  --primary-foreground: #ffffff;
+  /* ── Foreground / Typography ── */
+  --foreground:         #1A1015;   /* Sumi ink */
+  --muted-foreground:   #6B7A8C;   /* Muted blue-grey */
 
-  --secondary: #555555;
-  --secondary-foreground: #ffffff;
+  /* ── Primary — Sakura Deep Rose ── */
+  --primary:            #C84B6B;
+  --primary-foreground: #FFFFFF;
+  --primary-hover:      #B03D5A;
+  --primary-glow:       rgba(200, 75, 107, 0.18);
 
-  --muted: #f2f2f2;
-  --muted-foreground: #888888;
+  /* ── Secondary ── */
+  --secondary:          #556880;   /* Muted indigo-sky */
+  --secondary-foreground: #FFFFFF;
 
-  --accent: #efefef;
-  --accent-foreground: #0f0f0f;
+  /* ── Muted ── */
+  --muted:              #E2EDF8;   /* Soft sky-blue muted */
+  --muted-hover:        #D5E4F5;
 
-  --border: #e8e8e8;
-  --input: #f5f5f5;
-  --ring: #0f0f0f;
-  --radius: 0.75rem;
+  /* ── Accent — Sakura petal ── */
+  --accent:             #F9EEF1;
+  --accent-foreground:  #1A1015;
+  --accent-cherry:      #E8A0B0;   /* Cherry blossom pink */
 
-  /* Custom helper variables */
-  --navbar-bg: rgba(255, 255, 255, 0.9);
-  --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-  --hero-bg-image: url('/hero-bg.png');
+  /* ── Borders & Inputs ── */
+  --border:             #DCE8F5;   /* Soft sky-blue border */
+  --input:              #E2EDF8;
+  --ring:               #C84B6B;
+  --radius:             0.75rem;
+
+  /* ── Sidebar (always dark contrast panel) ── */
+  --sidebar-bg:         #16162A;   /* Deep indigo */
+  --sidebar-border:     #242440;
+  --sidebar-text:       #C8C4D8;
+  --sidebar-text-muted: #6B6585;
+  --sidebar-active-bg:  rgba(200, 75, 107, 0.15);
+  --sidebar-active-text:#F0A0B5;
+  --sidebar-hover-bg:   rgba(255, 255, 255, 0.06);
+
+  /* ── Japanese accent ── */
+  --sakura:             #C84B6B;
+  --sakura-light:       #E8A0B0;
+  --sakura-glow:        rgba(200, 75, 107, 0.2);
+  --ink:                #1A1015;
+  --ink-muted:          #4A3F48;
+  --gold:               #C8962A;   /* Mon gold accent */
+
+  /* ── Shadows ── */
+  --card-shadow:        0 2px 16px rgba(26, 16, 21, 0.06);
+  --card-shadow-hover:  0 8px 32px rgba(26, 16, 21, 0.12);
+  --sakura-shadow:      0 4px 24px rgba(200, 75, 107, 0.18);
+
+  /* ── Misc ── */
+  --navbar-bg:          rgba(239, 245, 251, 0.92);
 }
 
+/* ── Dark Mode — Midnight Indigo Ink ── */
 [data-theme="dark"] {
-  /* True Deep Dark Theme */
-  --background: #050505;
-  --foreground: #f0f0f0;
-  --card: #0d0d0d;
-  --card-foreground: #f0f0f0;
-  --popover: #0d0d0d;
-  --popover-foreground: #f0f0f0;
+  --background:         #0D0D14;   /* Deep midnight indigo */
+  --card:               #13131F;   /* Dark ink surface */
+  --card-foreground:    #E8E4F0;
+  --popover:            #13131F;
+  --popover-foreground: #E8E4F0;
 
-  --primary: #f0f0f0;
-  --primary-foreground: #050505;
+  --foreground:         #E8E4F0;   /* Moonlit white */
+  --muted-foreground:   #6B6585;
 
-  --secondary: #888888;
-  --secondary-foreground: #050505;
+  --primary:            #E8728A;   /* Glowing sakura */
+  --primary-foreground: #0D0D14;
+  --primary-hover:      #F08098;
+  --primary-glow:       rgba(232, 114, 138, 0.22);
 
-  --muted: #141414;
-  --muted-foreground: #5a5a5a;
+  --secondary:          #8A8098;
+  --secondary-foreground: #0D0D14;
 
-  --accent: #1a1a1a;
-  --accent-foreground: #f0f0f0;
+  --muted:              #181826;
+  --muted-hover:        #1E1E2E;
 
-  --border: #1e1e1e;
-  --input: #0f0f0f;
-  --ring: #f0f0f0;
+  --accent:             #1E1830;
+  --accent-foreground:  #E8E4F0;
+  --accent-cherry:      #E8728A;
 
-  --navbar-bg: rgba(5, 5, 5, 0.92);
-  --card-shadow: 0 4px 40px rgba(0, 0, 0, 0.8);
-  --hero-bg-image: url('/hero-bg-dark.png');
+  --border:             #1E1E32;
+  --input:              #181826;
+  --ring:               #E8728A;
+
+  /* ── Sidebar (even deeper in dark mode) ── */
+  --sidebar-bg:         #0A0A15;
+  --sidebar-border:     #181828;
+  --sidebar-text:       #B0ACCC;
+  --sidebar-text-muted: #504865;
+  --sidebar-active-bg:  rgba(232, 114, 138, 0.14);
+  --sidebar-active-text:#F0A0B5;
+  --sidebar-hover-bg:   rgba(255, 255, 255, 0.05);
+
+  --sakura:             #E8728A;
+  --sakura-light:       #F0A0B5;
+  --sakura-glow:        rgba(232, 114, 138, 0.22);
+  --ink:                #E8E4F0;
+  --ink-muted:          #8A8098;
+  --gold:               #D4A840;
+
+  --card-shadow:        0 2px 24px rgba(0, 0, 0, 0.5);
+  --card-shadow-hover:  0 8px 40px rgba(0, 0, 0, 0.7);
+  --sakura-shadow:      0 4px 24px rgba(232, 114, 138, 0.22);
+
+  --navbar-bg:          rgba(13, 13, 20, 0.94);
 }
 
+/* ── Tailwind theme bridge ── */
 @theme {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
+  --color-background:       var(--background);
+  --color-foreground:       var(--foreground);
+  --color-card:             var(--card);
+  --color-card-foreground:  var(--card-foreground);
+  --color-popover:          var(--popover);
   --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
+  --color-primary:          var(--primary);
   --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
+  --color-secondary:        var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
+  --color-muted:            var(--muted);
   --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
+  --color-accent:           var(--accent);
   --color-accent-foreground: var(--accent-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
+  --color-border:           var(--border);
+  --color-input:            var(--input);
+  --color-ring:             var(--ring);
 
-  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: var(--font-geist-mono), monospace;
+  --font-sans:  'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-serif: 'Noto Serif JP', serif;
 
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
-
-  --animate-in: animate-in 0.2s ease-out;
-  --animate-out: animate-out 0.2s ease-in;
-  --animate-fade-in: fade-in 0.2s ease-out;
-  --animate-fade-out: fade-out 0.2s ease-in;
-  --animate-slide-in-from-right: slide-in-from-right 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  --animate-slide-out-to-right: slide-out-to-right 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* ── Keyframes ── */
 @keyframes slide-in-from-right {
   from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+  to   { transform: translateX(0); }
 }
-
 @keyframes slide-out-to-right {
   from { transform: translateX(0); }
-  to { transform: translateX(100%); }
+  to   { transform: translateX(100%); }
 }
-
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes fade-out {
   from { opacity: 1; }
-  to { opacity: 0; }
+  to   { opacity: 0; }
+}
+@keyframes sakura-float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.7; }
+  50%       { transform: translateY(-6px) rotate(8deg); opacity: 1; }
+}
+@keyframes sakura-bloom {
+  from { transform: scale(0.8); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--sakura-glow); }
+  50%       { box-shadow: 0 0 16px 4px var(--sakura-glow); }
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
+/* ── Global transitions ── */
 *, *::before, *::after {
-  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.15s ease, box-shadow 0.25s ease;
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    color 0.15s ease,
+    box-shadow 0.3s ease,
+    opacity 0.2s ease;
+}
+
+/* ── Base styles ── */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.6;
 }
 
-/* Clean card surface */
+/* ── Card glass surface ── */
 .glass {
   background: var(--card);
   border: 1px solid var(--border);
-  transition: box-shadow 0.2s ease;
-}
-
-.glass:hover {
+  border-radius: var(--radius);
   box-shadow: var(--card-shadow);
+  transition: box-shadow 0.3s ease, transform 0.2s ease;
+}
+.glass:hover {
+  box-shadow: var(--card-shadow-hover);
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* ── Sakura accent helpers ── */
+.sakura-text   { color: var(--sakura); }
+.sakura-glow   { box-shadow: var(--sakura-shadow); }
+.sakura-border { border-color: var(--sakura-light) !important; }
+
+/* ── Japanese heading font ── */
+.font-serif,
+.ja-heading {
+  font-family: 'Noto Serif JP', serif;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
+/* ── Scrollbar — thin and elegant ── */
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
   background: var(--border);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--sakura-light);
+}
+
+/* ── Animation utilities ── */
+.animate-fade-in    { animation: fade-in 0.3s ease-out forwards; }
+.animate-sakura     { animation: sakura-float 3s ease-in-out infinite; }
+.animate-bloom      { animation: sakura-bloom 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-glow-pulse { animation: glow-pulse 2s ease-in-out infinite; }
+
+/* ── Focus ring ── */
+:focus-visible {
+  outline: 2px solid var(--sakura);
+  outline-offset: 2px;
   border-radius: 4px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--muted-foreground);
+/* ── Selection color ── */
+::selection {
+  background: var(--sakura-glow);
+  color: var(--foreground);
 }
-

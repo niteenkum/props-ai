@@ -152,141 +152,25 @@ export default function MailPage() {
           </div>
           <div>
             <h1 style={{ fontSize: 23, fontWeight: 800, color: "var(--foreground)", margin: 0, letterSpacing: -0.5 }}>
-              Mail Integration
+              Smart Inbox
             </h1>
             <p style={{ fontSize: 13, color: "var(--muted-foreground)", margin: 0 }}>
-              Link your mailbox to read leads and send outreach directly from PropAI.
+              Read filtered email threads and send professional job outreach.
             </p>
           </div>
         </div>
-
-        {/* Quick stats row */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 18 }}>
-          <StatCard icon={<Inbox size={16} />}      label="Inbox"       value="Smart" accent="#6366f1" isDark={isDark} />
-          <StatCard icon={<Send size={16} />}       label="Outreach"    value="1-Click" accent="#14b8a6" isDark={isDark} />
-          <StatCard icon={<ShieldCheck size={16} />} label="Privacy"    value="Secure" accent="#22c55e" isDark={isDark} />
-        </div>
       </header>
 
-      {/* ── Main grid ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 22, alignItems: "start" }}>
-
-        {/* ── Left — Mail panel ── */}
-        <div style={{
-          ...cardStyle,
-          padding: "22px 22px",
-          borderRadius: 18,
-          boxShadow: isDark
-            ? "0 0 0 1px rgba(255,255,255,0.04), 0 8px 40px rgba(0,0,0,0.5)"
-            : "0 0 0 1px rgba(0,0,0,0.07), 0 4px 24px rgba(0,0,0,0.06)",
-        }}>
-          <MailAccountPanel userEmail={userEmail ?? ""} isDark={isDark} />
-        </div>
-
-        {/* ── Right — Info column ── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-
-          {/* How it works */}
-          <div style={{
-            ...cardStyle,
-            borderRadius: 16,
-            padding: "20px",
-            boxShadow: isDark
-              ? "0 0 0 1px rgba(255,255,255,0.04)"
-              : "0 0 0 1px rgba(0,0,0,0.06), 0 2px 12px rgba(0,0,0,0.04)",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 16 }}>
-              <Zap size={13} style={{ color: "#818cf8" }} />
-              <p style={{
-                fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1.2,
-                color: "var(--muted-foreground)", margin: 0,
-              }}>
-                How it works
-              </p>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <Step n="1" title="Click 'Link Zoho Mail'" desc="You'll be redirected to Zoho's secure authorization page." isDark={isDark} />
-              <Step n="2" title="Grant access" desc="Allow PropAI to read and send emails on your behalf." isDark={isDark} />
-              <Step n="3" title="Smart Inbox" desc="Emails auto-sorted by category — Jobs, People, Updates." isDark={isDark} />
-            </div>
-          </div>
-
-          {/* Inbox categories explainer */}
-          <div style={{
-            ...cardStyle,
-            borderRadius: 16,
-            padding: "20px",
-            boxShadow: isDark
-              ? "0 0 0 1px rgba(255,255,255,0.04)"
-              : "0 0 0 1px rgba(0,0,0,0.06), 0 2px 12px rgba(0,0,0,0.04)",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
-              <Clock size={13} style={{ color: "#818cf8" }} />
-              <p style={{
-                fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1.2,
-                color: "var(--muted-foreground)", margin: 0,
-              }}>
-                Inbox Categories
-              </p>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {[
-                { label: "📥 All Mail",  desc: "Every message in your inbox" },
-                { label: "👁️ Unread",    desc: "Messages you haven't opened yet" },
-                { label: "⭐ Starred",   desc: "Messages you've marked important" },
-                { label: "💼 Jobs",      desc: "Job opportunities & recruiters" },
-                { label: "👥 People",    desc: "Personal & direct messages" },
-                { label: "🏷️ Updates",  desc: "Notifications & newsletters" },
-              ].map(({ label, desc }) => (
-                <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--foreground)", whiteSpace: "nowrap" }}>{label}</span>
-                  <span style={{ fontSize: 11, color: "var(--muted-foreground)", textAlign: "right", lineHeight: 1.4 }}>{desc}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Mail providers */}
-          <div style={{
-            ...cardStyle,
-            borderRadius: 16,
-            padding: "20px",
-            boxShadow: isDark
-              ? "0 0 0 1px rgba(255,255,255,0.04)"
-              : "0 0 0 1px rgba(0,0,0,0.06), 0 2px 12px rgba(0,0,0,0.04)",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
-              <Link2 size={13} style={{ color: "#818cf8" }} />
-              <p style={{
-                fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1.2,
-                color: "var(--muted-foreground)", margin: 0,
-              }}>
-                Mail Providers
-              </p>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-              <ProviderRow name="Zoho Mail" status="available" isDark={isDark} />
-              <ProviderRow name="Gmail"     status="soon"      isDark={isDark} />
-              <ProviderRow name="Outlook"   status="soon"      isDark={isDark} />
-            </div>
-          </div>
-
-          {/* Privacy note */}
-          <div style={{
-            padding: "14px 16px", borderRadius: 14,
-            background: isDark ? "rgba(245,158,11,0.05)" : "#fffbeb",
-            border: `1px solid ${isDark ? "rgba(245,158,11,0.18)" : "#fde68a"}`,
-          }}>
-            <div style={{ display: "flex", gap: 8 }}>
-              <ShieldCheck size={14} style={{ color: isDark ? "#fbbf24" : "#92400e", flexShrink: 0, marginTop: 1 }} />
-              <p style={{ fontSize: 12, color: isDark ? "#fbbf24" : "#92400e", margin: 0, lineHeight: 1.65 }}>
-                <strong>Your tokens never leave your server.</strong>{" "}
-                Access is scoped to read &amp; send only — PropAI cannot delete emails or access attachments.
-              </p>
-            </div>
-          </div>
-
-        </div>
+      {/* ── Wide layout for Mails only ── */}
+      <div style={{
+        ...cardStyle,
+        padding: "22px 22px",
+        borderRadius: 18,
+        boxShadow: isDark
+          ? "0 0 0 1px rgba(255,255,255,0.04), 0 8px 40px rgba(0,0,0,0.5)"
+          : "0 0 0 1px rgba(0,0,0,0.07), 0 4px 24px rgba(0,0,0,0.06)",
+      }}>
+        <MailAccountPanel userEmail={userEmail ?? ""} isDark={isDark} mode="inbox" />
       </div>
     </>
   );

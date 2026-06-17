@@ -2,15 +2,16 @@
 
 /**
  * PropBot AI — Chat message bubble components.
- * Renders user and assistant messages including rich result cards.
+ * Renders user and assistant messages as clean white card blocks with headers
+ * and inline action items.
  */
 
-import React from "react";
+import React, { useState } from "react";
+import { ThumbsUp, ThumbsDown, Copy, Share2, MoreHorizontal, Sparkles, Video, Calendar } from "lucide-react";
 import type { ChatResponse, DraftEmail } from "../../actions/chat-actions";
 import DraftEmailCard from "./DraftEmailCard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
 export interface UIMessage {
   id: string;
   role: "user" | "assistant";
@@ -20,8 +21,20 @@ export interface UIMessage {
   timestamp: Date;
 }
 
-// ─── Email Result Card (received inbox emails) ───────────────────────────────
+// Helper to format timestamp
+function formatTime(date: Date) {
+  try {
+    return new Date(date).toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return "";
+  }
+}
 
+// ─── Email Result Card (received inbox emails) ───────────────────────────────
 function EmailResultCard({ email }: { email: any }) {
   const typeColors: Record<string, string> = {
     interview_call: "#8b5cf6",
@@ -70,7 +83,6 @@ function EmailResultCard({ email }: { email: any }) {
 }
 
 // ─── Sent Email Result Card (outbound outreach) ───────────────────────────────
-
 function SentEmailResultCard({ email }: { email: any }) {
   const providerColors: Record<string, string> = {
     gmail:   "#ea4335",
@@ -78,7 +90,6 @@ function SentEmailResultCard({ email }: { email: any }) {
     outlook: "#0078d4",
   };
   const providerColor = providerColors[email.provider?.toLowerCase()] ?? "#64748b";
-
   const avatarLetter = (email.company || email.toEmail || "?").charAt(0).toUpperCase();
 
   return (
@@ -117,7 +128,6 @@ function SentEmailResultCard({ email }: { email: any }) {
 }
 
 // ─── Job Result Card ──────────────────────────────────────────────────────────
-
 function JobResultCard({ job }: { job: any }) {
   const statusColors: Record<string, string> = {
     Draft: "#64748b", Generated: "#8b5cf6", Sent: "#3b82f6",
@@ -141,7 +151,6 @@ function JobResultCard({ job }: { job: any }) {
 }
 
 // ─── Stats Card ───────────────────────────────────────────────────────────────
-
 function StatsResultCard({ stats }: { stats: any }) {
   return (
     <div style={styles.statsGrid}>
@@ -161,6 +170,7 @@ function StatsResultCard({ stats }: { stats: any }) {
   );
 }
 
+// ─── Scheduled Meetings / Calls (Redesigned Date-Badge Style) ─────────────────
 function CallResultCard({ call }: { call: any }) {
   const overdue = new Date(call.scheduledAt).getTime() < Date.now() && call.status === "pending";
   const done = call.status === "done";
@@ -169,59 +179,65 @@ function CallResultCard({ call }: { call: any }) {
   const accentColor = done ? "#22c55e" : cancelled ? "#64748b" : overdue ? "#f59e0b" : "#8b5cf6";
   const statusLabel = done ? "Done" : cancelled ? "Cancelled" : overdue ? "Overdue" : "Upcoming";
 
-  function fmtCallDateTime(iso: string) {
-    try {
-      return new Date(iso).toLocaleString("en-US", {
-        weekday: "short", month: "short", day: "numeric",
-        hour: "2-digit", minute: "2-digit", hour12: true,
-      });
-    } catch {
-      return iso;
-    }
-  }
+  let month = "JUN";
+  let day = "17";
+  try {
+    const d = new Date(call.scheduledAt);
+    month = d.toLocaleString("en-US", { month: "short" }).toUpperCase();
+    day = d.getDate().toString();
+  } catch (e) {}
 
   return (
-    <div style={{ ...styles.callCard, borderLeft: `3px solid ${accentColor}` }}>
-      <div style={styles.callHeader}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={styles.callTitle}>{call.title}</div>
-          {call.job && (
-            <div style={styles.callJobInfo}>
-              {call.job.role} at <strong>{call.job.company}</strong>
-            </div>
+    <div style={styles.callCard}>
+      {/* Date badge left column */}
+      <div style={styles.dateBadge}>
+        <span style={styles.dateBadgeMonth}>{month}</span>
+        <span style={styles.dateBadgeDay}>{day}</span>
+      </div>
+
+      {/* Details right column */}
+      <div style={styles.callContent}>
+        <div style={styles.callHeaderRow}>
+          <span style={styles.callTitle}>{call.title}</span>
+          <span style={{ ...styles.callStatusPill, background: `${accentColor}18`, color: accentColor, border: `1px solid ${accentColor}30` }}>
+            {statusLabel}
+          </span>
+        </div>
+
+        {call.job && (
+          <div style={styles.callJobInfo}>
+            {call.job.role} at <span style={{ fontWeight: 600 }}>{call.job.company}</span>
+          </div>
+        )}
+
+        {call.notes && <p style={styles.callNotes}>{call.notes}</p>}
+
+        <div style={styles.callFooterRow}>
+          <span style={styles.callDuration}>⏳ {call.durationMin} mins duration</span>
+          {call.meetLink && call.status === "pending" && (
+            <a
+              href={call.meetLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={styles.meetBtn}
+            >
+              <Video size={13} style={{ marginRight: 4 }} />
+              Join Meet
+            </a>
           )}
         </div>
-        <div style={{ ...styles.callStatusPill, background: `${accentColor}22`, color: accentColor, border: `1px solid ${accentColor}44` }}>
-          {statusLabel}
-        </div>
       </div>
-      
-      <div style={styles.callTime}>
-        <span>📅 {fmtCallDateTime(call.scheduledAt)} ({call.durationMin} mins)</span>
-      </div>
-
-      {call.notes && <div style={styles.callNotes}>{call.notes}</div>}
-
-      {call.meetLink && call.status === "pending" && (
-        <a
-          href={call.meetLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={styles.meetBtn}
-        >
-          📹 Join Google Meet
-        </a>
-      )}
     </div>
   );
 }
 
 // ─── Typing Indicator ────────────────────────────────────────────────────────
-
 export function TypingIndicator() {
   return (
     <div style={styles.typingRow}>
-      <div style={styles.botAvatarSm}>🤖</div>
+      <div style={styles.botAvatarSm}>
+        <Sparkles size={14} color="#7c3aed" />
+      </div>
       <div style={styles.typingBubble}>
         <span style={{ ...styles.typingDot, animationDelay: "0ms" }} />
         <span style={{ ...styles.typingDot, animationDelay: "150ms" }} />
@@ -231,31 +247,64 @@ export function TypingIndicator() {
   );
 }
 
-// ─── Main Message Bubble ──────────────────────────────────────────────────────
-
+// ─── Main Message Bubble (Ciphy White Card Layout) ───────────────────────────
 interface MessageBubbleProps {
   msg: UIMessage;
+  userName?: string;
   onSendDraft: (draft: DraftEmail) => Promise<void>;
 }
 
-export default function MessageBubble({ msg, onSendDraft }: MessageBubbleProps) {
+export default function MessageBubble({ msg, userName = "Niteen Kumar", onSendDraft }: MessageBubbleProps) {
   const isUser = msg.role === "user";
+  const initials = userName
+    .split(" ")
+    .map(n => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "PA";
+
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(msg.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
-    <div style={{ ...styles.msgRow, justifyContent: isUser ? "flex-end" : "flex-start" }}>
-      {!isUser && <div style={styles.botAvatarSm}>🤖</div>}
-
-      <div style={{ maxWidth: "75%", display: "flex", flexDirection: "column", gap: 10 }}>
-        {/* Text bubble */}
-        <div style={isUser ? styles.userBubble : styles.botBubble}>
-          {msg.content}
+    <div style={styles.cardBubble}>
+      {/* Header Block: Avatar + Name + Timestamp + Action Menu */}
+      <div style={styles.cardHeader}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {isUser ? (
+            <div style={styles.userAvatarBadge}>
+              {initials}
+            </div>
+          ) : (
+            <div style={styles.botAvatarBadge}>
+              <Sparkles size={14} color="#FFFFFF" />
+            </div>
+          )}
+          
+          <div>
+            <span style={styles.senderName}>{isUser ? userName : "Multi-Prompt AI"}</span>
+            <span style={styles.timestamp}>{formatTime(msg.timestamp)}</span>
+          </div>
         </div>
 
-        {/* Rich result cards */}
+        <button style={styles.moreBtn} title="Options">
+          <MoreHorizontal size={15} />
+        </button>
+      </div>
+
+      {/* Body Content */}
+      <div style={styles.cardBody}>
+        <div style={styles.textBody}>{msg.content}</div>
+
+        {/* Embedded Result Cards */}
         {msg.actionType === "emails" && Array.isArray(msg.actionData) ? (
           <div style={styles.cardsList}>
             {(msg.actionData as any[]).map((e, i) =>
-              // Detect sent emails by the presence of 'toEmail' (outbound) vs 'fromEmail'/'from' (inbound)
               e.toEmail && !e.fromName && !e.from
                 ? <SentEmailResultCard key={i} email={e} />
                 : <EmailResultCard key={i} email={e} />
@@ -284,87 +333,150 @@ export default function MessageBubble({ msg, onSendDraft }: MessageBubbleProps) 
         ) : null}
       </div>
 
-      {isUser && (
-        <div style={styles.userAvatarSm}>✨</div>
-      )}
+      {/* Card Toolbar / Footer Action Icons */}
+      <div style={styles.cardFooter}>
+        <div style={{ display: "flex", gap: 4 }}>
+          <button style={styles.toolbarIconBtn} title="Like">
+            <ThumbsUp size={13} />
+          </button>
+          <button style={styles.toolbarIconBtn} title="Dislike">
+            <ThumbsDown size={13} />
+          </button>
+        </div>
+
+        <div style={{ display: "flex", gap: 4 }}>
+          <button style={styles.toolbarIconBtn} onClick={handleCopy} title={copied ? "Copied!" : "Copy text"}>
+            {copied ? <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 600 }}>Copied!</span> : <Copy size={13} />}
+          </button>
+          <button style={styles.toolbarIconBtn} title="Share">
+            <Share2 size={13} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-
 const styles: Record<string, React.CSSProperties> = {
-  msgRow: {
+  cardBubble: {
+    background: "#FFFFFF",
+    border: "1px solid var(--border)",
+    borderRadius: 14,
+    padding: "16px",
     display: "flex",
-    alignItems: "flex-start",
-    gap: 10,
+    flexDirection: "column",
+    gap: 12,
+    boxShadow: "0 2px 12px rgba(0, 0, 0, 0.02)",
     width: "100%",
   },
-  botAvatarSm: {
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  userAvatarBadge: {
     width: 32,
     height: 32,
     borderRadius: "50%",
-    background: "linear-gradient(135deg, rgba(124,58,237,0.2), rgba(79,70,229,0.15))",
-    border: "1px solid rgba(124,58,237,0.25)",
+    background: "linear-gradient(135deg, #a78bfa, #7c3aed)",
+    color: "#FFFFFF",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 15,
-    flexShrink: 0,
+    fontSize: 12,
+    fontWeight: 700,
   },
-  userAvatarSm: {
+  botAvatarBadge: {
     width: 32,
     height: 32,
     borderRadius: "50%",
-    background: "rgba(124,58,237,0.12)",
-    border: "1px solid rgba(124,58,237,0.2)",
+    background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 14,
-    flexShrink: 0,
   },
-  botBubble: {
-    background: "var(--card)",
-    border: "1px solid var(--border)",
-    borderRadius: "6px 18px 18px 18px",
-    padding: "12px 16px",
-    fontSize: 14,
+  senderName: {
+    fontSize: 13.5,
+    fontWeight: 700,
+    color: "var(--foreground)",
+    marginRight: 8,
+  },
+  timestamp: {
+    fontSize: 10.5,
+    color: "var(--muted-foreground)",
+  },
+  moreBtn: {
+    background: "transparent",
+    border: "none",
+    color: "var(--muted-foreground)",
+    cursor: "pointer",
+    padding: 4,
+    borderRadius: 4,
+    display: "flex",
+    alignItems: "center",
+  },
+  cardBody: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+    paddingLeft: 2,
+  },
+  textBody: {
+    fontSize: 13.5,
     color: "var(--foreground)",
     lineHeight: 1.6,
     whiteSpace: "pre-wrap",
     wordBreak: "break-word",
-    boxShadow: "var(--card-shadow)",
   },
-  userBubble: {
-    background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
-    borderRadius: "18px 6px 18px 18px",
-    padding: "12px 16px",
-    fontSize: 14,
-    color: "#fff",
-    lineHeight: 1.6,
-    whiteSpace: "pre-wrap",
-    wordBreak: "break-word",
-    boxShadow: "0 4px 20px rgba(124,58,237,0.35)",
+  cardFooter: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderTop: "1px solid var(--border)",
+    paddingTop: 8,
+    marginTop: 4,
+  },
+  toolbarIconBtn: {
+    background: "transparent",
+    border: "none",
+    color: "var(--muted-foreground)",
+    cursor: "pointer",
+    padding: 6,
+    borderRadius: 6,
+    display: "flex",
+    alignItems: "center",
+    transition: "background 0.15s, color 0.15s",
   },
   typingRow: {
     display: "flex",
     alignItems: "center",
     gap: 10,
   },
-  typingBubble: {
-    background: "var(--card)",
-    border: "1px solid var(--border)",
-    borderRadius: "6px 18px 18px 18px",
-    padding: "14px 20px",
+  botAvatarSm: {
+    width: 30,
+    height: 30,
+    borderRadius: "50%",
+    background: "rgba(124, 58, 237, 0.08)",
     display: "flex",
-    gap: 6,
     alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  typingBubble: {
+    background: "#FFFFFF",
+    border: "1px solid var(--border)",
+    borderRadius: "6px 14px 14px 14px",
+    padding: "10px 16px",
+    display: "flex",
+    gap: 5,
+    alignItems: "center",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.01)",
   },
   typingDot: {
     display: "inline-block",
-    width: 7,
-    height: 7,
+    width: 6,
+    height: 6,
     borderRadius: "50%",
     background: "#7c3aed",
     animation: "propbot-dot 1.2s ease-in-out infinite",
@@ -372,11 +484,12 @@ const styles: Record<string, React.CSSProperties> = {
   cardsList: {
     display: "flex",
     flexDirection: "column",
-    gap: 8,
+    gap: 10,
+    width: "100%",
   },
   // Email card
   emailCard: {
-    background: "var(--card)",
+    background: "#FFFFFF",
     border: "1px solid var(--border)",
     borderRadius: 12,
     padding: "12px 14px",
@@ -390,20 +503,20 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 10,
   },
   emailAvatar: {
-    width: 34,
-    height: 34,
+    width: 32,
+    height: 32,
     borderRadius: "50%",
     background: "linear-gradient(135deg, #7c3aed, #3b82f6)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 700,
     color: "#fff",
     flexShrink: 0,
   },
   emailFrom: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: 600,
     color: "var(--foreground)",
     overflow: "hidden",
@@ -411,14 +524,14 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace: "nowrap",
   },
   emailAddr: {
-    fontSize: 11,
+    fontSize: 10.5,
     color: "var(--muted-foreground)",
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
   emailTypePill: {
-    fontSize: 9.5,
+    fontSize: 9,
     fontWeight: 700,
     padding: "2px 8px",
     borderRadius: 20,
@@ -429,7 +542,7 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace: "nowrap" as const,
   },
   emailSubject: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: 600,
     color: "#7c3aed",
     overflow: "hidden",
@@ -437,7 +550,7 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace: "nowrap",
   },
   emailSnippet: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: "var(--muted-foreground)",
     lineHeight: 1.5,
     display: "-webkit-box",
@@ -457,22 +570,22 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   emailDate: {
-    fontSize: 11,
+    fontSize: 10.5,
     color: "var(--muted-foreground)",
     flex: 1,
   },
   unreadPill: {
-    fontSize: 9.5,
+    fontSize: 9,
     fontWeight: 700,
-    background: "rgba(124,58,237,0.15)",
+    background: "rgba(124,58,237,0.1)",
     color: "#7c3aed",
-    padding: "2px 7px",
+    padding: "2px 6px",
     borderRadius: 20,
-    border: "1px solid rgba(124,58,237,0.25)",
+    border: "1px solid rgba(124,58,237,0.2)",
   },
   // Job card
   jobCard: {
-    background: "var(--card)",
+    background: "#FFFFFF",
     border: "1px solid var(--border)",
     borderRadius: 12,
     padding: "12px 14px",
@@ -486,23 +599,23 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     gap: 8,
   },
-  jobRole: { fontSize: 13, fontWeight: 600, color: "var(--foreground)" },
-  jobCompany: { fontSize: 12, color: "var(--muted-foreground)" },
+  jobRole: { fontSize: 12.5, fontWeight: 600, color: "var(--foreground)" },
+  jobCompany: { fontSize: 11.5, color: "var(--muted-foreground)" },
   matchBadge: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: 700,
     background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
     color: "#fff",
-    padding: "3px 9px",
+    padding: "2px 8px",
     borderRadius: 20,
     flexShrink: 0,
   },
-  jobEmail: { fontSize: 11, color: "var(--muted-foreground)" },
+  jobEmail: { fontSize: 10.5, color: "var(--muted-foreground)" },
   statusPill: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: 700,
     color: "#fff",
-    padding: "2px 9px",
+    padding: "2px 8px",
     borderRadius: 20,
     textTransform: "uppercase" as const,
     letterSpacing: "0.05em",
@@ -513,9 +626,10 @@ const styles: Record<string, React.CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gap: 10,
+    width: "100%",
   },
   statCell: {
-    background: "var(--card)",
+    background: "#FFFFFF",
     border: "1px solid var(--border)",
     borderRadius: 12,
     padding: "14px",
@@ -524,74 +638,112 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 4,
   },
-  statEmoji: { fontSize: 22 },
-  statValue: { fontSize: 22, fontWeight: 700, color: "#7c3aed" },
-  statLabel: { fontSize: 11, color: "var(--muted-foreground)", textAlign: "center" as const },
+  statEmoji: { fontSize: 20 },
+  statValue: { fontSize: 20, fontWeight: 700, color: "#7c3aed" },
+  statLabel: { fontSize: 10.5, color: "var(--muted-foreground)", textAlign: "center" as const },
+  
+  // Call / Meeting card redesigned with left date badge
   callCard: {
-    background: "var(--card)",
+    background: "#FFFFFF",
     border: "1px solid var(--border)",
     borderRadius: 12,
-    padding: "12px 14px",
+    padding: "14px 16px",
+    display: "flex",
+    gap: 16,
+    alignItems: "flex-start",
+    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.01)",
+    width: "100%",
+  },
+  dateBadge: {
+    width: 48,
+    height: 52,
+    borderRadius: 10,
+    background: "#F43F5E",
     display: "flex",
     flexDirection: "column",
-    gap: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    boxShadow: "0 2px 8px rgba(244, 63, 94, 0.25)",
   },
-  callHeader: {
+  dateBadgeMonth: {
+    fontSize: 9,
+    fontWeight: 700,
+    color: "#FFFFFF",
+    letterSpacing: "0.05em",
+    opacity: 0.9,
+  },
+  dateBadgeDay: {
+    fontSize: 18,
+    fontWeight: 800,
+    color: "#FFFFFF",
+    lineHeight: 1,
+    marginTop: 2,
+  },
+  callContent: {
+    flex: 1,
+    minWidth: 0,
     display: "flex",
-    alignItems: "flex-start",
+    flexDirection: "column",
+    gap: 5,
+  },
+  callHeaderRow: {
+    display: "flex",
+    alignItems: "center",
     justifyContent: "space-between",
     gap: 8,
   },
   callTitle: {
     fontSize: 13.5,
-    fontWeight: 600,
+    fontWeight: 700,
     color: "var(--foreground)",
-    lineHeight: 1.35,
+    lineHeight: 1.3,
+  },
+  callStatusPill: {
+    fontSize: 9,
+    fontWeight: 700,
+    padding: "1px 8px",
+    borderRadius: 12,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.04em",
+    flexShrink: 0,
   },
   callJobInfo: {
     fontSize: 11.5,
     color: "var(--muted-foreground)",
-    marginTop: 2,
-  },
-  callStatusPill: {
-    fontSize: 9.5,
-    fontWeight: 700,
-    padding: "2px 8px",
-    borderRadius: 20,
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.05em",
-    flexShrink: 0,
-  },
-  callTime: {
-    fontSize: 11.5,
-    color: "#7c3aed",
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
   },
   callNotes: {
-    fontSize: 11,
+    fontSize: 11.5,
     color: "var(--muted-foreground)",
     lineHeight: 1.4,
-    background: "var(--input)",
-    padding: "6px 8px",
-    borderRadius: 6,
-    whiteSpace: "pre-wrap" as const,
+    background: "#F8FAFC",
+    padding: "8px 10px",
+    borderRadius: 8,
+    margin: "4px 0",
+    border: "1px solid var(--border)",
+  },
+  callFooterRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 2,
+  },
+  callDuration: {
+    fontSize: 11,
+    color: "var(--muted-foreground)",
   },
   meetBtn: {
-    background: "linear-gradient(135deg, #059669, #10b981)",
-    border: "none",
+    background: "#7c3aed",
     borderRadius: 8,
-    padding: "8px 12px",
-    color: "#fff",
-    fontSize: 12,
+    padding: "5px 12px",
+    color: "#ffffff",
+    fontSize: 11,
     fontWeight: 600,
     cursor: "pointer",
-    textAlign: "center" as const,
+    display: "inline-flex",
+    alignItems: "center",
     textDecoration: "none",
-    display: "inline-block",
-    boxShadow: "0 4px 12px rgba(16,185,129,0.25)",
-    transition: "opacity 0.2s",
-    marginTop: 4,
+    boxShadow: "0 2px 8px rgba(124,58,237,0.2)",
+    transition: "background 0.15s",
   },
 };
