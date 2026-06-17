@@ -122,7 +122,7 @@ export const analyzeJobPost = (text: string, profile: UserProfile): AIAnalysisRe
   // Fetch a project from the profile to highlight in the cover letter/proposal
   const primaryProject = profile.projects.length > 0 
     ? profile.projects[0] 
-    : { name: "PropAI Hub", description: "Built customized React frameworks with dynamic components." };
+    : { name: "ThePitchly Hub", description: "Built customized React frameworks with dynamic components." };
 
   // Custom Cold Email Template
   const coldEmail = `Subject: ${role} Position - Product-Minded Outreach for ${company}

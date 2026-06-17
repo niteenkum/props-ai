@@ -43,7 +43,7 @@ export default function PendingPage() {
                   <Sparkles style={{ width: 17, height: 17, color: "var(--primary-foreground)" }} />
                 </div>
                 <h2 style={{ fontSize: 17, fontWeight: 700, color: "var(--foreground)", margin: 0 }}>
-                  Prop<span style={{ color: "var(--muted-foreground)" }}>AI</span>
+                  ThePitchly
                 </h2>
                 <p style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: 2, color: "var(--muted-foreground)", opacity: 0.7, fontWeight: 600, marginTop: 2 }}>Outreach Platform</p>
 
@@ -188,7 +188,7 @@ export default function PendingPage() {
                 <Mail style={{ width: 14, height: 14, color: theme === "dark" ? "#38bdf8" : "#0369a1", flexShrink: 0, marginTop: 1 }} />
                 <p style={{ fontSize: 12, color: theme === "dark" ? "#38bdf8" : "#0369a1", margin: 0, lineHeight: 1.6 }}>
                   Check your spam folder if you don&apos;t see the confirmation email. Add{" "}
-                  <strong>{process.env.NEXT_PUBLIC_EMAIL_FROM || "noreply@propai.com"}</strong>{" "}
+                  <strong>{process.env.NEXT_PUBLIC_EMAIL_FROM || "noreply@thepitchly.com"}</strong>{" "}
                   to your contacts to ensure delivery.
                 </p>
               </div>

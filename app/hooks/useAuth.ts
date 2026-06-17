@@ -63,7 +63,7 @@ export function useAuth({ requiredStatus }: UseAuthOptions = {}): UseAuthReturn 
     localStorage.removeItem("proposalizer_user_status");
     localStorage.removeItem("proposalizer_user_name");
     // Clear middleware cookie too
-    document.cookie = "props-ai-session=; path=/; max-age=0; SameSite=Lax";
+    document.cookie = "thepitchly-session=; path=/; max-age=0; SameSite=Lax";
     router.push("/");
   };
 

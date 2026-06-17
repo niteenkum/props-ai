@@ -1,6 +1,6 @@
 // ─── GET /api/mail/zoho/connect ───────────────────────────────────────────
 // Redirects the user to Zoho's OAuth consent screen.
-// The user's PropAI email is encoded in `state` so the callback can link
+// The user's ThePitchly email is encoded in `state` so the callback can link
 // the new token to the right account.
 
 import { NextRequest, NextResponse } from "next/server";
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Encode the PropAI user's email in state so the callback knows who to link
+  // Encode the ThePitchly user's email in state so the callback knows who to link
   const userEmail = req.nextUrl.searchParams.get("email") || "";
   const state     = Buffer.from(JSON.stringify({ email: userEmail })).toString("base64url");
 

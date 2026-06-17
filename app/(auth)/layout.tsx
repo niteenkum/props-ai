@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "PropAI — Sign In",
-  description: "Sign in or create your PropAI account.",
+  title: "ThePitchly — Sign In",
+  description: "Sign in or create your ThePitchly account.",
 };
 
 export default function AuthLayout({

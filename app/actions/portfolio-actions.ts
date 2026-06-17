@@ -129,7 +129,7 @@ async function fetchPage(url: string): Promise<{ url: string; text: string; titl
   try {
     const res = await fetch(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; PortfolioScanner/1.0; +https://props-ai.app)",
+        "User-Agent": "Mozilla/5.0 (compatible; PortfolioScanner/1.0; +https://thepitchly.app)",
         Accept: "text/html,application/xhtml+xml",
       },
       signal: AbortSignal.timeout(10000),
@@ -272,7 +272,7 @@ export async function scanPortfolioAction(
   allPages.forEach((pg) => pg.links.external.forEach((l) => allExternalLinks.add(l)));
 
   // Also collect internal links from sub-pages (one more level for individual project pages)
-  // For individual project detail pages (e.g. /projects/props-ai)
+  // For individual project detail pages (e.g. /projects/thepitchly)
   const alreadyCrawled = new Set(pagesScanned);
   const level2Candidates: string[] = [];
   successfulPages.forEach((pg) => {

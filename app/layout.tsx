@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PropAI — AI Proposal & Outreach Organizer",
+  title: "ThePitchly — AI Proposal & Outreach Organizer",
   description: "Deconstruct job listings instantly and generate hyper-tailored cold emails, freelance pitches, and proposals utilizing customized AI models.",
 };
 

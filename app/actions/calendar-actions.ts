@@ -119,13 +119,13 @@ export async function bookCallAction(
       sendUpdates: attendeeEmail ? "all" : "none",
       event: {
         summary:     title,
-        description: notes || `PropAI scheduled call for: ${title}`,
+        description: notes || `ThePitchly scheduled call for: ${title}`,
         start: { dateTime: startDateTime, timeZone },
         end:   { dateTime: endDateTime,   timeZone },
         attendees:    attendeeEmail ? [{ email: attendeeEmail }] : [],
         conferenceData: {
           createRequest: {
-            requestId:             `propai-${jobId}-${Date.now()}`,
+            requestId:             `thepitchly-${jobId}-${Date.now()}`,
             conferenceSolutionKey: { type: "hangoutsMeet" },
           },
         },

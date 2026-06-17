@@ -45,11 +45,11 @@ const DEFAULT_PROFILE: UserProfile = {
   ],
   projects: [
     {
-      name: "PropAI (Proposal Organizer)",
+      name: "ThePitchly (Proposal Organizer)",
       tech: ["Next.js", "React 19", "Tailwind CSS v4", "Radix UI"],
       description: "Architected a premium midnight-themed job outreach assistant with dynamic parsing capabilities.",
       links: [
-        { label: "Web", url: "https://propsai.dev" },
+        { label: "Web", url: "https://thepitchly.dev" },
         { label: "GitHub", url: "https://github.com/niteenkumar/props-ai" }
       ]
     },

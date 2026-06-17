@@ -117,7 +117,7 @@ export default function GeneralSettingsPage() {
   // App preferences state
   const [matchThreshold, setMatchThreshold] = useState<number>(55);
   const [autoScanWa, setAutoScanWa]         = useState<boolean>(true);
-  const [chatbotGreeting, setChatbotGreeting] = useState<string>("Hi! I'm PropBot. How can I help you today?");
+  const [chatbotGreeting, setChatbotGreeting] = useState<string>("Hi! I'm The Pitchly AI. How can I help you today?");
   const [chatbotTone, setChatbotTone]         = useState<string>("Professional");
   const [prefSaveSuccess, setPrefSaveSuccess] = useState(false);
 
@@ -313,7 +313,7 @@ export default function GeneralSettingsPage() {
               
               {/* Mail Accounts Integrations */}
               <div className="settings-bento-card">
-                <SectionTitle icon={<Mail size={16} />} title="Email &amp; Calendar Credentials" desc="Authorize PropAI to check and send messages via Zoho Mail or Gmail." />
+                <SectionTitle icon={<Mail size={16} />} title="Email &amp; Calendar Credentials" desc="Authorize ThePitchly to check and send messages via Zoho Mail or Gmail." />
                 <MailAccountPanel userEmail={userEmail ?? ""} isDark={isDark} mode="connections" />
               </div>
 
@@ -408,7 +408,7 @@ export default function GeneralSettingsPage() {
                     {[
                       { step: "1", text: "Go to Mail or WhatsApp to connect your active communication channels." },
                       { step: "2", text: "Authenticate securely via OAuth (Google/Zoho) or QR scan (WhatsApp)." },
-                      { step: "3", text: "PropAI parses incoming leads and aggregates follow-up items dynamically." }
+                      { step: "3", text: "ThePitchly parses incoming leads and aggregates follow-up items dynamically." }
                     ].map(item => (
                       <div key={item.step} style={{ display: "flex", gap: 10 }}>
                         <div style={{
@@ -433,7 +433,7 @@ export default function GeneralSettingsPage() {
                       </span>
                     </div>
                     <p style={{ fontSize: 12.5, color: "var(--muted-foreground)", margin: 0, lineHeight: 1.5 }}>
-                      Creds and session refresh tokens are encrypted on database records. Scopes are requested for reading and sending messages only — PropAI will never index private details or delete threads.
+                      Creds and session refresh tokens are encrypted on database records. Scopes are requested for reading and sending messages only — ThePitchly will never index private details or delete threads.
                     </p>
                   </div>
                   <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10, marginTop: 10, fontSize: 11, color: "var(--muted-foreground)" }}>
@@ -719,7 +719,7 @@ export default function GeneralSettingsPage() {
 
               {/* Bot greeting customizer */}
               <div className="settings-bento-card">
-                <SectionTitle icon={<Sparkles size={16} />} title="PropBot AI Assistant preferences" desc="Customize chatbot greetings and personality responses." />
+                <SectionTitle icon={<Sparkles size={16} />} title="The Pitchly AI preferences" desc="Customize chatbot greetings and personality responses." />
                 
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   
@@ -730,7 +730,7 @@ export default function GeneralSettingsPage() {
                       type="text"
                       value={chatbotGreeting}
                       onChange={e => setChatbotGreeting(e.target.value)}
-                      placeholder="Hi! I'm PropBot. How can I help you today?"
+                      placeholder="Hi! I'm The Pitchly AI. How can I help you today?"
                       className="settings-input"
                     />
                   </div>

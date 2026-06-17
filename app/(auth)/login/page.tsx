@@ -56,7 +56,7 @@ export default function LoginPage() {
           color: var(--foreground); font-size: 14px; outline: none; transition: all 0.2s;
           font-family: inherit; -webkit-appearance: none;
         }
-        .lp-input:focus { border-color: var(--foreground); background: var(--card); box-shadow: 0 0 0 3px var(--border); }
+        .lp-input:focus { border-color: var(--ring); background: var(--card); box-shadow: 0 0 0 3px rgba(0,0,0,0.08); }
         .lp-input::placeholder { color: var(--muted-foreground); opacity: 0.5; }
         .lp-input.pr { padding-right: 40px; }
         .lp-pwtoggle {
@@ -70,7 +70,7 @@ export default function LoginPage() {
           cursor: pointer; display: flex; align-items: center; justify-content: center;
           gap: 7px; transition: all 0.2s; font-family: inherit; -webkit-appearance: none;
         }
-        .lp-btn:hover:not(:disabled) { opacity: 0.85; }
+        .lp-btn:hover:not(:disabled) { background: var(--primary-hover); }
         .lp-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .lp-switch { text-align: center; margin-top: 20px; font-size: 13px; color: var(--muted-foreground); }
         .lp-switch button {
@@ -126,10 +126,7 @@ export default function LoginPage() {
         <div className="lp-card">
           {/* Brand */}
           <div className="lp-brand">
-            <div className="lp-logo">
-              <Sparkles style={{ width: 20, height: 20, color: "var(--primary-foreground)" }} />
-            </div>
-            <h1>Prop<span style={{ color: "var(--muted-foreground)" }}>AI</span></h1>
+            <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: -0.5 }}>The Pitchly</h1>
             <p>Sign in to your workspace</p>
           </div>
 

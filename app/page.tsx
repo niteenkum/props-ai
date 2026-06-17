@@ -48,11 +48,15 @@ export default function LandingPage() {
         <div style={{ maxWidth: 1140, margin: "0 auto", padding: "14px 32px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           {/* Logo */}
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Sparkles style={{ width: 16, height: 16, color: "var(--primary-foreground)" }} />
-            </div>
-            <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.5 }}>
-              Prop<span style={{ color: "var(--muted-foreground)" }}>AI</span>
+            <span
+              style={{
+                fontSize: 19,
+                fontWeight: 800,
+                color: "var(--foreground)",
+                letterSpacing: -0.5,
+              }}
+            >
+              The Pitchly
             </span>
           </div>
 
@@ -163,7 +167,7 @@ export default function LandingPage() {
           </h1>
 
           <p style={{ fontSize: 17, lineHeight: 1.75, color: "var(--muted-foreground)", maxWidth: 500, margin: "0 auto 36px" }}>
-            Paste any job post. PropAI parses it, scores your match, and generates
+            Paste any job post. ThePitchly parses it, scores your match, and generates
             tailored cold emails and proposals — instantly.
           </p>
 
@@ -213,7 +217,7 @@ export default function LandingPage() {
             Everything you need to <span style={{ color: "var(--muted-foreground)" }}>win outreach</span>
           </h2>
           <p style={{ fontSize: 15, color: "var(--muted-foreground)", maxWidth: 440, margin: "0 auto" }}>
-            From parsing job posts to generating personalized proposals — PropAI handles the heavy lifting.
+            From parsing job posts to generating personalized proposals — ThePitchly handles the heavy lifting.
           </p>
         </div>
 
@@ -251,7 +255,7 @@ export default function LandingPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             {[
               { num: "01", title: "Paste the job post",     desc: "Drop any job listing — LinkedIn, Upwork, email, anywhere." },
-              { num: "02", title: "AI analyzes & scores",   desc: "PropAI extracts role, company, requirements and scores your match in seconds." },
+              { num: "02", title: "AI analyzes & scores",   desc: "ThePitchly extracts role, company, requirements and scores your match in seconds." },
               { num: "03", title: "Copy & send outreach",   desc: "Get a cold email, Upwork proposal, LinkedIn note, and cover letter — all personalized." },
             ].map(({ num, title, desc }) => (
               <div key={num} style={{ display: "flex", gap: 20, padding: "24px 28px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14 }}>
@@ -273,7 +277,7 @@ export default function LandingPage() {
             Ready to land your next gig?
           </h2>
           <p style={{ fontSize: 15, color: "var(--muted-foreground)", marginBottom: 28, maxWidth: 380, margin: "0 auto 28px" }}>
-            Join thousands of professionals using PropAI to craft winning proposals.
+            Join thousands of professionals using ThePitchly to craft winning proposals.
           </p>
           <button
             onClick={() => router.push("/signup")}
@@ -289,12 +293,9 @@ export default function LandingPage() {
       {/* ── FOOTER ─────────────────────────────────────────────────────── */}
       <footer style={{ borderTop: "1px solid var(--border)", padding: "28px 24px", textAlign: "center" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
-          <div style={{ width: 22, height: 22, borderRadius: 6, background: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Sparkles style={{ width: 11, height: 11, color: "var(--primary-foreground)" }} />
-          </div>
-          <span style={{ fontSize: 13, fontWeight: 700 }}>Prop<span style={{ color: "var(--muted-foreground)" }}>AI</span></span>
+          <span style={{ fontSize: 14, fontWeight: 800 }}>ThePitchly</span>
         </div>
-        <p style={{ fontSize: 11, color: "var(--muted-foreground)", opacity: 0.6, marginTop: 8 }}>© 2026 PropAI. Built for professionals.</p>
+        <p style={{ fontSize: 11, color: "var(--muted-foreground)", opacity: 0.6, marginTop: 8 }}>© 2026 ThePitchly. Built for professionals.</p>
       </footer>
     </div>
   );

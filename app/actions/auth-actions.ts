@@ -46,7 +46,7 @@ export async function sendSignupOtpAction(email: string, name: string): Promise<
     const emailResult = await sendEmail({
       to: email,
       toName: name,
-      subject: "Your PropAI verification code",
+      subject: "Your ThePitchly verification code",
       htmlContent: html,
     });
 

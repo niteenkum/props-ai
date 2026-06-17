@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PropAI Dashboard Chatbot — Floating AI Assistant
+ * ThePitchly Dashboard Chatbot — Floating AI Assistant
  *
  * A premium glassmorphic chat bubble that lets users interact with
  * their Gmail, job applications, and AI assistant in one place.
@@ -351,7 +351,7 @@ export default function DashboardChatBot() {
     {
       id: "welcome",
       role: "assistant",
-      content: "Hey! 👋 I'm PropBot, your AI assistant. I can search your Gmail, show your job stats, draft emails, and more. What can I help you with?",
+      content: "Hey! 👋 I'm The Pitchly AI, your AI assistant. I can search your Gmail, show your job stats, draft emails, and more. What can I help you with?",
       actionType: "text",
       timestamp: new Date(),
     },
@@ -459,7 +459,7 @@ export default function DashboardChatBot() {
         id="propbot-chat-trigger"
         onClick={() => setOpen((o) => !o)}
         style={styles.triggerBtn}
-        aria-label="Open PropBot AI Assistant"
+        aria-label="Open The Pitchly AI Assistant"
       >
         <span style={{ fontSize: 22, lineHeight: 1 }}>{open ? "✕" : "🤖"}</span>
         {!open && <div style={styles.pulseBadge} />}
@@ -467,13 +467,13 @@ export default function DashboardChatBot() {
 
       {/* Chat Panel */}
       {open && (
-        <div style={styles.panel} role="dialog" aria-label="PropBot AI Chat">
+        <div style={styles.panel} role="dialog" aria-label="The Pitchly AI Chat">
           {/* Header */}
           <div style={styles.header}>
             <div style={styles.headerLeft}>
               <div style={styles.headerAvatar}>🤖</div>
               <div>
-                <div style={styles.headerTitle}>PropBot</div>
+                <div style={styles.headerTitle}>The Pitchly AI</div>
                 <div style={styles.headerSub}>AI Assistant · Powered by Gemini</div>
               </div>
             </div>

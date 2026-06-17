@@ -1,7 +1,7 @@
 {
-  "name": "props-ai-wa-service",
+  "name": "thepitchly-wa-service",
   "version": "1.0.0",
-  "description": "WhatsApp bridge service for Props AI using Baileys",
+  "description": "WhatsApp bridge service for ThePitchly using Baileys",
   "main": "index.js",
   "type": "module",
   "scripts": {

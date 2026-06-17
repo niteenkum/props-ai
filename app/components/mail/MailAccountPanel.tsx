@@ -1030,7 +1030,7 @@ export default function MailAccountPanel({ userEmail, isDark, mode = "all" }: Ma
             Connect Your Mailbox
           </h3>
           <p style={{ fontSize: 13, color: "var(--muted-foreground)", lineHeight: 1.65, margin: 0 }}>
-            Link your mail account to read job leads and send outreach directly from PropAI.
+            Link your mail account to read job leads and send outreach directly from ThePitchly.
           </p>
         </div>
 

@@ -10,7 +10,7 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Read session cookie set by useLoginSuccess
-  const raw = request.cookies.get("props-ai-session")?.value;
+  const raw = request.cookies.get("thepitchly-session")?.value;
   let session: SessionCookie | null = null;
   if (raw) {
     try { session = JSON.parse(decodeURIComponent(raw)); } catch { session = null; }

@@ -17,7 +17,7 @@ export function useLoginSuccess() {
     // ── 2. Cookie (for middleware route protection) ─────────────────────────
     const payload = JSON.stringify({ email, status, name });
     const maxAge  = 60 * 60 * 24 * 7; // 7 days
-    document.cookie = `props-ai-session=${encodeURIComponent(payload)}; path=/; max-age=${maxAge}; SameSite=Lax`;
+    document.cookie = `thepitchly-session=${encodeURIComponent(payload)}; path=/; max-age=${maxAge}; SameSite=Lax`;
 
     // ── 3. Navigate ─────────────────────────────────────────────────────────
     router.push(status === "ACTIVE" ? "/dashboard" : "/pending");

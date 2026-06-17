@@ -162,7 +162,7 @@ export default function JobDrawer({
             </div>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: "var(--foreground)" }}>
-                PropAI Generator
+                ThePitchly Generator
               </div>
               <div style={{ fontSize: 11, color: "var(--muted-foreground)", fontWeight: 500 }}>
                 {step === "checking"  && (isCandidacyLoading ? "Analyzing job & scoring candidacy..." : "Scanning for duplicates...")}
@@ -631,7 +631,7 @@ export default function JobDrawer({
                   Crafting your proposals...
                 </p>
                 <p style={{ fontSize: 13, color: "var(--muted-foreground)", lineHeight: 1.6 }}>
-                  PropAI is analyzing the job, matching your skills,<br />
+                  ThePitchly is analyzing the job, matching your skills,<br />
                   and writing personalized outreach for each platform.
                 </p>
               </div>

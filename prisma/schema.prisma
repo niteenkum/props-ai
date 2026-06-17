@@ -147,7 +147,7 @@ model AiUsageLog {
 // follow-up reminders, and manual notes. Status lifecycle: pending → done/cancelled.
 model FollowUp {
   id            String   @id @default(uuid())
-  userEmail     String                          // PropAI user
+  userEmail     String                          // ThePitchly user
   jobId         String                          // linked job post
   jobPost       JobPost  @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
@@ -181,7 +181,7 @@ model FollowUp {
 // provider: "zoho" | "gmail" | "googlecalendar"
 model MailAccount {
   id              String   @id @default(uuid())
-  userEmail       String                          // PropAI user email
+  userEmail       String                          // ThePitchly user email
   provider        String   @default("zoho")       // "zoho" | "gmail"
   accountEmail    String                          // the actual mailbox address linked
   accessToken     String   @db.Text
@@ -198,11 +198,11 @@ model MailAccount {
 }
 
 // ─── Sent Email Log ────────────────────────────────────────────────────────
-// Tracks every email sent from PropAI via any provider (Zoho, later Gmail).
+// Tracks every email sent from ThePitchly via any provider (Zoho, later Gmail).
 // Linked to a JobPost so the user can see outreach history per opportunity.
 model SentEmail {
   id          String    @id @default(uuid())
-  userEmail   String                        // PropAI user who sent
+  userEmail   String                        // ThePitchly user who sent
   jobPostId   String?                       // linked job (nullable for non-job sends)
   jobPost     JobPost?  @relation(fields: [jobPostId], references: [id], onDelete: SetNull)
   provider    String    @default("zoho")    // "zoho" | "gmail" | "outlook"
@@ -317,7 +317,7 @@ model CorsairEvent {
 // Stores AI-classified incoming emails for fast, incremental offline access.
 model SyncedEmail {
   id            String   @id @default(uuid())
-  userEmail     String   // PropAI user email
+  userEmail     String   // ThePitchly user email
   provider      String   // "gmail" | "zoho"
   messageId     String   // provider's message ID (for dedup)
   subject       String   @db.Text

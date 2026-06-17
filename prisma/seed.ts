@@ -28,7 +28,7 @@ const DEFAULT_EDUCATION = [
 
 const DEFAULT_PROJECTS = [
   {
-    name: "PropAI (Proposal Organizer)",
+    name: "ThePitchly (Proposal Organizer)",
     tech: ["Next.js", "React 19", "Tailwind CSS", "Gemini AI", "Prisma", "PostgreSQL"],
     description: "AI-powered job outreach assistant — scans LinkedIn posts, generates cold emails, proposals, LinkedIn notes, and cover letters via Gemini.",
     links: [{ label: "GitHub", url: "https://github.com/niteen-kumar/props-ai" }],

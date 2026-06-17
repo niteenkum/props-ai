@@ -16,7 +16,7 @@ export type Platform =
 
 // ─── SYSTEM PROMPT (shared across all generations) ─────────────────────────
 
-const SYSTEM_PROMPT = `You are PropAI, a world-class professional outreach assistant. You help job seekers craft personalized, compelling outreach messages based on their profile and a target job posting.
+const SYSTEM_PROMPT = `You are ThePitchly, a world-class professional outreach assistant. You help job seekers craft personalized, compelling outreach messages based on their profile and a target job posting.
 
 Your writing style:
 - Professional but warm — never stiff or robotic

@@ -16,7 +16,7 @@ export interface SendEmailResult {
 export async function sendEmail({ to, toName, subject, htmlContent }: SendEmailOptions): Promise<SendEmailResult> {
   const apiKey = process.env.BREVO_API_KEY;
   const fromEmail = process.env.EMAIL_FROM;
-  const fromName = process.env.EMAIL_FROM_NAME || "PropAI";
+  const fromName = process.env.EMAIL_FROM_NAME || "ThePitchly";
 
   if (!apiKey || !fromEmail) {
     console.error("Brevo credentials missing: BREVO_API_KEY or EMAIL_FROM not set in .env");
@@ -94,7 +94,7 @@ export function buildOtpEmail(name: string, otp: string): string {
                     <span style="color:#fff;font-size:18px;">✦</span>
                   </td>
                   <td style="padding-left:10px;">
-                    <span style="font-size:18px;font-weight:700;color:#111;">Prop<span style="color:#888;">AI</span></span>
+                    <span style="font-size:18px;font-weight:700;color:#111;">ThePitchly</span>
                   </td>
                 </tr>
               </table>
@@ -108,7 +108,7 @@ export function buildOtpEmail(name: string, otp: string): string {
                 Verify your email
               </p>
               <p style="margin:0 0 24px;font-size:14px;color:#888;line-height:1.6;">
-                Hi ${name}, use the code below to complete your PropAI account setup. This code expires in <strong style="color:#555;">10 minutes</strong>.
+                Hi ${name}, use the code below to complete your ThePitchly account setup. This code expires in <strong style="color:#555;">10 minutes</strong>.
               </p>
 
               <!-- OTP box -->
@@ -122,7 +122,7 @@ export function buildOtpEmail(name: string, otp: string): string {
               </div>
 
               <p style="margin:0;font-size:12px;color:#bbb;line-height:1.6;">
-                If you didn't create a PropAI account, you can safely ignore this email. Someone may have entered your email address by mistake.
+                If you didn't create a ThePitchly account, you can safely ignore this email. Someone may have entered your email address by mistake.
               </p>
             </td>
           </tr>
@@ -131,7 +131,7 @@ export function buildOtpEmail(name: string, otp: string): string {
           <tr>
             <td style="padding:20px 36px;border-top:1px solid #f0f0f0;background:#fafafa;">
               <p style="margin:0;font-size:11px;color:#ccc;text-align:center;">
-                © 2026 PropAI · AI Outreach Architect · This is an automated message, please do not reply.
+                © 2026 ThePitchly · AI Outreach Architect · This is an automated message, please do not reply.
               </p>
             </td>
           </tr>

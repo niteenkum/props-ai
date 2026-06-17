@@ -289,7 +289,7 @@ export default function JobDetailPage() {
     }
   };
 
-  // ─ Open the PropAI Generator drawer for this existing job ─────────────────────
+  // ─ Open the ThePitchly Generator drawer for this existing job ─────────────────────
   const handleOpenGeneratorDrawer = () => {
     if (!job) return;
     // Always ensure scanner has the job text (needed for proposal generation)
@@ -513,7 +513,7 @@ export default function JobDetailPage() {
 
             {/* Action buttons */}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {/* Primary: Open PropAI Generator Drawer */}
+              {/* Primary: Open ThePitchly Generator Drawer */}
               <button
                 onClick={handleOpenGeneratorDrawer}
                 style={{
@@ -1403,7 +1403,7 @@ export default function JobDetailPage() {
         initialBody={composeBody}
       />
 
-      {/* ── PropAI Generator Drawer (same as New Scan page) ── */}
+      {/* ── ThePitchly Generator Drawer (same as New Scan page) ── */}
       <JobDrawer
         isOpen={scanner.isDrawerOpen}
         step={scanner.drawerStep}

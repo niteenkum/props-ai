@@ -194,7 +194,7 @@ function PropBotContent() {
           <div style={styles.emptyState}>
             <PropBotOrb />
             <div style={styles.greetingBlock}>
-              <h1 style={styles.greeting}>Hi! I'm PropBot.</h1>
+              <h1 style={styles.greeting}>Hi! I'm The Pitchly AI.</h1>
               <p style={styles.greetingSub}>{customGreeting}</p>
               <p style={styles.greetingHint}>
                 Ask me anything — search Gmail, draft emails, view job metrics, and schedule outreach.

@@ -1721,7 +1721,7 @@ export default function ProfilePage() {
                 label="Project Title"
                 value={modalProjectName}
                 onChange={setModalProjectName}
-                placeholder="e.g. PropAI (Proposal Organizer)"
+                placeholder="e.g. ThePitchly (Proposal Organizer)"
               />
 
               <FieldInput

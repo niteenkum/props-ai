@@ -2,7 +2,7 @@
 
 /**
  * ╔══════════════════════════════════════════════════════════════╗
- * ║  PropAI Dashboard Chatbot — Server Actions                  ║
+ * ║  ThePitchly Dashboard Chatbot — Server Actions              ║
  * ║  Uses Corsair SDK for Gmail/Calendar + Gemini for reasoning ║
  * ╚══════════════════════════════════════════════════════════════╝
  *
@@ -207,7 +207,7 @@ const FUNCTION_DECLARATIONS = [
   },
   {
     name: "db_query",
-    description: "Query the local PropAI database for job posts, sent emails, outreach statistics, and scheduled calls/follow-ups.",
+    description: "Query the local ThePitchly database for job posts, sent emails, outreach statistics, and scheduled calls/follow-ups.",
     parameters: {
       type: "object",
       properties: {
@@ -240,7 +240,7 @@ const FUNCTION_DECLARATIONS = [
   },
   {
     name: "schedule_call",
-    description: `Schedule a Google Meet call for a specific job and save it to the PropAI Follow-ups tracker.
+    description: `Schedule a Google Meet call for a specific job and save it to the ThePitchly Follow-ups tracker.
 
 IMPORTANT WORKFLOW — you MUST follow this exact order:
 1. First call db_query({ type: 'job_list' }) to get the user's job posts.
@@ -265,7 +265,7 @@ NEVER call schedule_call without a confirmed jobId from the user.`,
   },
   {
     name: "create_job_post",
-    description: `Create a new job post in PropAI from a job description the user provides.
+    description: `Create a new job post in ThePitchly from a job description the user provides.
 
 WORKFLOW:
 1. Ask the user to paste or describe the job posting (role, company, requirements, contact info if any).
@@ -748,7 +748,7 @@ export async function processDashboardChatAction(
     const gmailConnected = mailAccounts.some((a) => a.provider === "gmail");
 
     // 2. Build system prompt
-    const systemPrompt = `You are PropBot, an intelligent AI assistant embedded in PropAI — a professional job outreach and proposal management platform.
+    const systemPrompt = `You are The Pitchly AI, an intelligent AI assistant embedded in The Pitchly — a professional job outreach and proposal management platform.
 
 ## USER PROFILE
 Name: ${profile.name}
