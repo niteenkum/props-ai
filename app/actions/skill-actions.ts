@@ -10,21 +10,25 @@ export interface SkillItem {
 
 // Fetch all skills grouped by category
 export async function getSkillsAction(): Promise<SkillItem[]> {
+  console.log("🔍 [getSkillsAction] Called. Database URL (masked):", process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/:[^:@]+@/, ":****@") : "undefined");
   try {
     const skills = await prisma.skill.findMany({
       orderBy: [{ category: "asc" }, { name: "asc" }],
     });
+    console.log(`✅ [getSkillsAction] Successfully queried database. Found ${skills.length} skills in the table.`);
     return skills.map((s) => ({ id: s.id, name: s.name, category: s.category }));
-  } catch (error) {
-    console.error("Error in getSkillsAction:", error);
+  } catch (error: any) {
+    console.error("❌ [getSkillsAction] Failed to query skills from Database:", error.message || error);
     return [];
   }
 }
 
 // Seed default IT skills if none exist
 export async function seedSkillsAction(): Promise<{ count: number }> {
+  console.log("🌱 [seedSkillsAction] Called. Checking database table...");
   try {
     const existing = await prisma.skill.count();
+    console.log(`📊 [seedSkillsAction] Current skill count in table: ${existing}`);
     if (existing > 0) return { count: existing };
 
     const IT_SKILLS: { name: string; category: string }[] = [
