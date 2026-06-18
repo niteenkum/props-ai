@@ -201,31 +201,26 @@ function DraftCard({
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
-  const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState<"gmail" | "zoho">("gmail");
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [sentProvider, setSentProvider] = useState<"gmail" | "zoho">("gmail");
 
   useEffect(() => {
     if (!userEmail) return;
     import("../actions/mail-actions").then(({ getMailAccountsAction }) => {
-      getMailAccountsAction(userEmail).then((accounts) => {
-        const providers = accounts.map(a => a.provider).filter(Boolean);
-        setConnectedProviders(providers);
-        if (providers.includes("zoho") && !providers.includes("gmail")) {
-          setSelectedProvider("zoho");
-        } else {
-          setSelectedProvider("gmail");
-        }
+      getMailAccountsAction(userEmail).then((accs) => {
+        setAccounts(accs);
       }).catch(err => {
         console.error("Failed to load connected mail accounts", err);
       });
     });
   }, [userEmail]);
 
-  async function handleSend() {
+  async function handleSendWithProvider(prov: "gmail" | "zoho") {
     setSending(true);
     setError("");
     try {
-      await onSend(editDraft, selectedProvider);
+      await onSend(editDraft, prov);
+      setSentProvider(prov);
       setSent(true);
     } catch (e: any) {
       setError(e?.message ?? "Send failed");
@@ -238,13 +233,17 @@ function DraftCard({
     return (
       <div style={{ ...styles.draftCard, borderColor: "#22c55e44" }}>
         <div style={{ textAlign: "center", color: "#22c55e", padding: "12px 0" }}>
-          ✅ Email sent successfully via {selectedProvider === "zoho" ? "Zoho" : "Gmail"}!
+          ✅ Email sent successfully via {sentProvider === "zoho" ? "Zoho" : "Gmail"}!
         </div>
       </div>
     );
   }
 
-  const hasBoth = connectedProviders.includes("gmail") && connectedProviders.includes("zoho");
+  const gmailAcc = accounts.find(a => a.provider === "gmail");
+  const zohoAcc = accounts.find(a => a.provider === "zoho");
+  const hasGmail = !!gmailAcc;
+  const hasZoho = !!zohoAcc;
+  const hasBoth = hasGmail && hasZoho;
 
   return (
     <div style={styles.draftCard}>
@@ -253,32 +252,6 @@ function DraftCard({
           <span style={styles.draftHeaderIcon}>✉️</span>
           <span style={styles.draftHeaderText}>Review Draft</span>
         </div>
-        {hasBoth ? (
-          <div style={styles.providerSelector}>
-            <button
-              style={{
-                ...styles.providerTab,
-                ...(selectedProvider === "gmail" ? styles.providerTabActiveGmail : {}),
-              }}
-              onClick={() => setSelectedProvider("gmail")}
-            >
-              Gmail
-            </button>
-            <button
-              style={{
-                ...styles.providerTab,
-                ...(selectedProvider === "zoho" ? styles.providerTabActiveZoho : {}),
-              }}
-              onClick={() => setSelectedProvider("zoho")}
-            >
-              Zoho
-            </button>
-          </div>
-        ) : (
-          <span style={selectedProvider === "zoho" ? styles.zohoBadge : styles.gmailBadge}>
-            {selectedProvider === "zoho" ? "Zoho" : "Gmail"}
-          </span>
-        )}
       </div>
       <div style={styles.draftField}>
         <label style={styles.draftLabel}>To</label>
@@ -315,14 +288,45 @@ function DraftCard({
         />
       </div>
       {error && <div style={{ color: "#ef4444", fontSize: 12, padding: "4px 0" }}>{error}</div>}
-      <button
-        id="chat-send-email-btn"
-        style={styles.sendEmailBtn}
-        onClick={handleSend}
-        disabled={sending}
-      >
-        {sending ? "Sending…" : `📤 Send via ${selectedProvider === "zoho" ? "Zoho" : "Gmail"}`}
-      </button>
+      {hasBoth ? (
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <button
+            id="chat-send-email-gmail-btn"
+            style={{
+              ...styles.sendEmailBtnHalf,
+              background: "linear-gradient(135deg, #ea4335, #c53929)",
+            }}
+            onClick={() => handleSendWithProvider("gmail")}
+            disabled={sending}
+          >
+            {sending ? "Sending…" : `Send by Gmail (${gmailAcc?.accountEmail || userEmail})`}
+          </button>
+          <button
+            id="chat-send-email-zoho-btn"
+            style={{
+              ...styles.sendEmailBtnHalf,
+              background: "linear-gradient(135deg, #1f74ff, #1656c2)",
+            }}
+            onClick={() => handleSendWithProvider("zoho")}
+            disabled={sending}
+          >
+            {sending ? "Sending…" : `Send by Zoho (${zohoAcc?.accountEmail || ""})`}
+          </button>
+        </div>
+      ) : (
+        <button
+          id="chat-send-email-btn"
+          style={styles.sendEmailBtn}
+          onClick={() => handleSendWithProvider(hasZoho ? "zoho" : "gmail")}
+          disabled={sending}
+        >
+          {sending
+            ? "Sending…"
+            : hasZoho
+            ? `Send by Zoho (${zohoAcc?.accountEmail || ""})`
+            : `Send by Gmail (${gmailAcc?.accountEmail || userEmail})`}
+        </button>
+      )}
     </div>
   );
 }
@@ -1011,6 +1015,22 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     boxShadow: "0 4px 16px rgba(124,58,237,0.4)",
     transition: "opacity 0.2s",
+  },
+  sendEmailBtnHalf: {
+    flex: 1,
+    border: "none",
+    borderRadius: 10,
+    padding: "10px 12px",
+    color: "#fff",
+    fontSize: 11.5,
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "0 4px 12px rgba(124,58,237,0.25)",
+    transition: "opacity 0.2s",
+    textAlign: "center" as const,
+    whiteSpace: "nowrap" as const,
+    overflow: "hidden" as const,
+    textOverflow: "ellipsis" as const,
   },
   quickActions: {
     padding: "8px 14px",

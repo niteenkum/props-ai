@@ -58,19 +58,13 @@ export default function DraftEmailCard({ draft, onSend, userEmail }: DraftEmailC
   const [error, setError]         = useState("");
   const [editing, setEditing]     = useState(false);
   const [bodyExpanded, setBodyExpanded] = useState(false);
-  const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState<"gmail" | "zoho">("gmail");
+  const [accounts, setAccounts]   = useState<any[]>([]);
+  const [sentProvider, setSentProvider] = useState<"gmail" | "zoho">("gmail");
 
   useEffect(() => {
     if (!userEmail) return;
-    getMailAccountsAction(userEmail).then((accounts) => {
-      const providers = accounts.map(a => a.provider).filter(Boolean);
-      setConnectedProviders(providers);
-      if (providers.includes("zoho") && !providers.includes("gmail")) {
-        setSelectedProvider("zoho");
-      } else {
-        setSelectedProvider("gmail");
-      }
+    getMailAccountsAction(userEmail).then((accs) => {
+      setAccounts(accs);
     }).catch(err => {
       console.error("Failed to load connected mail accounts", err);
     });
@@ -84,11 +78,12 @@ export default function DraftEmailCard({ draft, onSend, userEmail }: DraftEmailC
 
   const hasPlaceholders = placeholders.length > 0;
 
-  async function handleSend() {
+  async function handleSendWithProvider(prov: "gmail" | "zoho") {
     setSending(true);
     setError("");
     try {
-      await onSend(editDraft, selectedProvider);
+      await onSend(editDraft, prov);
+      setSentProvider(prov);
       setSent(true);
     } catch (e: any) {
       setError(e?.message ?? "Failed to send. Please try again.");
@@ -114,7 +109,7 @@ export default function DraftEmailCard({ draft, onSend, userEmail }: DraftEmailC
           <div>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#15803d" }}>Email sent! 🎉</div>
             <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
-              Delivered to <strong>{editDraft.to}</strong> via {selectedProvider === "zoho" ? "Zoho" : "Gmail"}
+              Delivered to <strong>{editDraft.to}</strong> via {sentProvider === "zoho" ? "Zoho" : "Gmail"}
             </div>
           </div>
         </div>
@@ -126,7 +121,11 @@ export default function DraftEmailCard({ draft, onSend, userEmail }: DraftEmailC
   const bodyLines   = (editDraft.body ?? "").split("\n").filter(Boolean);
   const previewLines = bodyLines.slice(0, 4).join("\n");
 
-  const hasBoth = connectedProviders.includes("gmail") && connectedProviders.includes("zoho");
+  const gmailAcc = accounts.find(a => a.provider === "gmail");
+  const zohoAcc = accounts.find(a => a.provider === "zoho");
+  const hasGmail = !!gmailAcc;
+  const hasZoho = !!zohoAcc;
+  const hasBoth = hasGmail && hasZoho;
 
   return (
     <div style={s.card}>
@@ -140,7 +139,7 @@ export default function DraftEmailCard({ draft, onSend, userEmail }: DraftEmailC
             <div style={s.cardSub}>
               {hasPlaceholders
                 ? <span style={{ color: "#d97706", fontWeight: 600 }}>⚠ {placeholders.length} field{placeholders.length > 1 ? "s" : ""} need review</span>
-                : `Ready to send via ${selectedProvider === "zoho" ? "Zoho" : "Gmail"}`}
+                : "Ready to send"}
             </div>
           </div>
         </div>
@@ -152,32 +151,6 @@ export default function DraftEmailCard({ draft, onSend, userEmail }: DraftEmailC
           >
             {editing ? <X size={14} /> : <Edit3 size={14} />}
           </button>
-          {hasBoth ? (
-            <div style={s.providerSelector}>
-              <button
-                style={{
-                  ...s.providerTab,
-                  ...(selectedProvider === "gmail" ? s.providerTabActiveGmail : {}),
-                }}
-                onClick={() => setSelectedProvider("gmail")}
-              >
-                Gmail
-              </button>
-              <button
-                style={{
-                  ...s.providerTab,
-                  ...(selectedProvider === "zoho" ? s.providerTabActiveZoho : {}),
-                }}
-                onClick={() => setSelectedProvider("zoho")}
-              >
-                Zoho
-              </button>
-            </div>
-          ) : (
-            <span style={selectedProvider === "zoho" ? s.zohoBadge : s.gmailBadge}>
-              {selectedProvider === "zoho" ? "Zoho" : "Gmail"}
-            </span>
-          )}
         </div>
       </div>
 
@@ -258,28 +231,70 @@ export default function DraftEmailCard({ draft, onSend, userEmail }: DraftEmailC
         </div>
       )}
 
-      {/* ── Send button ── */}
-      <div style={{ position: "relative" }}>
-        <button
-          id="propbot-send-email-btn"
-          style={{
-            ...s.sendBtn,
-            opacity: sending ? 0.75 : 1,
-            background: hasPlaceholders
-              ? "linear-gradient(135deg, #d97706, #b45309)"
-              : "linear-gradient(135deg, #7c3aed, #4f46e5)",
-          }}
-          onClick={handleSend}
-          disabled={sending}
-        >
-          <Send size={14} />
-          {sending
-            ? "Sending…"
-            : hasPlaceholders
-            ? `Send anyway (${placeholders.length} unfilled)`
-            : `Send via ${selectedProvider === "zoho" ? "Zoho" : "Gmail"}`}
-        </button>
-      </div>
+      {/* ── Send buttons ── */}
+      {hasBoth ? (
+        <div style={s.buttonsRow}>
+          <button
+            id="propbot-send-email-gmail-btn"
+            style={{
+              ...s.sendBtnHalf,
+              background: hasPlaceholders
+                ? "linear-gradient(135deg, #d97706, #b45309)"
+                : "linear-gradient(135deg, #ea4335, #c53929)",
+              opacity: sending ? 0.75 : 1,
+              borderRadius: "0 0 0 15px",
+            }}
+            onClick={() => handleSendWithProvider("gmail")}
+            disabled={sending}
+          >
+            <Send size={14} />
+            {sending
+              ? "Sending…"
+              : `Send by Gmail (${gmailAcc?.accountEmail || userEmail})`}
+          </button>
+          <button
+            id="propbot-send-email-zoho-btn"
+            style={{
+              ...s.sendBtnHalf,
+              background: hasPlaceholders
+                ? "linear-gradient(135deg, #d97706, #b45309)"
+                : "linear-gradient(135deg, #1f74ff, #1656c2)",
+              opacity: sending ? 0.75 : 1,
+              borderRadius: "0 0 15px 0",
+              borderLeft: "1px solid rgba(255,255,255,0.15)",
+            }}
+            onClick={() => handleSendWithProvider("zoho")}
+            disabled={sending}
+          >
+            <Send size={14} />
+            {sending
+              ? "Sending…"
+              : `Send by Zoho (${zohoAcc?.accountEmail || ""})`}
+          </button>
+        </div>
+      ) : (
+        <div style={{ position: "relative" }}>
+          <button
+            id="propbot-send-email-btn"
+            style={{
+              ...s.sendBtn,
+              opacity: sending ? 0.75 : 1,
+              background: hasPlaceholders
+                ? "linear-gradient(135deg, #d97706, #b45309)"
+                : hasZoho
+                ? "linear-gradient(135deg, #1f74ff, #1656c2)"
+                : "linear-gradient(135deg, #ea4335, #c53929)",
+            }}
+            onClick={() => handleSendWithProvider(hasZoho ? "zoho" : "gmail")}
+            disabled={sending}
+          >
+            <Send size={14} />
+            {sending
+              ? "Sending…"
+              : `Send by ${hasZoho ? "Zoho" : "Gmail"} (${hasZoho ? zohoAcc?.accountEmail : (gmailAcc?.accountEmail || userEmail)})`}
+          </button>
+        </div>
+      )}
 
     </div>
   );
@@ -541,5 +556,28 @@ const s: Record<string, React.CSSProperties> = {
     background: "var(--provider-tab-active-bg, #fff)",
     color: "#1f74ff",
     boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+  },
+  buttonsRow: {
+    display: "flex",
+    gap: 1,
+    background: "var(--border)",
+    borderRadius: "0 0 15px 15px",
+    overflow: "hidden",
+  },
+  sendBtnHalf: {
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    border: "none",
+    padding: "13px 12px",
+    color: "#fff",
+    fontSize: 12.5,
+    fontWeight: 700,
+    cursor: "pointer",
+    transition: "opacity 0.2s, background 0.3s",
+    letterSpacing: "0.02em",
+    minWidth: 0,
   },
 };

@@ -1662,7 +1662,7 @@ function parseMarkdown(text: string): React.ReactNode {
 
   const parseItalicAndCode = (str: string): React.ReactNode => {
     const codeParts = str.split("`");
-    const codeFormatted = codeParts.map((part, index) => {
+    return codeParts.map((part, index) => {
       if (index % 2 === 1) {
         return (
           <code
@@ -1686,22 +1686,20 @@ function parseMarkdown(text: string): React.ReactNode {
         if (subIndex % 2 === 1) {
           return <em key={subIndex} style={{ fontStyle: "italic" }}>{subPart}</em>;
         }
-        return subPart;
+        return <React.Fragment key={subIndex}>{subPart}</React.Fragment>;
       });
       return <React.Fragment key={index}>{italicFormatted}</React.Fragment>;
     });
-    return <React.Fragment>{codeFormatted}</React.Fragment>;
   };
 
   const parseInline = (str: string): React.ReactNode => {
     const boldParts = str.split("**");
-    const boldFormatted = boldParts.map((part, index) => {
+    return boldParts.map((part, index) => {
       if (index % 2 === 1) {
         return <strong key={index} style={{ fontWeight: 700 }}>{parseItalicAndCode(part)}</strong>;
       }
-      return parseItalicAndCode(part);
+      return <React.Fragment key={index}>{parseItalicAndCode(part)}</React.Fragment>;
     });
-    return <React.Fragment>{boldFormatted}</React.Fragment>;
   };
 
   for (let i = 0; i < lines.length; i++) {
