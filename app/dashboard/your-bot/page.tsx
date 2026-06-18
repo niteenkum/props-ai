@@ -14,6 +14,7 @@ import { useAuth } from "../../hooks/useAuth";
 import {
   processDashboardChatAction,
   sendDraftEmailAction,
+  bookCallFromBotAction,
   ChatMessage,
   DraftEmail,
 } from "../../actions/chat-actions";
@@ -121,6 +122,22 @@ function PropBotContent() {
     }
   };
 
+  const handleSelectSuggestion = useCallback((prompt: string) => {
+    if (prompt.includes("[Paste job description here]")) {
+      const template = "Here is a job description. Please create a new job post and analyze it for me:\n\n";
+      setInput(template);
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          inputRef.current.selectionStart = template.length;
+          inputRef.current.selectionEnd = template.length;
+        }
+      }, 50);
+    } else {
+      handleSend(prompt);
+    }
+  }, [handleSend]);
+
   // Listen to url search parameters (q to auto-send, new to clear)
   useEffect(() => {
     const q = searchParams.get("q");
@@ -148,6 +165,15 @@ function PropBotContent() {
     if (!result.success) throw new Error(result.error ?? "Failed to send");
   }
 
+  async function handleBookCall(input: {
+    jobId: string; jobRole: string; jobCompany: string;
+    title: string; startDateTime: string; durationMinutes: number;
+    attendeeEmail?: string; notes?: string;
+  }) {
+    if (!userEmail) throw new Error("Not authenticated");
+    return bookCallFromBotAction(userEmail, input);
+  }
+
   const clearChat = () => setMessages([]);
 
   if (!isReady) return null;
@@ -165,10 +191,10 @@ function PropBotContent() {
               <h1 style={styles.greeting}>Hi! I&apos;m The Pitchly AI.</h1>
               <p style={styles.greetingSub}>{customGreeting}</p>
               <p style={styles.greetingHint}>
-                Ask me anything — search Gmail, draft emails, view job metrics, and schedule outreach.
+                Ask me anything — draft proposals, calculate freelance rates, find gig leads, and track active clients.
               </p>
             </div>
-            <QuickActionsGrid onSelect={(p) => handleSend(p)} />
+            <QuickActionsGrid onSelect={handleSelectSuggestion} />
           </div>
         )}
 
@@ -185,7 +211,7 @@ function PropBotContent() {
           <div style={styles.chatHistory}>
             {messages.map((msg) => (
               <div key={msg.id} style={{ animation: "propbot-fadein 0.25s ease" }}>
-                <MessageBubble msg={msg} onSendDraft={handleSendDraft} />
+                <MessageBubble msg={msg} userEmail={userEmail ?? undefined} onSendDraft={handleSendDraft} onSelectSuggestion={handleSelectSuggestion} onBookCall={handleBookCall} />
               </div>
             ))}
             {loading && <TypingIndicator />}
@@ -196,29 +222,9 @@ function PropBotContent() {
 
       {/* ── Bottom Input Container ──────────────────────────────────────── */}
       <div style={styles.bottom}>
-        {/* Suggested Pills */}
-        {!loading && (
-          <div style={styles.promptsRow}>
-            <div style={styles.promptsLabel}>
-              <Clock size={12} />
-              Suggestions
-            </div>
-            <div style={styles.promptsPills}>
-              {LATEST_PROMPTS.map((p) => (
-                <button
-                  key={p}
-                  style={styles.promptPill}
-                  onClick={() => handleSend(p)}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Input box */}
-        <div id="propbot-textarea-wrap" style={styles.inputWrap}>
+        {/* Premium floating input */}
+        <div id="propbot-input-outer" style={styles.inputOuter}>
+          {/* Top row: textarea */}
           <textarea
             ref={inputRef}
             id="propbot-input"
@@ -226,23 +232,37 @@ function PropBotContent() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask anything… search inbox, draft email, check stats (Enter to send)"
-            rows={1}
+            placeholder="Ask anything — draft proposals, track clients, paste a job lead…"
+            rows={2}
             disabled={loading}
           />
-          <div style={styles.inputActions}>
-            <span style={styles.inputHint}>⏎ Send</span>
+          {/* Bottom row: hint + send button */}
+          <div style={styles.inputFooterRow}>
+            <div style={styles.inputMeta}>
+              <span style={styles.inputMetaDot} />
+              <span style={styles.inputMetaText}>
+                {loading ? "Pitchly AI is thinking…" : "Press Enter to send · Shift+Enter for new line"}
+              </span>
+            </div>
             <button
               id="propbot-send-btn"
               style={{
                 ...styles.sendBtn,
-                opacity: !input.trim() || loading ? 0.5 : 1,
+                opacity: !input.trim() || loading ? 0.45 : 1,
                 cursor: !input.trim() || loading ? "not-allowed" : "pointer",
+                transition: "all 0.2s ease",
               }}
               onClick={() => handleSend()}
               disabled={!input.trim() || loading}
             >
-              {loading ? "⏳" : "➤"}
+              {loading ? (
+                <span style={{ fontSize: 16 }}>⏳</span>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13" />
+                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+              )}
             </button>
           </div>
         </div>
@@ -263,11 +283,33 @@ export default function PropBotPage() {
           from { opacity: 0; transform: translateY(12px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        #propbot-input::placeholder { color: var(--muted-foreground); opacity: 0.6; }
+        @keyframes propbot-border-glow {
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 1; }
+        }
+        #propbot-input::placeholder {
+          color: #94a3b8;
+          font-size: 14px;
+        }
         #propbot-input:focus { outline: none; }
-        #propbot-textarea-wrap:focus-within {
-          border-color: #7c3aed !important;
-          box-shadow: 0 4px 20px rgba(124, 58, 237, 0.08);
+        #propbot-input-outer {
+          position: relative;
+          border-radius: 16px;
+          background: linear-gradient(145deg, #ffffff, #f8f7ff);
+          box-shadow: 0 4px 24px rgba(124, 58, 237, 0.08), 0 1px 4px rgba(0,0,0,0.04);
+          border: 1.5px solid #e2d9f3;
+          transition: box-shadow 0.25s ease, border-color 0.25s ease;
+        }
+        #propbot-input-outer:focus-within {
+          border-color: #7c3aed;
+          box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.08), 0 4px 24px rgba(124, 58, 237, 0.12);
+        }
+        #propbot-send-btn:hover:not(:disabled) {
+          background: linear-gradient(135deg, #6d28d9, #4f46e5) !important;
+          transform: scale(1.04);
+        }
+        #propbot-send-btn:active:not(:disabled) {
+          transform: scale(0.97);
         }
       `}</style>
       
@@ -416,101 +458,74 @@ const styles: Record<string, React.CSSProperties> = {
     width: "100%",
   },
   bottom: {
-    borderTop: "1px solid var(--border)",
-    background: "#FFFFFF",
-    padding: "16px 20px 20px",
+    background: "linear-gradient(180deg, transparent 0%, rgba(248,247,255,0.8) 30%, #f8f7ff 100%)",
+    padding: "16px 20px 24px",
     display: "flex",
     flexDirection: "column",
-    gap: 12,
+    gap: 0,
     flexShrink: 0,
     borderRadius: "0 0 16px 16px",
   },
-  promptsRow: {
+  inputOuter: {
     display: "flex",
-    alignItems: "center",
-    gap: 10,
-    overflowX: "auto" as const,
-    scrollbarWidth: "none" as const,
-  },
-  promptsLabel: {
-    display: "flex",
-    alignItems: "center",
-    gap: 5,
-    fontSize: 10.5,
-    fontWeight: 600,
-    color: "var(--muted-foreground)",
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.06em",
-    flexShrink: 0,
-    whiteSpace: "nowrap" as const,
-  },
-  promptsPills: {
-    display: "flex",
-    gap: 7,
-    overflowX: "auto" as const,
-    scrollbarWidth: "none" as const,
-  },
-  promptPill: {
-    padding: "5px 12px",
-    borderRadius: 20,
-    border: "1px solid var(--border)",
-    background: "transparent",
-    color: "var(--muted-foreground)",
-    fontSize: 12,
-    fontWeight: 500,
-    cursor: "pointer",
-    whiteSpace: "nowrap" as const,
-    transition: "border-color 0.15s, color 0.15s",
-    fontFamily: "inherit",
-  },
-  inputWrap: {
-    display: "flex",
-    alignItems: "flex-end",
-    gap: 10,
-    padding: "10px 16px",
-    borderRadius: 12,
-    border: "1px solid var(--border)",
-    background: "#FFFFFF",
-    transition: "border-color 0.2s, box-shadow 0.2s",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
+    flexDirection: "column",
+    gap: 0,
+    padding: "14px 16px 12px",
+    borderRadius: 16,
   },
   input: {
-    flex: 1,
     background: "transparent",
     border: "none",
     resize: "none" as const,
-    fontSize: 14,
-    color: "var(--foreground)",
-    lineHeight: 1.6,
-    maxHeight: 120,
+    fontSize: 14.5,
+    color: "#1e1b4b",
+    lineHeight: 1.65,
+    maxHeight: 140,
     overflowY: "auto" as const,
     fontFamily: "inherit",
+    width: "100%",
+    outline: "none",
+    padding: 0,
   },
-  inputActions: {
+  inputFooterRow: {
     display: "flex",
     alignItems: "center",
-    gap: 8,
-    flexShrink: 0,
+    justifyContent: "space-between",
+    marginTop: 10,
+    paddingTop: 10,
+    borderTop: "1px solid rgba(124,58,237,0.1)",
   },
-  inputHint: {
+  inputMeta: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  },
+  inputMetaDot: {
+    width: 6,
+    height: 6,
+    borderRadius: "50%",
+    background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
+    flexShrink: 0,
+    boxShadow: "0 0 6px rgba(124,58,237,0.4)",
+  },
+  inputMetaText: {
     fontSize: 11,
-    color: "var(--muted-foreground)",
-    opacity: 0.5,
+    color: "#94a3b8",
+    fontWeight: 500,
     whiteSpace: "nowrap" as const,
   },
   sendBtn: {
-    width: 34,
-    height: 34,
-    background: "#7c3aed",
+    width: 38,
+    height: 38,
+    background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
     border: "none",
-    borderRadius: 8,
+    borderRadius: 12,
     color: "#FFFFFF",
-    fontSize: 14,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    transition: "background 0.15s",
     flexShrink: 0,
-    boxShadow: "0 2px 8px rgba(124,58,237,0.2)",
+    boxShadow: "0 4px 14px rgba(124,58,237,0.35)",
+    cursor: "pointer",
   },
 };

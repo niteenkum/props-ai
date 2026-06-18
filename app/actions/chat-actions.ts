@@ -34,7 +34,7 @@ export interface ChatMessage {
 
 export interface ChatResponse {
   reply: string;
-  actionType: "text" | "emails" | "jobs" | "draft" | "stats" | "calls" | "error";
+  actionType: "text" | "emails" | "jobs" | "draft" | "stats" | "calls" | "schedule_job_select" | "error";
   actionData?: unknown;
 }
 
@@ -213,8 +213,8 @@ const FUNCTION_DECLARATIONS = [
       properties: {
         type: {
           type: "string",
-          enum: ["job_stats", "job_list", "sent_emails", "synced_emails", "calls"],
-          description: "What to query. 'job_stats' = aggregate counts, 'job_list' = all jobs, 'sent_emails' = outreach emails sent to companies (from SentEmail table), 'synced_emails' = received inbox emails (from SyncedEmail table), 'calls' = upcoming scheduled interview calls.",
+          enum: ["job_stats", "job_list", "pending_jobs", "sent_emails", "synced_emails", "calls"],
+          description: "What to query. 'job_stats' = aggregate counts, 'job_list' = all jobs, 'pending_jobs' = unapplied job posts (status is Draft or Generated), 'sent_emails' = outreach emails sent to companies (from SentEmail table), 'synced_emails' = received inbox emails (from SyncedEmail table), 'calls' = upcoming scheduled interview calls.",
         },
         filter: {
           type: "string",
@@ -238,31 +238,9 @@ const FUNCTION_DECLARATIONS = [
       required: ["to", "subject", "body"],
     },
   },
-  {
-    name: "schedule_call",
-    description: `Schedule a Google Meet call for a specific job and save it to the ThePitchly Follow-ups tracker.
-
-IMPORTANT WORKFLOW — you MUST follow this exact order:
-1. First call db_query({ type: 'job_list' }) to get the user's job posts.
-2. Show the list to the user and ask them to confirm which job this call is for.
-3. If the user doesn't see their job, ask them for a brief description and call db_query({ type: 'job_list', filter: '<keyword>' }) to search.
-4. Once you have a confirmed jobId, call schedule_call with all required fields.
-
-NEVER call schedule_call without a confirmed jobId from the user.`,
-    parameters: {
-      type: "object",
-      properties: {
-        jobId:           { type: "string",  description: "The UUID of the JobPost this call is linked to (required — get from db_query job_list first)" },
-        title:           { type: "string",  description: "Title for the calendar event, e.g. 'Interview call with Stripe'" },
-        startDateTime:   { type: "string",  description: "ISO 8601 datetime with timezone, e.g. '2026-06-20T15:00:00+05:30'" },
-        durationMinutes: { type: "number",  description: "Duration in minutes (30 or 60)" },
-        attendeeEmail:   { type: "string",  description: "Recruiter or interviewer email to invite (optional)" },
-        notes:           { type: "string",  description: "Optional notes about the call" },
-        timeZone:        { type: "string",  description: "IANA timezone string, defaults to 'Asia/Kolkata'" },
-      },
-      required: ["jobId", "title", "startDateTime", "durationMinutes"],
-    },
-  },
+  // schedule_call is intentionally REMOVED from AI tools.
+  // The UI's ScheduleJobSelectPanel handles booking via bookCallFromBotAction directly.
+  // AI only triggers db_query({type:'job_list'}) → schedule_job_select card → client books.
   {
     name: "create_job_post",
     description: `Create a new job post in ThePitchly from a job description the user provides.
@@ -406,6 +384,23 @@ async function executeFunctionCall(
           where,
           orderBy: { postedDate: "desc" },
           take: 10,
+          select: { id: true, role: true, company: true, matchScore: true, status: true, contactEmail: true },
+        });
+        // Detect if called from a scheduling context by checking recent history
+        // We use a heuristic: if Gemini called db_query(job_list) it's almost always for schedule_call flow
+        return {
+          toolResult: jobs,
+          specialAction: { type: "schedule_job_select", data: jobs },
+        };
+      }
+
+      if (queryType === "pending_jobs") {
+        const jobs = await prisma.jobPost.findMany({
+          where: {
+            status: { in: ["Draft", "Generated"] }
+          },
+          orderBy: { postedDate: "desc" },
+          take: 15,
           select: { id: true, role: true, company: true, matchScore: true, status: true, contactEmail: true },
         });
         return {
@@ -770,10 +765,11 @@ You can:
 4. Draft emails for the user to review (use draft_email tool)
 5. Send emails (gmail.api.messages.send — only after user reviews the draft)
 6. Query the local database for job stats and applications (use db_query)
-7. Query scheduled calls/follow-ups (use db_query with type 'calls')
-8. List calendar events (googlecalendar.api.events.getMany)
-9. Schedule a Google Meet call linked to a job (use schedule_call tool — see workflow below)
-10. **Create a new job post** from a description the user provides (use create_job_post tool)
+7. Query unapplied / pending jobs where status is Draft or Generated (use db_query with type 'pending_jobs')
+8. Query scheduled calls/follow-ups (use db_query with type 'calls')
+9. List calendar events (googlecalendar.api.events.getMany)
+10. Schedule a Google Meet call linked to a job (use schedule_call tool — see workflow below)
+11. **Create a new job post** from a description the user provides (use create_job_post tool)
 
 ## CREATING A JOB POST — WORKFLOW
 When the user wants to add a new job, says "add this job", "save this job", "create a job post", or pastes a job description:
@@ -784,21 +780,22 @@ STEP 3: The system will auto-analyze: match score, cold email, proposal, cover l
 STEP 4: Tell the user the job was created and suggest they open it in the Jobs page to review the generated templates.
 
 ## SCHEDULING A CALL — MANDATORY WORKFLOW
-When a user asks to schedule a call, interview, or meeting, you MUST follow this exact flow:
+When a user asks to schedule a call, interview, meeting, or book time with a client:
 
 STEP 1: Call db_query({ type: 'job_list' }) to fetch their job posts.
-STEP 2: Present the job list to the user and ask: "Which job is this call for? Pick one from the list, or describe the company/role so I can search."
-STEP 3: If they don't see their job, call db_query({ type: 'job_list', filter: '<keyword>' }) to search by name/company.
-STEP 4: Once the user confirms a job, call schedule_call with the confirmed jobId + call details.
+STEP 2: STOP — say only "Here are your jobs — please select the one this call is for:" and nothing else. The UI will render a job selection card automatically.
+STEP 3: The user picks the job and fills in the time/date via the interactive scheduling UI. You do NOT need to do anything else.
 
-NEVER call schedule_call without a confirmed jobId. NEVER use corsair_run for calendar event creation — always use schedule_call instead.
+NEVER call schedule_call — it does not exist. NEVER ask the user for time/date/duration in text. The UI handles the entire scheduling flow after you call db_query(job_list).
+NEVER use corsair_run for calendar event creation.
 
 ## RULES
+- If the user asks you to find job leads, search for freelance projects, or scan for new gigs, DO NOT try to search. Instead, decline politely and inform them: "Currently you have to connect your own WhatsApp group and you can read messages, or directly paste any job post. We are currently working on it so that we can have a scraper as well."
 - For ALL Gmail operations, ALWAYS use the corsair_run tool. NEVER attempt to call Gmail API directly.
 - For sending emails, first use draft_email to show a compose card. Never auto-send without user approval.
 - When fetching emails, use gmail.api.messages.list with a 'q' parameter for search queries.
-- For local job/application/call data, use db_query.
-- For scheduling calls, use schedule_call (NOT corsair_run directly). This ensures the call appears in Follow-ups & Calls.
+- For local job/application/call data, use db_query (types: 'job_stats', 'job_list', 'pending_jobs', 'calls', 'sent_emails', 'synced_emails').
+- For scheduling calls, call db_query({ type: 'job_list' }) — the UI card handles all booking. Do NOT call schedule_call.
 - When a user asks for a "meeting link", "meet link", or "conference link", ALWAYS look for and provide the actual video conference URL (e.g., from 'hangoutLink' or 'conferenceData' in Google Calendar events, or 'meetLink' in database calls). DO NOT confuse this with the calendar event page URL ('htmlLink' or 'gcalEventUrl'), which is just a link to view the event on Google Calendar. Only provide the calendar event page link as a fallback if the video conference link is not available.
 - Be concise, helpful, and professional. Use emojis sparingly.
 - If Gmail is not connected, suggest the user connect it from the Mail Account settings page.
@@ -931,5 +928,105 @@ export async function sendDraftEmailAction(
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message ?? "Failed to send email." };
+  }
+}
+
+/**
+ * Book a call directly from the client-side scheduling UI.
+ * Called after user selects a job, picks time/date from the analog clock card, and confirms.
+ */
+export async function bookCallFromBotAction(
+  userEmail: string,
+  input: {
+    jobId: string;
+    jobRole: string;
+    jobCompany: string;
+    title: string;
+    startDateTime: string;
+    durationMinutes: number;
+    attendeeEmail?: string;
+    notes?: string;
+    timeZone?: string;
+  }
+): Promise<{ success: boolean; meetLink?: string; gcalEventUrl?: string; error?: string }> {
+  try {
+    const result = await bookCallAction(userEmail, {
+      jobId:           input.jobId,
+      title:           input.title,
+      attendeeEmail:   input.attendeeEmail ?? "",
+      startDateTime:   input.startDateTime,
+      durationMinutes: input.durationMinutes,
+      notes:           input.notes ?? "",
+      timeZone:        input.timeZone ?? "Asia/Kolkata",
+    });
+
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+
+    return {
+      success:      true,
+      meetLink:     result.meetLink,
+      gcalEventUrl: result.gcalEventUrl,
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message ?? "Failed to book call" };
+  }
+}
+
+// ─── Schedule Context Action ──────────────────────────────────────────────────
+// Fetches full job details + generates AI meeting agenda for pre-filling the schedule form.
+export async function getScheduleContextAction(
+  userEmail: string,
+  jobId: string
+): Promise<{
+  contactEmail?: string;
+  contactName?: string;
+  agenda?: string;
+  error?: string;
+}> {
+  try {
+    const job = await prisma.jobPost.findFirst({
+      where: { id: jobId },
+      select: {
+        role: true, company: true,
+        parsedSummary: true, matchedSkills: true, missingSkills: true,
+        contactEmail: true, contactName: true,
+      },
+    });
+    if (!job) return { error: "Job not found" };
+
+    // Build a short meeting agenda with AI
+    const { getProvider } = await import("../utils/ai/service");
+    const provider = getProvider();
+
+    let agenda = "";
+    if (provider) {
+      const systemPrompt = `You are a freelance developer preparing for a client intro call. Generate a concise meeting agenda with exactly 3 bullet points. Be professional and specific. Output ONLY the 3 bullet points, nothing else, no preamble.`;
+      const userPrompt = `Job: ${job.role} at ${job.company || "a company"}
+Summary: ${(job.parsedSummary || "").slice(0, 400)}
+My matched skills: ${(job.matchedSkills || []).slice(0, 5).join(", ")}
+Skills to address: ${(job.missingSkills || []).slice(0, 3).join(", ")}
+
+Write a 3-bullet agenda for an intro/interview call.`;
+
+      try {
+        agenda = await provider.generate({
+          systemPrompt,
+          userPrompt,
+          temperature: 0.5,
+          maxTokens: 200,
+          apiType: "job_analysis",
+        });
+      } catch { agenda = ""; }
+    }
+
+    return {
+      contactEmail: job.contactEmail ?? undefined,
+      contactName:  job.contactName  ?? undefined,
+      agenda:       agenda.trim()    || undefined,
+    };
+  } catch (err: any) {
+    return { error: err?.message ?? "Failed to fetch context" };
   }
 }
