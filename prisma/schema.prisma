@@ -266,22 +266,11 @@ model WhatsAppMessage {
 // prevent `prisma db push` from treating them as unknown tables.
 // The actual schema is managed by the Corsair SDK internally.
 
-model CorsairAccount {
-  id         String   @id
-  tenantId   String   @map("tenant_id")
-  plugin     String
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  @@map("corsair_accounts")
-  @@ignore
-}
-
 model CorsairIntegration {
   id        String   @id
-  accountId String   @map("account_id")
-  plugin    String
+  name      String
   config    Json     @default("{}")
+  dek       String?
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -289,11 +278,25 @@ model CorsairIntegration {
   @@ignore
 }
 
+model CorsairAccount {
+  id            String   @id
+  tenantId      String   @map("tenant_id")
+  integrationId String   @map("integration_id")
+  config        Json     @default("{}")
+  dek           String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("corsair_accounts")
+  @@ignore
+}
+
 model CorsairEntity {
   id         String   @id
   accountId  String   @map("account_id")
-  plugin     String
+  entityId   String   @map("entity_id")
   entityType String   @map("entity_type")
+  version    String
   data       Json     @default("{}")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
@@ -305,10 +308,11 @@ model CorsairEntity {
 model CorsairEvent {
   id        String   @id
   accountId String   @map("account_id")
-  plugin    String
   eventType String   @map("event_type")
-  data      Json     @default("{}")
+  payload   Json     @default("{}")
+  status    String?
   createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("corsair_events")
   @@ignore
