@@ -43,6 +43,7 @@ if (!globalForPool.pgPool) {
   globalForPool.pgPool = new Pool({
     connectionString: process.env.DATABASE_URL,
     max: 10,
+    ssl: { rejectUnauthorized: false }
   });
 }
 

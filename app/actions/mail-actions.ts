@@ -13,7 +13,10 @@ import { Pool } from "pg";
 // talk to Postgres directly via `pg` Pool — no bundle-cache issues.
 
 function rawPool() {
-  return new Pool({ connectionString: process.env.DATABASE_URL! });
+  return new Pool({
+    connectionString: process.env.DATABASE_URL!,
+    ssl: { rejectUnauthorized: false }
+  });
 }
 
 async function rawInsertSentEmail(data: {
