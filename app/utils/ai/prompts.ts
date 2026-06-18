@@ -121,7 +121,7 @@ MY PROFILE:
 - Portfolio: ${profile.portfolioUrl || "N/A"}
 - GitHub: ${profile.githubUrl || "N/A"}
 - LinkedIn: ${profile.linkedinUrl || "N/A"}
-${profile.resumeText ? `- Summary: ${profile.resumeText.slice(0, 400)}` : ""}
+${profile.resumeText ? `- Resume Text:\n${profile.resumeText}` : ""}
 
 PROJECTS:
 ${projectLines}
@@ -313,7 +313,7 @@ export function buildColdEmailPrompt(
     : `Key skills: ${profile.skills.slice(0, 6).join(", ")}`;
 
   const resumeSnippet = profile.resumeText
-    ? `\nCandidate summary (from resume): ${profile.resumeText.slice(0, 300)}`
+    ? `\nCandidate resume text:\n${profile.resumeText}`
     : "";
 
   const contactFirst = parsed.contactName !== "Hiring Team"

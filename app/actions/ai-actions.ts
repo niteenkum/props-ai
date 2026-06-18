@@ -424,7 +424,7 @@ CRITICAL: Output ONLY valid JSON. No markdown, no explanation, no code blocks.`;
 CANDIDATE PROFILE:
 - Role: ${profile.role}
 - Skills: ${profile.skills.join(", ")}
-${profile.resumeText ? `- Summary: ${profile.resumeText.slice(0, 300)}` : ""}
+${profile.resumeText ? `- Resume Text:\n${profile.resumeText}` : ""}
 ${projectSummaries ? `- Projects:\n${projectSummaries}` : ""}
 ${duplicateSection}
 NEW JOB POST:

@@ -58,7 +58,7 @@ export default function Sidebar({
   };
 
   const isActive = (href: string) => {
-    if (href === "/dashboard/workspace" || href === "/dashboard/mail" || href === "/dashboard/settings") {
+    if (href === "/dashboard/workspace" || href === "/dashboard/mail") {
       return pathname === href;
     }
     return pathname.startsWith(href);
@@ -226,85 +226,98 @@ export default function Sidebar({
           </button>
         </div>
 
-        {/* User Profile Area */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: collapsed ? "8px" : "10px 12px",
-            background: isDark ? "rgba(255, 255, 255, 0.03)" : "rgba(0, 0, 0, 0.02)",
-            borderRadius: 14,
-            border: isDark ? "1px solid rgba(255, 255, 255, 0.05)" : "1px solid var(--border)",
-            boxShadow: isDark ? "0 4px 12px rgba(0, 0, 0, 0.15)" : "none",
-            transition: "all 0.2s ease",
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.04)";
-            e.currentTarget.style.borderColor = isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.12)";
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = isDark ? "rgba(255, 255, 255, 0.03)" : "rgba(0, 0, 0, 0.02)";
-            e.currentTarget.style.borderColor = isDark ? "rgba(255, 255, 255, 0.05)" : "var(--border)";
-          }}
+        {/* User Profile Area — clickable card → /dashboard/profile */}
+        <Link
+          href="/dashboard/profile"
+          title="View your profile"
+          style={{ textDecoration: "none" }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-            {/* Avatar — always visible */}
-            <div style={{
-              width: 32, height: 32,
-              borderRadius: "50%",
-              background: isDark ? "linear-gradient(135deg, #374151, #1F2937)" : "linear-gradient(135deg, #1F2937, #0A0A0A)",
-              color: "#FFFFFF",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 12, fontWeight: 700,
-              flexShrink: 0, position: "relative",
-            }}>
-              {initials}
-              <span style={{
-                position: "absolute", bottom: 0, right: 0,
-                width: 8, height: 8, borderRadius: "50%",
-                background: "#22c55e", border: "2px solid var(--card)",
-              }} />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: collapsed ? "8px" : "10px 12px",
+              background: isActive("/dashboard/profile")
+                ? (isDark ? "rgba(99,102,241,0.10)" : "rgba(99,102,241,0.06)")
+                : (isDark ? "rgba(255, 255, 255, 0.03)" : "rgba(0, 0, 0, 0.02)"),
+              borderRadius: 14,
+              border: isActive("/dashboard/profile")
+                ? (isDark ? "1px solid rgba(99,102,241,0.3)" : "1px solid rgba(99,102,241,0.2)")
+                : (isDark ? "1px solid rgba(255, 255, 255, 0.05)" : "1px solid var(--border)"),
+              boxShadow: isDark ? "0 4px 12px rgba(0, 0, 0, 0.15)" : "none",
+              transition: "all 0.2s ease",
+              cursor: "pointer",
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = isDark ? "rgba(99,102,241,0.12)" : "rgba(99,102,241,0.06)";
+              e.currentTarget.style.borderColor = isDark ? "rgba(99,102,241,0.35)" : "rgba(99,102,241,0.2)";
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = isActive("/dashboard/profile")
+                ? (isDark ? "rgba(99,102,241,0.10)" : "rgba(99,102,241,0.06)")
+                : (isDark ? "rgba(255, 255, 255, 0.03)" : "rgba(0, 0, 0, 0.02)");
+              e.currentTarget.style.borderColor = isActive("/dashboard/profile")
+                ? (isDark ? "rgba(99,102,241,0.3)" : "rgba(99,102,241,0.2)")
+                : (isDark ? "rgba(255, 255, 255, 0.05)" : "var(--border)");
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              {/* Avatar — always visible */}
+              <div style={{
+                width: 32, height: 32,
+                borderRadius: "50%",
+                background: isDark ? "linear-gradient(135deg, #374151, #1F2937)" : "linear-gradient(135deg, #1F2937, #0A0A0A)",
+                color: "#FFFFFF",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 12, fontWeight: 700,
+                flexShrink: 0, position: "relative",
+              }}>
+                {initials}
+                <span style={{
+                  position: "absolute", bottom: 0, right: 0,
+                  width: 8, height: 8, borderRadius: "50%",
+                  background: "#22c55e", border: "2px solid var(--card)",
+                }} />
+              </div>
+
+              {/* Name/role: slide in/out */}
+              <div style={{
+                maxWidth: collapsed ? 0 : 140,
+                opacity: collapsed ? 0 : 1,
+                overflow: "hidden",
+                minWidth: 0,
+                transition: "max-width 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease",
+              }}>
+                <p style={{
+                  fontSize: 12.5, fontWeight: 700, color: "var(--foreground)",
+                  margin: 0, overflow: "hidden", textOverflow: "ellipsis",
+                  whiteSpace: "nowrap", letterSpacing: -0.2,
+                }}>
+                  {userName}
+                </p>
+                <p style={{
+                  fontSize: 9.5, color: "var(--muted-foreground)",
+                  margin: 0, overflow: "hidden", textOverflow: "ellipsis",
+                  whiteSpace: "nowrap", fontWeight: 500,
+                }}>
+                  {userRole}
+                </p>
+              </div>
             </div>
 
-            {/* Name/role: slide in/out */}
+            {/* Arrow hint — fades in when expanded */}
             <div style={{
-              maxWidth: collapsed ? 0 : 140,
-              opacity: collapsed ? 0 : 1,
+              maxWidth: collapsed ? 0 : 20,
+              opacity: collapsed ? 0 : 0.5,
               overflow: "hidden",
-              minWidth: 0,
               transition: "max-width 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease",
+              display: "flex", alignItems: "center",
             }}>
-              <p style={{
-                fontSize: 12.5, fontWeight: 700, color: "var(--foreground)",
-                margin: 0, overflow: "hidden", textOverflow: "ellipsis",
-                whiteSpace: "nowrap", letterSpacing: -0.2,
-              }}>
-                {userName}
-              </p>
-              <p style={{
-                fontSize: 9.5, color: "var(--muted-foreground)",
-                margin: 0, overflow: "hidden", textOverflow: "ellipsis",
-                whiteSpace: "nowrap", fontWeight: 500,
-              }}>
-                {userRole}
-              </p>
+              <ChevronRight size={13} />
             </div>
           </div>
-
-          {/* Profile link: fades out */}
-          <div style={{
-            maxWidth: collapsed ? 0 : 24,
-            opacity: collapsed ? 0 : 1,
-            overflow: "hidden",
-            transition: "max-width 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease",
-          }}>
-            <Link href="/dashboard/profile" title="View profile"
-              style={{ display: "flex", alignItems: "center", color: "var(--muted-foreground)", opacity: 0.7 }}>
-              <User size={14} style={{ cursor: "pointer" }} />
-            </Link>
-          </div>
-        </div>
+        </Link>
 
         {/* Search Input: slides out */}
         <div style={{
@@ -375,7 +388,6 @@ export default function Sidebar({
             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
               {[
                 { href: "/dashboard/whatsapp", label: "WhatsApp", icon: MessageCircle, color: "#22c55e" },
-                { href: "/dashboard/settings", label: "Settings", icon: Settings },  
               ].map(({ href, label, icon, color }) => renderNavLink(href, label, icon, color))}
             </div>
           </div>
