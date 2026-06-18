@@ -2,12 +2,11 @@
 
 /**
  * PropBot AI — Quick Action cards.
- * Freelancer-specific options with premium glassmorphism styling.
+ * 6 focused, high-value actions for the freelancer outreach workflow.
  * Shown on the empty state / home screen of the chat page.
  */
 
 import React from "react";
-import { Mail, BarChart3, Search, FileText, Calendar, Sparkles } from "lucide-react";
 
 export interface QuickAction {
   icon: React.ReactNode;
@@ -15,65 +14,106 @@ export interface QuickAction {
   description: string;
   prompt: string;
   accentColor: string;
-  bgGradient: string;
+  bgColor: string;
 }
+
+// Icons as inline SVGs so we have zero extra deps
+const IconMail = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+    <polyline points="22,6 12,13 2,6"/>
+  </svg>
+);
+
+const IconCalendar = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+    <line x1="16" y1="2" x2="16" y2="6"/>
+    <line x1="8" y1="2" x2="8" y2="6"/>
+    <line x1="3" y1="10" x2="21" y2="10"/>
+    <line x1="12" y1="14" x2="12" y2="18"/>
+    <line x1="10" y1="16" x2="14" y2="16"/>
+  </svg>
+);
+
+const IconFileText = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="16" y1="13" x2="8" y2="13"/>
+    <line x1="16" y1="17" x2="8" y2="17"/>
+    <polyline points="10 9 9 9 8 9"/>
+  </svg>
+);
+
+const IconBriefcase = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+  </svg>
+);
+
+const IconStar = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+  </svg>
+);
+
+const IconInbox = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
+    <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+  </svg>
+);
 
 export const QUICK_ACTIONS: QuickAction[] = [
   {
-    icon: <Mail size={20} />,
-    label: "Priority Inbox",
-    description: "AI-sorted emails & alerts",
-    prompt: "Show me my priority inbox with AI-classified emails",
+    icon: <IconMail />,
+    label: "Write & Send a Gmail",
+    description: "Draft, preview and send an email via Corsair",
+    prompt: "Help me write and send an email via Gmail. Who should I send it to?",
     accentColor: "#6366f1",
-    bgGradient: "rgba(99,102,241,0.06)",
+    bgColor: "rgba(99,102,241,0.08)",
   },
   {
-    icon: <Mail size={20} />,
-    label: "Cold Pitch Client",
-    description: "Write personalised outreach",
-    prompt: "Help me draft a personalized cold pitch to a potential client looking for a freelance web developer",
+    icon: <IconCalendar />,
+    label: "Schedule a Call",
+    description: "Book a Google Meet client call with a job",
+    prompt: "Schedule a client call",
     accentColor: "#7c3aed",
-    bgGradient: "rgba(124,58,237,0.06)",
+    bgColor: "rgba(124,58,237,0.08)",
   },
   {
-    icon: <Search size={20} />,
-    label: "Create Job from Lead",
-    description: "Paste description & analyze",
-    prompt: "Here is a job description. Please create a new job post and analyze it for me:\n\n[Paste job description here]",
-    accentColor: "#3b82f6",
-    bgGradient: "rgba(59,130,246,0.06)",
+    icon: <IconFileText />,
+    label: "Write a Proposal",
+    description: "Generate a personalised client proposal",
+    prompt: "Help me write a professional proposal for a potential client. What type of project is it?",
+    accentColor: "#0ea5e9",
+    bgColor: "rgba(14,165,233,0.08)",
   },
   {
-    icon: <BarChart3 size={20} />,
-    label: "Proposal Tracker",
-    description: "Track conversion & leads",
-    prompt: "Show me my proposal statistics, active rates, and lead pipeline updates",
+    icon: <IconBriefcase />,
+    label: "Unapplied Jobs",
+    description: "View jobs you haven't applied to yet",
+    prompt: "Show me all jobs I haven't applied to yet",
     accentColor: "#10b981",
-    bgGradient: "rgba(16,185,129,0.06)",
+    bgColor: "rgba(16,185,129,0.08)",
   },
   {
-    icon: <FileText size={20} />,
-    label: "Negotiate Pricing",
-    description: "Rate help & invoice drafts",
-    prompt: "Help me calculate a project rate and draft a payment milestone negotiation message",
+    icon: <IconStar />,
+    label: "Know Your Match Score",
+    description: "Check your AI match score for any job",
+    prompt: "What is my match score for the jobs in my pipeline? Show me ranked from highest to lowest.",
     accentColor: "#f59e0b",
-    bgGradient: "rgba(245,158,11,0.06)",
+    bgColor: "rgba(245,158,11,0.08)",
   },
   {
-    icon: <Calendar size={20} />,
-    label: "Client Follow-up",
-    description: "Polite proposal reminders",
-    prompt: "Help me write a polite follow-up message to a client who hasn't responded to my proposal",
+    icon: <IconInbox />,
+    label: "Priority Inbox",
+    description: "AI-classified emails — offers, interviews, leads",
+    prompt: "Show me my priority inbox with AI-classified emails",
     accentColor: "#ec4899",
-    bgGradient: "rgba(236,72,153,0.06)",
-  },
-  {
-    icon: <Sparkles size={20} />,
-    label: "Optimize Portfolio",
-    description: "Refine profile & projects",
-    prompt: "Give me suggestions to optimize my freelancer profile description and portfolio projects to attract more clients",
-    accentColor: "#06b6d4",
-    bgGradient: "rgba(6,182,212,0.06)",
+    bgColor: "rgba(236,72,153,0.08)",
   },
 ];
 
@@ -83,72 +123,104 @@ interface QuickActionsGridProps {
 
 export default function QuickActionsGrid({ onSelect }: QuickActionsGridProps) {
   return (
-    <div style={styles.grid}>
-      {QUICK_ACTIONS.map((action) => (
-        <button
-          key={action.label}
-          id={`propbot-quick-${action.label.toLowerCase().replace(/\s+/g, "-")}`}
-          onClick={() => onSelect(action.prompt)}
-          style={{
-            ...styles.card,
-            borderColor: `${action.accentColor}25`,
-          }}
-          onMouseEnter={(e) => {
-            const el = e.currentTarget as HTMLElement;
-            el.style.borderColor = `${action.accentColor}55`;
-            el.style.background = `linear-gradient(135deg, rgba(255,255,255,0.85) 0%, ${action.bgGradient} 100%)`;
-            el.style.transform = "translateY(-2.5px)";
-            el.style.boxShadow = "0 8px 24px rgba(0,0,0,0.03)";
-          }}
-          onMouseLeave={(e) => {
-            const el = e.currentTarget as HTMLElement;
-            el.style.borderColor = `${action.accentColor}20`;
-            el.style.background = "linear-gradient(135deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.4) 100%)";
-            el.style.transform = "translateY(0)";
-            el.style.boxShadow = "0 4px 16px rgba(0,0,0,0.01), inset 0 0 0 1px rgba(255, 255, 255, 0.6)";
-          }}
-        >
-          <div style={{ ...styles.iconBox, color: action.accentColor, background: `${action.accentColor}12` }}>
-            {action.icon}
-          </div>
-          <div style={styles.cardContent}>
-            <span style={styles.cardLabel}>{action.label}</span>
-            <span style={styles.cardDesc}>{action.description}</span>
-          </div>
-          <div style={{ ...styles.arrow, color: action.accentColor }}>›</div>
-        </button>
-      ))}
-    </div>
+    <>
+      <style>{`
+        .propbot-quick-card {
+          position: relative;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 14px 16px 14px 14px;
+          border-radius: 14px;
+          border: 1.5px solid rgba(226,217,243,0.7);
+          cursor: pointer;
+          text-align: left;
+          transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+          background: rgba(255,255,255,0.75);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          box-shadow: 0 2px 12px rgba(0,0,0,0.03);
+          outline: none;
+          overflow: hidden;
+        }
+
+        [data-theme="dark"] .propbot-quick-card {
+          background: rgba(9, 9, 11, 0.45);
+          border-color: rgba(31, 41, 55, 0.7);
+          box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+        }
+
+        .propbot-quick-card:hover {
+          border-color: var(--hover-accent-color) !important;
+          transform: translateY(-3px);
+          box-shadow: 0 12px 32px var(--hover-accent-glow), 0 2px 8px rgba(0,0,0,0.04);
+        }
+
+        :root:not([data-theme="dark"]) .propbot-quick-card:hover {
+          background: linear-gradient(135deg, #ffffff 0%, var(--hover-accent-bg) 100%) !important;
+        }
+
+        [data-theme="dark"] .propbot-quick-card:hover {
+          background: linear-gradient(135deg, #09090b 0%, var(--hover-accent-bg) 100%) !important;
+          box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0,0,0,0.2);
+        }
+      `}</style>
+      <div style={styles.grid}>
+        {QUICK_ACTIONS.map((action) => (
+          <button
+            key={action.label}
+            id={`propbot-quick-${action.label.toLowerCase().replace(/\s+/g, "-")}`}
+            onClick={() => onSelect(action.prompt)}
+            className="propbot-quick-card"
+            style={{
+              "--hover-accent-color": `${action.accentColor}50`,
+              "--hover-accent-bg": action.bgColor,
+              "--hover-accent-glow": `${action.accentColor}18`,
+            } as React.CSSProperties}
+          >
+            {/* Left accent bar */}
+            <div style={{ ...styles.accentBar, background: action.accentColor }} />
+
+            {/* Icon */}
+            <div style={{ ...styles.iconBox, color: action.accentColor, background: action.bgColor }}>
+              {action.icon}
+            </div>
+
+            {/* Text */}
+            <div style={styles.cardContent}>
+              <span style={styles.cardLabel}>{action.label}</span>
+              <span style={styles.cardDesc}>{action.description}</span>
+            </div>
+
+            {/* Arrow */}
+            <div style={{ ...styles.arrow, color: action.accentColor }}>›</div>
+          </button>
+        ))}
+      </div>
+    </>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
-    gap: 14,
-    width: "100%",
-    maxWidth: 760,
-  },
-  card: {
-    display: "flex",
-    alignItems: "center",
+    gridTemplateColumns: "repeat(3, 1fr)",
     gap: 12,
-    padding: "14px 16px",
-    borderRadius: 14,
-    border: "1px solid",
-    cursor: "pointer",
-    textAlign: "left",
-    transition: "transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease",
-    background: "linear-gradient(135deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.4) 100%)",
-    backdropFilter: "blur(12px)",
-    WebkitBackdropFilter: "blur(12px)",
-    boxShadow: "0 4px 16px rgba(0,0,0,0.01), inset 0 0 0 1px rgba(255, 255, 255, 0.6)",
-    outline: "none",
+    width: "100%",
+    maxWidth: 780,
+  },
+  accentBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: 3,
+    height: "100%",
+    borderRadius: "3px 0 0 3px",
+    opacity: 0.5,
   },
   iconBox: {
-    width: 38,
-    height: 38,
+    width: 40,
+    height: 40,
     borderRadius: 10,
     display: "flex",
     alignItems: "center",
@@ -158,7 +230,7 @@ const styles: Record<string, React.CSSProperties> = {
   cardContent: {
     display: "flex",
     flexDirection: "column",
-    gap: 2,
+    gap: 3,
     flex: 1,
     minWidth: 0,
   },
@@ -167,10 +239,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 650,
     color: "var(--foreground)",
     textAlign: "left",
+    lineHeight: 1.3,
   },
   cardDesc: {
     fontSize: 11,
-    color: "var(--muted-foreground)",
+    color: "#94a3b8",
     textAlign: "left",
     whiteSpace: "nowrap",
     overflow: "hidden",
@@ -178,8 +251,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   arrow: {
     fontSize: 20,
-    opacity: 0.6,
+    opacity: 0.5,
     flexShrink: 0,
     lineHeight: 1,
+    marginLeft: 2,
   },
 };

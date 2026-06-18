@@ -284,6 +284,8 @@ export default function PitchlyOrb({ size = 140, state = "idle" }: PitchlyOrbPro
       };
 
       // Add outer dots
+      const isDark = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "dark";
+
       outerDots.forEach((dot) => {
         const rot = rotatePoint(dot.x, dot.y, dot.z, outerAngleX, outerAngleY, outerAngleZ);
         const proj = project(rot);
@@ -295,14 +297,14 @@ export default function PitchlyOrb({ size = 140, state = "idle" }: PitchlyOrbPro
             const sz = dot.size * (0.45 + pzNorm * 0.75);
             c.beginPath();
             c.arc(proj.px, proj.py, sz, 0, Math.PI * 2);
-            c.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+            c.fillStyle = isDark ? `rgba(9, 9, 11, ${alpha})` : `rgba(255, 255, 255, ${alpha})`;
             c.fill();
 
             // Glow effect on closest front-facing particles
             if (pzNorm > 0.76) {
-              c.shadowColor = "rgba(255, 255, 255, 0.45)";
+              c.shadowColor = isDark ? "rgba(9, 9, 11, 0.45)" : "rgba(255, 255, 255, 0.45)";
               c.shadowBlur = 4.5;
-              c.fillStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
+              c.fillStyle = isDark ? `rgba(9, 9, 11, ${alpha * 0.9})` : `rgba(255, 255, 255, ${alpha * 0.9})`;
               c.fill();
               c.shadowBlur = 0; // reset
             }
@@ -322,7 +324,7 @@ export default function PitchlyOrb({ size = 140, state = "idle" }: PitchlyOrbPro
             const sz = dot.size * (0.45 + pzNorm * 0.65);
             c.beginPath();
             c.arc(proj.px, proj.py, sz, 0, Math.PI * 2);
-            c.fillStyle = `rgba(235, 240, 255, ${alpha})`;
+            c.fillStyle = isDark ? `rgba(63, 63, 70, ${alpha})` : `rgba(235, 240, 255, ${alpha})`;
             c.fill();
           },
         });
@@ -350,7 +352,7 @@ export default function PitchlyOrb({ size = 140, state = "idle" }: PitchlyOrbPro
               c.beginPath();
               c.moveTo(projA.px, projA.py);
               c.lineTo(projB.px, projB.py);
-              c.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+              c.strokeStyle = isDark ? `rgba(9, 9, 11, ${alpha})` : `rgba(255, 255, 255, ${alpha})`;
               c.lineWidth = 0.75;
               c.stroke();
             },
@@ -419,6 +421,27 @@ export default function PitchlyOrb({ size = 140, state = "idle" }: PitchlyOrbPro
           50%      { opacity: 1;   }
         }
 
+        :root {
+          --orb-gradient: linear-gradient(135deg, #09090b 0%, #27272a 50%, #52525b 100%);
+          --orb-glow: radial-gradient(
+            circle,
+            rgba(9, 9, 11, 0.25) 0%,
+            rgba(39, 39, 42, 0.15) 40%,
+            transparent 70%
+          );
+          --orb-shadow: 0 0 ${size * 0.35}px rgba(9, 9, 11, 0.25), 0 0 ${size * 0.6}px rgba(39, 39, 42, 0.12);
+        }
+        [data-theme="dark"] {
+          --orb-gradient: linear-gradient(135deg, #ffffff 0%, #e4e4e7 50%, #a1a1aa 100%);
+          --orb-glow: radial-gradient(
+            circle,
+            rgba(255, 255, 255, 0.35) 0%,
+            rgba(228, 228, 231, 0.2) 40%,
+            transparent 70%
+          );
+          --orb-shadow: 0 0 ${size * 0.35}px rgba(255, 255, 255, 0.35), 0 0 ${size * 0.6}px rgba(228, 228, 231, 0.15);
+        }
+
         .porb-wrap {
           position: relative;
           width: ${size}px;
@@ -435,13 +458,7 @@ export default function PitchlyOrb({ size = 140, state = "idle" }: PitchlyOrbPro
           width: ${size * 1.1}px;
           height: ${size * 1.1}px;
           border-radius: 50%;
-          background: radial-gradient(
-            circle,
-            rgba(99,179,237,0.4)  0%,
-            rgba(167,139,250,0.25) 40%,
-            rgba(236,72,153,0.1)  70%,
-            transparent 100%
-          );
+          background: var(--orb-glow);
           filter: blur(${size * 0.18}px);
           animation: orb-glow-pulse ${blobSpeed} ease-in-out infinite;
         }
@@ -452,22 +469,12 @@ export default function PitchlyOrb({ size = 140, state = "idle" }: PitchlyOrbPro
           width: ${size}px;
           height: ${size}px;
           border-radius: 60% 40% 55% 45% / 50% 60% 40% 50%;
-          background: conic-gradient(
-            from 180deg at 50% 50%,
-            #63b3ed 0deg,
-            #9f7aea 60deg,
-            #ec4899 120deg,
-            #f6ad55 180deg,
-            #63b3ed 220deg,
-            #a78bfa 280deg,
-            #63b3ed 360deg
-          );
+          background: var(--orb-gradient);
           animation:
             orb-blob ${blobSpeed} ease-in-out infinite,
             orb-glow-pulse ${blobSpeed} ease-in-out infinite;
           box-shadow:
-            0 0 ${size * 0.35}px rgba(99,179,237,0.5),
-            0 0 ${size * 0.6}px  rgba(167,139,250,0.25),
+            var(--orb-shadow),
             inset 0 ${size * 0.05}px ${size * 0.12}px rgba(255,255,255,0.2);
           overflow: hidden;
         }
@@ -504,7 +511,7 @@ export default function PitchlyOrb({ size = 140, state = "idle" }: PitchlyOrbPro
           position: absolute;
           inset: 0;
           border-radius: inherit;
-          mix-blend-mode: screen;
+          mix-blend-mode: normal;
           animation: orb-dot-pulse 3s ease-in-out infinite;
           cursor: grab;
           user-select: none;

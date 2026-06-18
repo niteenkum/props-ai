@@ -194,9 +194,9 @@ function EmailThreadModal({
         style={{
           width: "100%", maxWidth: 680,
           maxHeight: "90vh",
-          background: "#fff",
+          background: "var(--card)",
           borderRadius: 20,
-          boxShadow: "0 32px 80px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.06)",
+          boxShadow: "0 32px 80px rgba(0,0,0,0.28), 0 0 0 1px var(--border)",
           display: "flex", flexDirection: "column",
           overflow: "hidden",
           animation: "slideUp 0.22s cubic-bezier(0.34,1.56,0.64,1)",
@@ -206,8 +206,8 @@ function EmailThreadModal({
         <div style={{
           display: "flex", alignItems: "center", gap: 12,
           padding: "14px 18px",
-          borderBottom: "1px solid rgba(0,0,0,0.07)",
-          background: "linear-gradient(135deg, #f8f7ff, #f0f0ff)",
+          borderBottom: "1px solid var(--border)",
+          background: "linear-gradient(135deg, var(--muted), var(--background))",
           flexShrink: 0,
         }}>
           <div style={{
@@ -219,23 +219,23 @@ function EmailThreadModal({
             {(fromName).charAt(0).toUpperCase()}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 800, color: "#1e1b4b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div style={{ fontSize: 13.5, fontWeight: 800, color: "var(--foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {fromName}
             </div>
-            <div style={{ fontSize: 11, color: "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div style={{ fontSize: 11, color: "var(--muted-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {subject}
             </div>
           </div>
           <button
             onClick={onClose}
             style={{
-              background: "rgba(0,0,0,0.06)", border: "none", cursor: "pointer",
+              background: "var(--border)", border: "none", cursor: "pointer",
               width: 30, height: 30, borderRadius: "50%",
               display: "flex", alignItems: "center", justifyContent: "center",
-              color: "#64748b", flexShrink: 0, transition: "background 0.15s",
+              color: "var(--muted-foreground)", flexShrink: 0, transition: "background 0.15s",
             }}
-            onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.1)"}
-            onMouseLeave={e => e.currentTarget.style.background = "rgba(0,0,0,0.06)"}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--border)"}
+            onMouseLeave={e => e.currentTarget.style.background = "var(--border)"}
           >
             <X size={14} />
           </button>
@@ -246,7 +246,7 @@ function EmailThreadModal({
           flex: 1, overflowY: "auto",
           padding: "16px 18px",
           display: "flex", flexDirection: "column", gap: 12,
-          background: "#fafaf9",
+          background: "var(--background)",
           minHeight: 200,
         }}>
           {loading && (
@@ -298,14 +298,14 @@ function EmailThreadModal({
                   borderRadius: 16,
                   borderTopRightRadius: isSent ? 4 : 16,
                   borderTopLeftRadius: isSent ? 16 : 4,
-                  background: isSent ? "linear-gradient(135deg, #6366f1, #4f46e5)" : "#fff",
-                  color: isSent ? "#fff" : "#1e293b",
+                  background: isSent ? "linear-gradient(135deg, #6366f1, #4f46e5)" : "var(--card)",
+                  color: isSent ? "#fff" : "var(--foreground)",
                   fontSize: 12.5, lineHeight: 1.65,
                   boxShadow: isSent
                     ? "0 2px 12px rgba(99,102,241,0.3)"
                     : "0 1px 4px rgba(0,0,0,0.07)",
                   wordBreak: "break-word",
-                  border: isSent ? "none" : "1px solid rgba(0,0,0,0.06)",
+                  border: isSent ? "none" : "1px solid var(--border)",
                 }}>
                   {renderThreadBody(m.body, isSent)}
                 </div>
@@ -317,19 +317,19 @@ function EmailThreadModal({
         {/* ── Reply Composer ── */}
         {userEmail && (
           <div style={{
-            borderTop: "1px solid rgba(0,0,0,0.07)",
-            background: "#fff",
+            borderTop: "1px solid var(--border)",
+            background: "var(--card)",
             padding: "12px 18px",
             flexShrink: 0,
           }}>
             {/* To / Subject row */}
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", width: 40, flexShrink: 0 }}>To</span>
-              <span style={{ fontSize: 12, color: "#1e293b", fontWeight: 500 }}>{fromEmail}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--muted-foreground)", width: 40, flexShrink: 0 }}>To</span>
+              <span style={{ fontSize: 12, color: "var(--foreground)", fontWeight: 500 }}>{fromEmail}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", width: 40, flexShrink: 0 }}>Re:</span>
-              <span style={{ fontSize: 11.5, color: "#475569" }}>{subject.toLowerCase().startsWith("re:") ? subject : `Re: ${subject}`}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--muted-foreground)", width: 40, flexShrink: 0 }}>Re:</span>
+              <span style={{ fontSize: 11.5, color: "var(--muted-foreground)" }}>{subject.toLowerCase().startsWith("re:") ? subject : `Re: ${subject}`}</span>
             </div>
             {/* Textarea */}
             <textarea
@@ -344,14 +344,14 @@ function EmailThreadModal({
               style={{
                 width: "100%", boxSizing: "border-box",
                 padding: "10px 12px", borderRadius: 10, fontSize: 13,
-                border: "1.5px solid rgba(99,102,241,0.2)",
-                background: "#fafaf9",
-                color: "#1e293b", outline: "none",
+                border: "1.5px solid var(--border)",
+                background: "var(--input)",
+                color: "var(--foreground)", outline: "none",
                 fontFamily: "inherit", lineHeight: 1.6, resize: "none",
                 transition: "border-color 0.15s",
               }}
               onFocus={e => e.target.style.borderColor = "#6366f1"}
-              onBlur={e => e.target.style.borderColor = "rgba(99,102,241,0.2)"}
+              onBlur={e => e.target.style.borderColor = "var(--border)"}
             />
             {sendError && (
               <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6, fontSize: 11.5, color: "#ef4444" }}>
@@ -362,7 +362,7 @@ function EmailThreadModal({
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
               <button
                 onClick={() => setExpanded(e => !e)}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600 }}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted-foreground)", display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600 }}
               >
                 {expanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
                 {expanded ? "Collapse" : "Expand"}
@@ -375,8 +375,8 @@ function EmailThreadModal({
                   padding: "8px 20px", borderRadius: 9,
                   background: replyText.trim() && !sending
                     ? "linear-gradient(135deg, #818cf8, #6366f1)"
-                    : "rgba(0,0,0,0.07)",
-                  color: replyText.trim() && !sending ? "#fff" : "#94a3b8",
+                    : "var(--muted)",
+                  color: replyText.trim() && !sending ? "#fff" : "var(--muted-foreground)",
                   border: "none", cursor: replyText.trim() && !sending ? "pointer" : "not-allowed",
                   fontSize: 13, fontWeight: 700,
                   boxShadow: replyText.trim() && !sending ? "0 4px 14px rgba(99,102,241,0.35)" : "none",
@@ -716,7 +716,7 @@ function JobsPanel({
                 onClick={() => toggleJob(jobId)}
                 style={{
                   ...styles.jobSelectRow,
-                  background: isSelected ? "rgba(124,58,237,0.06)" : "#fafafe",
+                  background: isSelected ? "rgba(124,58,237,0.08)" : "var(--muted)",
                   borderColor: isSelected ? "#7c3aed" : "var(--border)",
                   boxShadow: isSelected ? "0 0 0 2px rgba(124,58,237,0.12)" : "none",
                 }}
@@ -724,8 +724,8 @@ function JobsPanel({
                 {/* Checkbox */}
                 <div style={{
                   ...styles.jobCheckbox,
-                  background: isSelected ? "#7c3aed" : "#fff",
-                  borderColor: isSelected ? "#7c3aed" : "#cbd5e1",
+                  background: isSelected ? "#7c3aed" : "var(--card)",
+                  borderColor: isSelected ? "#7c3aed" : "var(--border)",
                 }}>
                   {isSelected && (
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3">
@@ -766,9 +766,9 @@ function JobsPanel({
                 onClick={() => setActionId(action.id)}
                 style={{
                   ...styles.jobActionBtn,
-                  background: actionId === action.id ? "rgba(124,58,237,0.08)" : "#fafafe",
+                  background: actionId === action.id ? "rgba(124,58,237,0.12)" : "var(--muted)",
                   borderColor: actionId === action.id ? "#7c3aed" : "var(--border)",
-                  color: actionId === action.id ? "#5b21b6" : "var(--foreground)",
+                  color: actionId === action.id ? "#7c3aed" : "var(--foreground)",
                 }}
               >
                 <span style={{ fontSize: 16 }}>{action.label.split(" ")[0]}</span>
@@ -1389,30 +1389,38 @@ function ScheduleJobSelectPanel({
                 <div
                   key={i}
                   onClick={() => { setSelectedJob(job); setModalOpen(false); setMeetingTitle(""); setAttendeeEmail(""); setNotes(""); setStep("schedule"); fetchScheduleContext(job); }}
-                  style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 12, border: "1.5px solid #e8e3ff", background: "#fafafe", cursor: "pointer", transition: "all 0.15s" }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#f0eeff"; (e.currentTarget as HTMLElement).style.borderColor = "#7c3aed"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "#fafafe"; (e.currentTarget as HTMLElement).style.borderColor = "#e8e3ff"; }}
+                  style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 12, border: "1.5px solid var(--job-item-border, #e8e3ff)", background: "var(--job-item-bg, #fafafe)", cursor: "pointer", transition: "all 0.15s" }}
+                  onMouseEnter={(e) => {
+                    const el = e.currentTarget as HTMLElement;
+                    el.style.background = "var(--job-item-hover-bg, #f0eeff)";
+                    el.style.borderColor = "var(--job-item-hover-border, #7c3aed)";
+                  }}
+                  onMouseLeave={(e) => {
+                    const el = e.currentTarget as HTMLElement;
+                    el.style.background = "var(--job-item-bg, #fafafe)";
+                    el.style.borderColor = "var(--job-item-border, #e8e3ff)";
+                  }}
                 >
                   <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #7c3aed20, #4f46e520)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>💼</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#1e1b4b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.role || "Untitled Role"}</div>
-                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--job-item-text, #1e1b4b)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.role || "Untitled Role"}</div>
+                    <div style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 2 }}>
                       {(() => { const co = (job.company ?? "").trim().toLowerCase(); return co && co !== "not specified" ? job.company : "No company"; })()}
                     </div>
                   </div>
-                  {job.matchScore && <span style={{ fontSize: 11.5, fontWeight: 700, color: "#7c3aed", background: "#f0eeff", padding: "3px 8px", borderRadius: 20, flexShrink: 0 }}>{job.matchScore}%</span>}
+                  {job.matchScore && <span style={{ fontSize: 11.5, fontWeight: 700, color: "#7c3aed", background: "var(--job-item-hover-bg, #f0eeff)", padding: "3px 8px", borderRadius: 20, flexShrink: 0 }}>{job.matchScore}%</span>}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>
                 </div>
               ))}
             </div>
 
             {/* No-job option */}
-            <div style={{ padding: "12px 16px 16px", borderTop: "1px solid #f1f5f9" }}>
+            <div style={{ padding: "12px 16px 16px", borderTop: "1px solid var(--border)" }}>
               <button
                 onClick={() => { setSelectedJob(null); setModalOpen(false); setStep("schedule"); }}
-                style={{ width: "100%", padding: "11px 16px", borderRadius: 12, border: "1.5px dashed #cbd5e1", background: "#f8fafc", color: "#64748b", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#f1f5f9"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "#f8fafc"; }}
+                style={{ width: "100%", padding: "11px 16px", borderRadius: 12, border: "1.5px dashed var(--border)", background: "var(--muted)", color: "var(--muted-foreground)", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--border)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--muted)"; }}
               >
                 📆 Schedule without a job post
               </button>
@@ -2113,7 +2121,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "6px 12px",
     borderRadius: 20,
     border: "1px solid var(--border)",
-    background: "#F8FAFF",
+    background: "var(--muted)",
     color: "var(--foreground)",
     fontSize: 11.5,
     fontWeight: 600,
@@ -2176,7 +2184,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "var(--foreground)",
   },
   cardBubble: {
-    background: "#FFFFFF",
+    background: "var(--card)",
     border: "1px solid var(--border)",
     borderRadius: 14,
     padding: "16px",
@@ -2282,7 +2290,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   typingBubble: {
-    background: "#FFFFFF",
+    background: "var(--card)",
     border: "1px solid var(--border)",
     borderRadius: "6px 14px 14px 14px",
     padding: "10px 16px",
@@ -2307,7 +2315,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   // Email card
   emailCard: {
-    background: "#FFFFFF",
+    background: "var(--card)",
     border: "1px solid var(--border)",
     borderRadius: 12,
     padding: "12px 14px",
@@ -2448,11 +2456,11 @@ const styles: Record<string, React.CSSProperties> = {
 
   // Expanded panel
   jobPanel: {
-    background: "#FFFFFF",
-    border: "1.5px solid #e2d9f3",
+    background: "var(--card)",
+    border: "1.5px solid var(--border)",
     borderRadius: 14,
     overflow: "hidden",
-    boxShadow: "0 4px 20px rgba(124,58,237,0.08)",
+    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.2)",
     width: "100%",
   },
   jobPanelHeader: {
@@ -2709,9 +2717,9 @@ const styles: Record<string, React.CSSProperties> = {
     width: "100%",
     padding: "9px 12px",
     borderRadius: 9,
-    border: "1.5px solid #e2d9f3",
+    border: "1.5px solid var(--border)",
     fontSize: 12.5,
-    background: "#fafafe",
+    background: "var(--input)",
     color: "var(--foreground)",
     fontFamily: "inherit",
     outline: "none",
@@ -2722,7 +2730,8 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     padding: "8px 0",
     borderRadius: 8,
-    border: "1.5px solid #e2e8f0",
+    border: "1.5px solid var(--border)",
+    color: "var(--foreground)",
     fontSize: 12,
     fontWeight: 700,
     cursor: "pointer",
@@ -2732,8 +2741,8 @@ const styles: Record<string, React.CSSProperties> = {
   scheduleSummaryCell: {
     padding: "10px 12px",
     borderRadius: 10,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
+    background: "var(--muted)",
+    border: "1px solid var(--border)",
     display: "flex",
     flexDirection: "column" as const,
     gap: 3,
@@ -2741,14 +2750,14 @@ const styles: Record<string, React.CSSProperties> = {
   scheduleSummaryCellLabel: {
     fontSize: 9.5,
     fontWeight: 700,
-    color: "#94a3b8",
+    color: "var(--muted-foreground)",
     textTransform: "uppercase" as const,
     letterSpacing: "0.07em",
   },
   scheduleSummaryCellValue: {
     fontSize: 12,
     fontWeight: 600,
-    color: "#1e1b4b",
+    color: "var(--foreground)",
     lineHeight: 1.4,
   },
 
@@ -2771,7 +2780,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: "100%",
   },
   statCell: {
-    background: "#FFFFFF",
+    background: "var(--card)",
     border: "1px solid var(--border)",
     borderRadius: 12,
     padding: "14px",
@@ -2786,7 +2795,7 @@ const styles: Record<string, React.CSSProperties> = {
   
   // Call / Meeting card redesigned with left date badge
   callCard: {
-    background: "#FFFFFF",
+    background: "var(--card)",
     border: "1px solid var(--border)",
     borderRadius: 12,
     padding: "14px 16px",
@@ -2858,7 +2867,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 11.5,
     color: "var(--muted-foreground)",
     lineHeight: 1.4,
-    background: "#F8FAFC",
+    background: "var(--muted)",
     padding: "8px 10px",
     borderRadius: 8,
     margin: "4px 0",

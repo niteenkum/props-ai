@@ -45,6 +45,7 @@ function PropBotContent() {
   const hasMessages                = messages.length > 0;
 
   const [showPalette, setShowPalette] = useState(false);
+  const [showHelper, setShowHelper]   = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const paletteSearchRef = useRef<HTMLInputElement>(null);
@@ -140,21 +141,21 @@ function PropBotContent() {
     {
       id: "inbox",
       name: "Show Priority Inbox",
-      shortcut: "I",
+      shortcut: "⌘ I",
       description: "Fetch synced emails with AI priority classification",
       action: () => handleSend("Show me my priority inbox with AI-classified emails"),
     },
     {
       id: "pitch",
       name: "Draft Cold Pitch",
-      shortcut: "C",
+      shortcut: "⌘ E",
       description: "Write a personalized cold outreach pitch for clients",
       action: () => handleSend("Help me draft a personalized cold pitch to a potential client looking for a freelance web developer"),
     },
     {
       id: "create-job",
       name: "Create Job Post",
-      shortcut: "J",
+      shortcut: "⌘ J",
       description: "Paste a job description to create and analyze a job",
       action: () => {
         const template = "Here is a job description. Please create a new job post and analyze it for me:\n\n";
@@ -171,21 +172,21 @@ function PropBotContent() {
     {
       id: "stats",
       name: "Show Proposal Stats",
-      shortcut: "S",
+      shortcut: "⌘ D",
       description: "View outreach conversion rates and pipeline counts",
       action: () => handleSend("Show me my proposal statistics, active rates, and lead pipeline updates"),
     },
     {
       id: "schedule",
       name: "Schedule Client Call",
-      shortcut: "F",
+      shortcut: "⌘ .",
       description: "Schedule a Google Meet call linked to a job post",
       action: () => handleSend("Schedule a client call"),
     },
     {
       id: "clear",
       name: "Clear Conversation",
-      shortcut: "X",
+      shortcut: "⌘ ⌫",
       description: "Wipe chat history and reset screen",
       action: () => setMessages([]),
     }
@@ -242,18 +243,19 @@ function PropBotContent() {
           return;
         }
       } else {
-        // Direct shortcuts when NOT typing
-        if (!isTyping) {
+        // Modifier-based shortcuts — safe, no conflict with typing
+        const mod = e.metaKey || e.ctrlKey;
+        if (mod) {
           const key = e.key?.toLowerCase();
+          // Cmd/Ctrl + I → Priority Inbox
           if (key === "i") {
             e.preventDefault();
             handleSend("Show me my priority inbox with AI-classified emails");
-          } else if (key === "c") {
+          // Cmd/Ctrl + E → Draft cold pitch (email)
+          } else if (key === "e") {
             e.preventDefault();
             handleSend("Help me draft a personalized cold pitch to a potential client looking for a freelance web developer");
-          } else if (key === "s") {
-            e.preventDefault();
-            handleSend("Show me my proposal statistics, active rates, and lead pipeline updates");
+          // Cmd/Ctrl + J → Create Job
           } else if (key === "j") {
             e.preventDefault();
             const template = "Here is a job description. Please create a new job post and analyze it for me:\n\n";
@@ -265,13 +267,23 @@ function PropBotContent() {
                 inputRef.current.selectionEnd = template.length;
               }
             }, 50);
-          } else if (key === "f") {
+          // Cmd/Ctrl + D → Dashboard stats
+          } else if (key === "d") {
+            e.preventDefault();
+            handleSend("Show me my proposal statistics, active rates, and lead pipeline updates");
+          // Cmd/Ctrl + . → Schedule call
+          } else if (key === ".") {
             e.preventDefault();
             handleSend("Schedule a client call");
-          } else if (key === "x") {
+          // Cmd/Ctrl + Backspace → Clear chat
+          } else if (e.key === "Backspace") {
             e.preventDefault();
             setMessages([]);
           }
+        }
+        // Esc always closes palette or blurs textarea
+        if (e.key === "Escape" && !showPalette) {
+          inputRef.current?.blur();
         }
       }
     };
@@ -339,36 +351,7 @@ function PropBotContent() {
   return (
     <div style={styles.page}>
 
-      {/* ── Header ── */}
-      <div style={styles.header}>
-        <div style={styles.headerLeft}>
-          <div style={styles.headerDot} />
-          <div>
-            <h2 style={styles.headerTitle}>PropBot Assistant</h2>
-            <p style={styles.headerSub}>Active Session · Connected via Corsair</p>
-          </div>
-        </div>
-        
-        <div style={styles.headerRight}>
-          <button 
-            onClick={() => setShowPalette(true)}
-            style={styles.headerShortcutBtn}
-            title="Open Command Palette (Cmd+K)"
-          >
-            <span style={styles.shortcutIconKey}>⌘</span>
-            <span style={styles.shortcutIconKey}>K</span>
-            <span style={styles.shortcutIconText}>Palette</span>
-          </button>
-          <div style={styles.divider} />
-          <button 
-            onClick={clearChat} 
-            style={styles.actionIconBtn}
-            title="Clear Chat History (X)"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      </div>
+
 
       {/* ── Chat Content Scroll Area ─────────────────────────────────────── */}
       <div style={styles.body}>
@@ -388,6 +371,27 @@ function PropBotContent() {
                 <span>or</span>
                 <kbd style={styles.keyboardTipBadge}>Ctrl K</kbd>
                 <span>for Command Palette</span>
+              </div>
+              <div style={styles.shortcutChipsContainer}>
+                <div className="propbot-shortcut-chip" style={styles.shortcutChip} onClick={() => handleSend("Show me my priority inbox with AI-classified emails")}>
+                  <kbd style={styles.shortcutChipKbd}>⌘I</kbd> Inbox
+                </div>
+                <div className="propbot-shortcut-chip" style={styles.shortcutChip} onClick={() => handleSend("Help me draft a personalized cold pitch to a potential client looking for a freelance web developer")}>
+                  <kbd style={styles.shortcutChipKbd}>⌘E</kbd> Pitch
+                </div>
+                <div className="propbot-shortcut-chip" style={styles.shortcutChip} onClick={() => {
+                  const template = "Here is a job description. Please create a new job post and analyze it for me:\n\n";
+                  setInput(template);
+                  setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 50);
+                }}>
+                  <kbd style={styles.shortcutChipKbd}>⌘J</kbd> Job
+                </div>
+                <div className="propbot-shortcut-chip" style={styles.shortcutChip} onClick={() => handleSend("Show me my proposal statistics, active rates, and lead pipeline updates")}>
+                  <kbd style={styles.shortcutChipKbd}>⌘D</kbd> Stats
+                </div>
+                <div className="propbot-shortcut-chip" style={styles.shortcutChip} onClick={() => handleSend("Schedule a client call")}>
+                  <kbd style={styles.shortcutChipKbd}>⌘.</kbd> Meet
+                </div>
               </div>
             </div>
             <QuickActionsGrid onSelect={handleSelectSuggestion} />
@@ -461,7 +465,7 @@ function PropBotContent() {
                       onMouseEnter={() => setActiveIndex(index)}
                       style={{
                         ...styles.paletteItem,
-                        background: isHoveredOrActive ? "rgba(124, 58, 237, 0.08)" : "transparent",
+                        background: isHoveredOrActive ? "var(--palette-item-hover)" : "transparent",
                         borderLeftColor: isHoveredOrActive ? "#7c3aed" : "transparent",
                       }}
                     >
@@ -503,6 +507,32 @@ function PropBotContent() {
 
       {/* ── Bottom Input Container ──────────────────────────────────────── */}
       <div style={styles.bottom}>
+        {/* Helper popover card */}
+        {showHelper && (
+          <div style={styles.helperCard}>
+            <div style={styles.helperHeader}>
+              <span style={styles.helperTitle}>⚡ Power-User Hotkeys</span>
+              <button style={styles.helperClose} onClick={() => setShowHelper(false)}>✕</button>
+            </div>
+            <div style={styles.helperList}>
+              {COMMANDS.map((cmd) => (
+                <div
+                  key={cmd.id}
+                  onClick={() => {
+                    cmd.action();
+                    setShowHelper(false);
+                  }}
+                  style={styles.helperItem}
+                  className="propbot-helper-item"
+                >
+                  <span style={styles.helperItemName}>{cmd.name}</span>
+                  <kbd style={styles.helperItemKbd}>{cmd.shortcut}</kbd>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Premium floating input */}
         <div id="propbot-input-outer" style={styles.inputOuter}>
           {/* Top row: textarea */}
@@ -525,26 +555,50 @@ function PropBotContent() {
                 {loading ? "Pitchly AI is thinking…" : "Press Enter to send · Shift+Enter for new line"}
               </span>
             </div>
-            <button
-              id="propbot-send-btn"
-              style={{
-                ...styles.sendBtn,
-                opacity: !input.trim() || loading ? 0.45 : 1,
-                cursor: !input.trim() || loading ? "not-allowed" : "pointer",
-                transition: "all 0.2s ease",
-              }}
-              onClick={() => handleSend()}
-              disabled={!input.trim() || loading}
-            >
-              {loading ? (
-                <span style={{ fontSize: 16 }}>⏳</span>
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="22" y1="2" x2="11" y2="13" />
-                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button
+                onClick={() => setShowHelper((prev) => !prev)}
+                style={{
+                  ...styles.keyboardBtn,
+                  background: showHelper ? "var(--palette-item-hover)" : "transparent",
+                  border: showHelper ? "1px solid #7c3aed" : "1px solid var(--border)",
+                  color: showHelper ? "#7c3aed" : "var(--muted-foreground)",
+                }}
+                title="Keyboard Shortcuts Guide"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2" ry="2"/>
+                  <line x1="6" y1="8" x2="6" y2="8"/>
+                  <line x1="10" y1="8" x2="10" y2="8"/>
+                  <line x1="14" y1="8" x2="14" y2="8"/>
+                  <line x1="18" y1="8" x2="18" y2="8"/>
+                  <line x1="6" y1="12" x2="6" y2="12"/>
+                  <line x1="18" y1="12" x2="18" y2="12"/>
+                  <line x1="7" y1="16" x2="17" y2="16"/>
+                  <line x1="10" y1="12" x2="14" y2="12"/>
                 </svg>
-              )}
-            </button>
+              </button>
+              <button
+                id="propbot-send-btn"
+                style={{
+                  ...styles.sendBtn,
+                  opacity: !input.trim() || loading ? 0.45 : 1,
+                  cursor: !input.trim() || loading ? "not-allowed" : "pointer",
+                  transition: "all 0.2s ease",
+                }}
+                onClick={() => handleSend()}
+                disabled={!input.trim() || loading}
+              >
+                {loading ? (
+                  <span style={{ fontSize: 16 }}>⏳</span>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13" />
+                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -556,6 +610,22 @@ export default function PropBotPage() {
   return (
     <>
       <style>{`
+        :root {
+          --bottom-gradient-fade: rgba(248, 247, 255, 0.8);
+          --palette-bg: rgba(255, 255, 255, 0.95);
+          --palette-text: #1e1b4b;
+          --palette-border: rgba(124, 58, 237, 0.18);
+          --palette-item-hover: rgba(124, 58, 237, 0.08);
+          --palette-shadow: 0 10px 40px rgba(124, 58, 237, 0.15), 0 2px 10px rgba(0,0,0,0.05);
+        }
+        [data-theme="dark"] {
+          --bottom-gradient-fade: rgba(0, 0, 0, 0.8);
+          --palette-bg: rgba(9, 9, 11, 0.95);
+          --palette-text: #f9fafb;
+          --palette-border: rgba(124, 58, 237, 0.3);
+          --palette-item-hover: rgba(124, 58, 237, 0.15);
+          --palette-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 2px 10px rgba(0,0,0,0.25);
+        }
         @keyframes propbot-dot {
           0%, 100% { transform: translateY(0); opacity: 0.4; }
           50%       { transform: translateY(-4px); opacity: 1; }
@@ -585,12 +655,30 @@ export default function PropBotPage() {
           border-color: #7c3aed;
           box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.08), 0 4px 24px rgba(124, 58, 237, 0.12);
         }
+        [data-theme="dark"] #propbot-input-outer {
+          background: linear-gradient(145deg, #09090b, #18181b);
+          border-color: #27272a;
+          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+        }
+        [data-theme="dark"] #propbot-input-outer:focus-within {
+          border-color: #7c3aed;
+          box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.15), 0 4px 24px rgba(0, 0, 0, 0.5);
+        }
         #propbot-send-btn:hover:not(:disabled) {
           background: linear-gradient(135deg, #6d28d9, #4f46e5) !important;
           transform: scale(1.04);
         }
         #propbot-send-btn:active:not(:disabled) {
           transform: scale(0.97);
+        }
+        .propbot-shortcut-chip:hover {
+          border-color: #7c3aed !important;
+          color: var(--foreground) !important;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(124, 58, 237, 0.05);
+        }
+        .propbot-helper-item:hover {
+          background: var(--palette-item-hover) !important;
         }
       `}</style>
       
@@ -739,13 +827,14 @@ const styles: Record<string, React.CSSProperties> = {
     width: "100%",
   },
   bottom: {
-    background: "linear-gradient(180deg, transparent 0%, rgba(248,247,255,0.8) 30%, #f8f7ff 100%)",
+    background: "linear-gradient(180deg, transparent 0%, var(--bottom-gradient-fade) 30%, var(--background) 100%)",
     padding: "16px 20px 24px",
     display: "flex",
     flexDirection: "column",
     gap: 0,
     flexShrink: 0,
     borderRadius: "0 0 16px 16px",
+    position: "relative",
   },
   inputOuter: {
     display: "flex",
@@ -759,7 +848,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: "none",
     resize: "none" as const,
     fontSize: 14.5,
-    color: "#1e1b4b",
+    color: "var(--foreground)",
     lineHeight: 1.65,
     maxHeight: 140,
     overflowY: "auto" as const,
@@ -828,10 +917,10 @@ const styles: Record<string, React.CSSProperties> = {
   paletteContainer: {
     maxWidth: 550,
     width: "90%",
-    background: "rgba(255, 255, 255, 0.95)",
-    border: "1.5px solid rgba(124, 58, 237, 0.18)",
+    background: "var(--palette-bg)",
+    border: "1.5px solid var(--palette-border)",
     borderRadius: 18,
-    boxShadow: "0 10px 40px rgba(124, 58, 237, 0.15), 0 2px 10px rgba(0,0,0,0.05)",
+    boxShadow: "var(--palette-shadow)",
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",
@@ -851,14 +940,14 @@ const styles: Record<string, React.CSSProperties> = {
     border: "none",
     outline: "none",
     fontSize: 15,
-    color: "#1e1b4b",
+    color: "var(--palette-text)",
     fontFamily: "inherit",
   },
   paletteEscBadge: {
     fontSize: 10,
     fontWeight: 700,
     color: "var(--muted-foreground)",
-    background: "rgba(0,0,0,0.05)",
+    background: "var(--border)",
     padding: "3px 7px",
     borderRadius: 5,
     cursor: "pointer",
@@ -913,10 +1002,13 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     color: "#7c3aed",
     background: "rgba(124, 58, 237, 0.08)",
-    padding: "3px 6px",
-    borderRadius: 4,
-    minWidth: 18,
-    textAlign: "center",
+    border: "1px solid rgba(124, 58, 237, 0.15)",
+    padding: "3px 7px",
+    borderRadius: 5,
+    minWidth: 36,
+    textAlign: "center" as const,
+    whiteSpace: "nowrap" as const,
+    letterSpacing: "0.5px",
   },
   paletteNoResults: {
     padding: "24px 16px",
@@ -980,5 +1072,108 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "2px 5px",
     borderRadius: 4,
     fontFamily: "inherit",
+  },
+  shortcutChipsContainer: {
+    display: "flex",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 14,
+    maxWidth: 550,
+  },
+  shortcutChip: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "5px 10px",
+    borderRadius: 8,
+    border: "1px solid var(--border)",
+    background: "var(--card)",
+    color: "var(--muted-foreground)",
+    fontSize: 11.5,
+    fontWeight: 500,
+    cursor: "pointer",
+    transition: "all 0.15s ease",
+  },
+  shortcutChipKbd: {
+    fontSize: 9.5,
+    fontWeight: 700,
+    color: "#7c3aed",
+    background: "rgba(124, 58, 237, 0.06)",
+    padding: "1px 4px",
+    borderRadius: 3,
+    fontFamily: "inherit",
+  },
+  keyboardBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    cursor: "pointer",
+    transition: "all 0.15s ease",
+    padding: 0,
+  },
+  helperCard: {
+    position: "absolute",
+    bottom: "85px",
+    right: "20px",
+    width: "260px",
+    background: "var(--card)",
+    border: "1px solid var(--border)",
+    borderRadius: 14,
+    boxShadow: "var(--palette-shadow)",
+    padding: "12px",
+    zIndex: 100,
+    animation: "propbot-fadein 0.2s ease-out",
+  },
+  helperHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+    paddingBottom: 6,
+    borderBottom: "1px solid var(--border)",
+  },
+  helperTitle: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: "var(--foreground)",
+  },
+  helperClose: {
+    background: "transparent",
+    border: "none",
+    color: "var(--muted-foreground)",
+    cursor: "pointer",
+    fontSize: 12,
+  },
+  helperList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+  },
+  helperItem: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "6px 8px",
+    borderRadius: 8,
+    cursor: "pointer",
+    transition: "background 0.15s ease",
+  },
+  helperItemName: {
+    fontSize: 11.5,
+    color: "var(--foreground)",
+  },
+  helperItemKbd: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: "#7c3aed",
+    background: "rgba(124, 58, 237, 0.06)",
+    border: "1px solid rgba(124, 58, 237, 0.15)",
+    padding: "1px 5px",
+    borderRadius: 4,
   },
 };

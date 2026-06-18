@@ -188,7 +188,7 @@ export default function DraftEmailCard({ draft, onSend }: DraftEmailCardProps) {
           />
         ) : (
           <>
-            <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
+            <div style={{ fontSize: 13, color: "var(--foreground)", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
               <HighlightedBody text={bodyExpanded ? (editDraft.body ?? "") : previewLines} />
               {!bodyExpanded && bodyLines.length > 4 && "…"}
             </div>
@@ -259,7 +259,8 @@ function MetaRow({
       ) : (
         <span style={{
           fontSize: 13,
-          color: bold ? "#1e1b4b" : "#374151",
+          color: bold ? "var(--foreground)" : "var(--foreground)",
+          opacity: bold ? 1 : 0.85,
           fontWeight: bold ? 600 : 400,
           flex: 1,
           fontStyle: hasPlaceholder ? "italic" : "normal",
@@ -276,21 +277,21 @@ function MetaRow({
 // ── Styles ──
 const s: Record<string, React.CSSProperties> = {
   card: {
-    background: "#ffffff",
-    border: "1px solid rgba(124,58,237,0.15)",
+    background: "var(--card)",
+    border: "1px solid var(--border)",
     borderRadius: 16,
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
-    boxShadow: "0 4px 24px rgba(124,58,237,0.07), 0 1px 4px rgba(0,0,0,0.04)",
+    boxShadow: "0 4px 24px rgba(0,0,0,0.04), 0 1px 4px rgba(0,0,0,0.02)",
   },
   topBar: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     padding: "12px 16px",
-    borderBottom: "1px solid rgba(124,58,237,0.08)",
-    background: "linear-gradient(135deg, #faf5ff, #f0f9ff)",
+    borderBottom: "1px solid var(--border)",
+    background: "var(--email-topbar-bg, linear-gradient(135deg, #faf5ff, #f0f9ff))",
   },
   topBarLeft: {
     display: "flex",
@@ -301,7 +302,7 @@ const s: Record<string, React.CSSProperties> = {
     width: 36, height: 36,
     borderRadius: 10,
     background: "linear-gradient(135deg, #7c3aed15, #4f46e515)",
-    border: "1px solid rgba(124,58,237,0.15)",
+    border: "1px solid var(--border)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -311,7 +312,7 @@ const s: Record<string, React.CSSProperties> = {
   cardTitle: {
     fontSize: 13,
     fontWeight: 700,
-    color: "#1e1b4b",
+    color: "var(--foreground)",
     lineHeight: 1.3,
   },
   cardSub: {
@@ -345,10 +346,10 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     gap: 10,
     alignItems: "flex-start",
-    background: "linear-gradient(135deg, #fffbeb, #fef3c7)",
-    borderBottom: "1px solid #fde68a",
+    background: "var(--warning-banner-bg, linear-gradient(135deg, #fffbeb, #fef3c7))",
+    borderBottom: "1px solid var(--warning-banner-border, #fde68a)",
     padding: "10px 16px",
-    color: "#92400e",
+    color: "var(--warning-banner-text, #92400e)",
     fontSize: 12,
     fontWeight: 500,
   },
@@ -382,12 +383,12 @@ const s: Record<string, React.CSSProperties> = {
   },
   metaInput: {
     flex: 1,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
+    background: "var(--input)",
+    border: "1px solid var(--border)",
     borderRadius: 6,
     padding: "6px 10px",
     fontSize: 13,
-    color: "#1e1b4b",
+    color: "var(--foreground)",
     outline: "none",
     fontFamily: "inherit",
   },
@@ -402,12 +403,12 @@ const s: Record<string, React.CSSProperties> = {
   },
   bodyTextarea: {
     width: "100%",
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
+    background: "var(--input)",
+    border: "1px solid var(--border)",
     borderRadius: 8,
     padding: "10px 12px",
     fontSize: 13,
-    color: "#374151",
+    color: "var(--foreground)",
     lineHeight: 1.7,
     resize: "vertical" as const,
     outline: "none",
@@ -449,11 +450,11 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 6,
-    background: "#fef2f2",
-    color: "#dc2626",
+    background: "var(--error-banner-bg, #fef2f2)",
+    color: "var(--error-banner-text, #dc2626)",
     fontSize: 12,
     fontWeight: 500,
     padding: "8px 16px",
-    borderTop: "1px solid #fee2e2",
+    borderTop: "1px solid var(--error-banner-border, #fee2e2)",
   },
 };
