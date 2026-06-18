@@ -2051,7 +2051,7 @@ export default function MessageBubble({ msg, userName = "Niteen Kumar", userEmai
         ) : null}
 
         {msg.actionType === "draft" && msg.actionData ? (
-          <DraftEmailCard draft={msg.actionData as DraftEmail} onSend={onSendDraft} />
+          <DraftEmailCard draft={msg.actionData as DraftEmail} onSend={onSendDraft} userEmail={userEmail} />
         ) : null}
 
         {/* Contextual Suggestions for Freelancers */}

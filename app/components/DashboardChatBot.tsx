@@ -190,21 +190,42 @@ function DraftCard({
   draft,
   onSend,
   onEdit,
+  userEmail,
 }: {
   draft: DraftEmail;
-  onSend: (d: DraftEmail) => void;
+  onSend: (d: DraftEmail, provider?: "gmail" | "zoho") => void;
   onEdit: (d: DraftEmail) => void;
+  userEmail?: string;
 }) {
   const [editDraft, setEditDraft] = useState<DraftEmail>(draft);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
+  const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState<"gmail" | "zoho">("gmail");
+
+  useEffect(() => {
+    if (!userEmail) return;
+    import("../actions/mail-actions").then(({ getMailAccountsAction }) => {
+      getMailAccountsAction(userEmail).then((accounts) => {
+        const providers = accounts.map(a => a.provider).filter(Boolean);
+        setConnectedProviders(providers);
+        if (providers.includes("zoho") && !providers.includes("gmail")) {
+          setSelectedProvider("zoho");
+        } else {
+          setSelectedProvider("gmail");
+        }
+      }).catch(err => {
+        console.error("Failed to load connected mail accounts", err);
+      });
+    });
+  }, [userEmail]);
 
   async function handleSend() {
     setSending(true);
     setError("");
     try {
-      await onSend(editDraft);
+      await onSend(editDraft, selectedProvider);
       setSent(true);
     } catch (e: any) {
       setError(e?.message ?? "Send failed");
@@ -217,17 +238,47 @@ function DraftCard({
     return (
       <div style={{ ...styles.draftCard, borderColor: "#22c55e44" }}>
         <div style={{ textAlign: "center", color: "#22c55e", padding: "12px 0" }}>
-          ✅ Email sent successfully!
+          ✅ Email sent successfully via {selectedProvider === "zoho" ? "Zoho" : "Gmail"}!
         </div>
       </div>
     );
   }
 
+  const hasBoth = connectedProviders.includes("gmail") && connectedProviders.includes("zoho");
+
   return (
     <div style={styles.draftCard}>
-      <div style={styles.draftHeader}>
-        <span style={styles.draftHeaderIcon}>✉️</span>
-        <span style={styles.draftHeaderText}>Review Draft</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <div style={styles.draftHeader}>
+          <span style={styles.draftHeaderIcon}>✉️</span>
+          <span style={styles.draftHeaderText}>Review Draft</span>
+        </div>
+        {hasBoth ? (
+          <div style={styles.providerSelector}>
+            <button
+              style={{
+                ...styles.providerTab,
+                ...(selectedProvider === "gmail" ? styles.providerTabActiveGmail : {}),
+              }}
+              onClick={() => setSelectedProvider("gmail")}
+            >
+              Gmail
+            </button>
+            <button
+              style={{
+                ...styles.providerTab,
+                ...(selectedProvider === "zoho" ? styles.providerTabActiveZoho : {}),
+              }}
+              onClick={() => setSelectedProvider("zoho")}
+            >
+              Zoho
+            </button>
+          </div>
+        ) : (
+          <span style={selectedProvider === "zoho" ? styles.zohoBadge : styles.gmailBadge}>
+            {selectedProvider === "zoho" ? "Zoho" : "Gmail"}
+          </span>
+        )}
       </div>
       <div style={styles.draftField}>
         <label style={styles.draftLabel}>To</label>
@@ -270,7 +321,7 @@ function DraftCard({
         onClick={handleSend}
         disabled={sending}
       >
-        {sending ? "Sending…" : "📤 Send via Gmail"}
+        {sending ? "Sending…" : `📤 Send via ${selectedProvider === "zoho" ? "Zoho" : "Gmail"}`}
       </button>
     </div>
   );
@@ -278,10 +329,12 @@ function DraftCard({
 
 function MessageBubble({
   msg,
+  userEmail,
   onSendDraft,
 }: {
   msg: UIMessage;
-  onSendDraft: (d: DraftEmail) => void;
+  userEmail?: string;
+  onSendDraft: (d: DraftEmail, provider?: "gmail" | "zoho") => void;
 }) {
   const isUser = msg.role === "user";
 
@@ -325,6 +378,7 @@ function MessageBubble({
             draft={msg.actionData as DraftEmail}
             onSend={onSendDraft}
             onEdit={(_d) => {}}
+            userEmail={userEmail}
           />
         ) : null}
       </div>
@@ -426,9 +480,9 @@ export default function DashboardChatBot() {
     }
   };
 
-  async function handleSendDraft(draft: DraftEmail) {
+  async function handleSendDraft(draft: DraftEmail, provider?: "gmail" | "zoho") {
     if (!userEmail) throw new Error("Not authenticated");
-    const result = await sendDraftEmailAction(userEmail, draft);
+    const result = await sendDraftEmailAction(userEmail, draft, provider);
     if (!result.success) throw new Error(result.error ?? "Failed to send");
   }
 
@@ -490,7 +544,7 @@ export default function DashboardChatBot() {
           {/* Messages */}
           <div style={styles.messagesArea} id="propbot-messages-area">
             {messages.map((msg) => (
-              <MessageBubble key={msg.id} msg={msg} onSendDraft={handleSendDraft} />
+              <MessageBubble key={msg.id} msg={msg} userEmail={userEmail ?? undefined} onSendDraft={handleSendDraft} />
             ))}
             {loading && <TypingDots />}
             <div ref={messagesEndRef} />
@@ -1084,5 +1138,51 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 4px 12px rgba(16,185,129,0.25)",
     transition: "opacity 0.2s",
     marginTop: 4,
+  },
+  providerSelector: {
+    display: "flex",
+    background: "rgba(255, 255, 255, 0.08)",
+    borderRadius: 8,
+    padding: 2,
+    border: "1px solid rgba(139,92,246,0.15)",
+  },
+  providerTab: {
+    fontSize: 9.5,
+    fontWeight: 600,
+    border: "none",
+    background: "transparent",
+    color: "#94a3b8",
+    padding: "3px 8px",
+    borderRadius: 6,
+    cursor: "pointer",
+    transition: "all 0.15s",
+  },
+  providerTabActiveGmail: {
+    background: "rgba(124, 58, 237, 0.2)",
+    color: "#ff8a80",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+  },
+  providerTabActiveZoho: {
+    background: "rgba(124, 58, 237, 0.2)",
+    color: "#60a5fa",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+  },
+  gmailBadge: {
+    fontSize: 9.5,
+    fontWeight: 700,
+    background: "rgba(239,68,68,0.1)",
+    color: "#f87171",
+    padding: "2px 7px",
+    borderRadius: 20,
+    border: "1px solid rgba(239,68,68,0.2)",
+  },
+  zohoBadge: {
+    fontSize: 9.5,
+    fontWeight: 700,
+    background: "rgba(59,130,246,0.1)",
+    color: "#60a5fa",
+    padding: "2px 7px",
+    borderRadius: 20,
+    border: "1px solid rgba(59,130,246,0.2)",
   },
 };

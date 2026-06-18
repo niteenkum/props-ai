@@ -888,57 +888,117 @@ Calendar: googlecalendar.api.events.getMany, googlecalendar.api.events.create`;
 }
 
 /**
- * Send an email via Corsair Gmail after user approves the draft.
- * Encodes the email as RFC 2822 base64url and sends via gmail.api.messages.send.
+ * Send an email via Corsair Gmail or Zoho after user approves the draft.
  */
 export async function sendDraftEmailAction(
   userEmail: string,
-  draft: DraftEmail
+  draft: DraftEmail,
+  provider?: "gmail" | "zoho"
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Build RFC 2822 raw message
-    const account = await prisma.mailAccount.findUnique({
-      where: { userEmail_provider: { userEmail, provider: "gmail" } },
-    });
-    const fromEmail = account?.accountEmail ?? userEmail;
-
-    const rawLines = [
-      `From: ${fromEmail}`,
-      `To: ${draft.to}`,
-      ...(draft.cc ? [`Cc: ${draft.cc}`] : []),
-      `Subject: ${draft.subject}`,
-      `MIME-Version: 1.0`,
-      `Content-Type: text/plain; charset=utf-8`,
-      ``,
-      draft.body,
-    ];
-    const raw = rawLines.join("\r\n");
-    const encoded = Buffer.from(raw).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-
-    const result = await executeCorsairOp(userEmail, "gmail.api.messages.send", { raw: encoded });
-
-    if (!result.success) {
-      return { success: false, error: result.error };
+    let targetProvider = provider;
+    if (!targetProvider) {
+      const accounts = await prisma.mailAccount.findMany({
+        where: { userEmail }
+      });
+      const providers = accounts.map(a => a.provider);
+      if (providers.includes("gmail")) {
+        targetProvider = "gmail";
+      } else if (providers.includes("zoho")) {
+        targetProvider = "zoho";
+      } else {
+        return { success: false, error: "No connected mail accounts found." };
+      }
     }
 
-    // Log to SentEmail table
-    try {
-      await prisma.sentEmail.create({
-        data: {
-          userEmail,
-          provider: "gmail",
-          fromEmail,
-          toEmail: draft.to,
-          subject: draft.subject,
-          body: draft.body,
-          jobPostId: null,
-          zohoMsgId: null,
-          sentAt: new Date(),
-        },
+    if (targetProvider === "zoho") {
+      const account = await prisma.mailAccount.findUnique({
+        where: { userEmail_provider: { userEmail, provider: "zoho" } },
       });
-    } catch { /* non-critical */ }
+      if (!account) {
+        return { success: false, error: "Zoho account is not connected." };
+      }
+      const fromEmail = account.accountEmail;
 
-    return { success: true };
+      const { sendMailAction } = await import("./mail-actions");
+      const result = await sendMailAction(
+        userEmail,
+        draft.to,
+        draft.subject,
+        draft.body,
+        undefined,
+        draft.cc
+      );
+
+      if (!result.success) {
+        return { success: false, error: result.error };
+      }
+
+      // Log to SentEmail table
+      try {
+        await prisma.sentEmail.create({
+          data: {
+            userEmail,
+            provider: "zoho",
+            fromEmail,
+            toEmail: draft.to,
+            subject: draft.subject,
+            body: draft.body,
+            jobPostId: null,
+            zohoMsgId: result.zohoMsgId || null,
+            sentAt: new Date(),
+          },
+        });
+      } catch (e: any) {
+        console.error("[sendDraftEmailAction] Zoho SentEmail log error:", e);
+      }
+
+      return { success: true };
+    } else {
+      // Build RFC 2822 raw message for Gmail
+      const account = await prisma.mailAccount.findUnique({
+        where: { userEmail_provider: { userEmail, provider: "gmail" } },
+      });
+      const fromEmail = account?.accountEmail ?? userEmail;
+
+      const rawLines = [
+        `From: ${fromEmail}`,
+        `To: ${draft.to}`,
+        ...(draft.cc ? [`Cc: ${draft.cc}`] : []),
+        `Subject: ${draft.subject}`,
+        `MIME-Version: 1.0`,
+        `Content-Type: text/plain; charset=utf-8`,
+        ``,
+        draft.body,
+      ];
+      const raw = rawLines.join("\r\n");
+      const encoded = Buffer.from(raw).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+      const result = await executeCorsairOp(userEmail, "gmail.api.messages.send", { raw: encoded });
+
+      if (!result.success) {
+        return { success: false, error: result.error };
+      }
+
+      // Log to SentEmail table
+      try {
+        await prisma.sentEmail.create({
+          data: {
+            userEmail,
+            provider: "gmail",
+            fromEmail,
+            toEmail: draft.to,
+            subject: draft.subject,
+            body: draft.body,
+            jobPostId: null,
+            zohoMsgId: null,
+            sentAt: new Date(),
+          },
+        });
+      } catch { /* non-critical */ }
+
+      return { success: true };
+    }
   } catch (err: any) {
     return { success: false, error: err?.message ?? "Failed to send email." };
   }

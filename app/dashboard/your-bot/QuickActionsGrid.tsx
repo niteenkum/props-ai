@@ -178,9 +178,6 @@ export default function QuickActionsGrid({ onSelect }: QuickActionsGridProps) {
               "--hover-accent-glow": `${action.accentColor}18`,
             } as React.CSSProperties}
           >
-            {/* Left accent bar */}
-            <div style={{ ...styles.accentBar, background: action.accentColor }} />
-
             {/* Icon */}
             <div style={{ ...styles.iconBox, color: action.accentColor, background: action.bgColor }}>
               {action.icon}
@@ -208,15 +205,6 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
     width: "100%",
     maxWidth: 780,
-  },
-  accentBar: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    width: 3,
-    height: "100%",
-    borderRadius: "3px 0 0 3px",
-    opacity: 0.5,
   },
   iconBox: {
     width: 40,

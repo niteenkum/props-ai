@@ -329,9 +329,9 @@ function PropBotContent() {
     }
   }, [searchParams]);
 
-  async function handleSendDraft(draft: DraftEmail) {
+  async function handleSendDraft(draft: DraftEmail, provider?: "gmail" | "zoho") {
     if (!userEmail) throw new Error("Not authenticated");
-    const result = await sendDraftEmailAction(userEmail, draft);
+    const result = await sendDraftEmailAction(userEmail, draft, provider);
     if (!result.success) throw new Error(result.error ?? "Failed to send");
   }
 
@@ -358,7 +358,7 @@ function PropBotContent() {
         {/* EMPTY STATE */}
         {!hasMessages && !loading && (
           <div style={styles.emptyState}>
-            <PropBotOrb size={140} state="idle" />
+            <PropBotOrb size={100} state="idle" />
             <div style={styles.greetingBlock}>
               <h1 style={styles.greeting}>Hi! I&apos;m The Pitchly AI.</h1>
               <p style={styles.greetingSub}>{customGreeting}</p>
@@ -401,7 +401,7 @@ function PropBotContent() {
         {/* LOADING EMPTY STATE — orb shows thinking */}
         {!hasMessages && loading && (
           <div style={{ ...styles.emptyState, gap: 20 }}>
-            <PropBotOrb size={140} state="thinking" />
+            <PropBotOrb size={100} state="thinking" />
             <p style={{ fontSize: 14, color: "var(--muted-foreground)", opacity: 0.7 }}>Thinking...</p>
           </div>
         )}
@@ -704,8 +704,8 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "space-between",
     padding: "16px 20px",
-    background: "#FFFFFF",
-    border: "1px solid var(--border)",
+    background: "var(--card)",
+    border: "none",
     borderRadius: "16px 16px 0 0",
     flexShrink: 0,
     boxShadow: "0 2px 10px rgba(0,0,0,0.01)",
@@ -778,8 +778,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "var(--background)",
     scrollbarWidth: "thin" as const,
     scrollbarColor: "var(--border) transparent",
-    border: "1px solid var(--border)",
-    borderBottom: "none",
+    border: "none",
     borderRadius: "16px 16px 0 0",
   },
   emptyState: {
@@ -787,32 +786,32 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    gap: 28,
-    padding: "48px 24px 32px",
+    gap: 16,
+    padding: "20px 24px 20px",
     minHeight: "100%",
   },
   greetingBlock: {
     textAlign: "center",
     display: "flex",
     flexDirection: "column",
-    gap: 8,
+    gap: 6,
   },
   greeting: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 700,
     color: "var(--foreground)",
     margin: 0,
     letterSpacing: "-0.5px",
   },
   greetingSub: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 600,
     color: "var(--foreground)",
     margin: 0,
     opacity: 0.85,
   },
   greetingHint: {
-    fontSize: 13,
+    fontSize: 12.5,
     color: "var(--muted-foreground)",
     margin: 0,
     maxWidth: 440,
@@ -1059,7 +1058,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    marginTop: 12,
+    marginTop: 6,
     fontSize: 12,
     color: "var(--muted-foreground)",
   },
@@ -1078,7 +1077,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     justifyContent: "center",
     gap: 8,
-    marginTop: 14,
+    marginTop: 10,
     maxWidth: 550,
   },
   shortcutChip: {

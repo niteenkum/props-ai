@@ -5,13 +5,15 @@
  * Highlights [placeholders] in amber and warns user before sending.
  */
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Send, CheckCircle2, ChevronDown, ChevronUp, Edit3, X, AlertTriangle } from "lucide-react";
 import type { DraftEmail } from "../../actions/chat-actions";
+import { getMailAccountsAction } from "../../actions/mail-actions";
 
 interface DraftEmailCardProps {
   draft: DraftEmail;
-  onSend: (draft: DraftEmail) => Promise<void>;
+  onSend: (draft: DraftEmail, provider?: "gmail" | "zoho") => Promise<void>;
+  userEmail?: string;
 }
 
 // ── Extract [placeholder] tokens from text ──
@@ -49,13 +51,30 @@ function HighlightedBody({ text }: { text: string }) {
   );
 }
 
-export default function DraftEmailCard({ draft, onSend }: DraftEmailCardProps) {
+export default function DraftEmailCard({ draft, onSend, userEmail }: DraftEmailCardProps) {
   const [editDraft, setEditDraft] = useState<DraftEmail>(draft);
   const [sending, setSending]     = useState(false);
   const [sent, setSent]           = useState(false);
   const [error, setError]         = useState("");
   const [editing, setEditing]     = useState(false);
   const [bodyExpanded, setBodyExpanded] = useState(false);
+  const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState<"gmail" | "zoho">("gmail");
+
+  useEffect(() => {
+    if (!userEmail) return;
+    getMailAccountsAction(userEmail).then((accounts) => {
+      const providers = accounts.map(a => a.provider).filter(Boolean);
+      setConnectedProviders(providers);
+      if (providers.includes("zoho") && !providers.includes("gmail")) {
+        setSelectedProvider("zoho");
+      } else {
+        setSelectedProvider("gmail");
+      }
+    }).catch(err => {
+      console.error("Failed to load connected mail accounts", err);
+    });
+  }, [userEmail]);
 
   // Detect unfilled placeholders in entire draft (to, subject, body)
   const placeholders = useMemo(() => {
@@ -69,7 +88,7 @@ export default function DraftEmailCard({ draft, onSend }: DraftEmailCardProps) {
     setSending(true);
     setError("");
     try {
-      await onSend(editDraft);
+      await onSend(editDraft, selectedProvider);
       setSent(true);
     } catch (e: any) {
       setError(e?.message ?? "Failed to send. Please try again.");
@@ -95,7 +114,7 @@ export default function DraftEmailCard({ draft, onSend }: DraftEmailCardProps) {
           <div>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#15803d" }}>Email sent! 🎉</div>
             <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
-              Delivered to <strong>{editDraft.to}</strong> via Gmail
+              Delivered to <strong>{editDraft.to}</strong> via {selectedProvider === "zoho" ? "Zoho" : "Gmail"}
             </div>
           </div>
         </div>
@@ -106,6 +125,8 @@ export default function DraftEmailCard({ draft, onSend }: DraftEmailCardProps) {
   // ── Body preview ──
   const bodyLines   = (editDraft.body ?? "").split("\n").filter(Boolean);
   const previewLines = bodyLines.slice(0, 4).join("\n");
+
+  const hasBoth = connectedProviders.includes("gmail") && connectedProviders.includes("zoho");
 
   return (
     <div style={s.card}>
@@ -119,7 +140,7 @@ export default function DraftEmailCard({ draft, onSend }: DraftEmailCardProps) {
             <div style={s.cardSub}>
               {hasPlaceholders
                 ? <span style={{ color: "#d97706", fontWeight: 600 }}>⚠ {placeholders.length} field{placeholders.length > 1 ? "s" : ""} need review</span>
-                : "Ready to send via Gmail"}
+                : `Ready to send via ${selectedProvider === "zoho" ? "Zoho" : "Gmail"}`}
             </div>
           </div>
         </div>
@@ -131,7 +152,32 @@ export default function DraftEmailCard({ draft, onSend }: DraftEmailCardProps) {
           >
             {editing ? <X size={14} /> : <Edit3 size={14} />}
           </button>
-          <span style={s.gmailBadge}>Gmail</span>
+          {hasBoth ? (
+            <div style={s.providerSelector}>
+              <button
+                style={{
+                  ...s.providerTab,
+                  ...(selectedProvider === "gmail" ? s.providerTabActiveGmail : {}),
+                }}
+                onClick={() => setSelectedProvider("gmail")}
+              >
+                Gmail
+              </button>
+              <button
+                style={{
+                  ...s.providerTab,
+                  ...(selectedProvider === "zoho" ? s.providerTabActiveZoho : {}),
+                }}
+                onClick={() => setSelectedProvider("zoho")}
+              >
+                Zoho
+              </button>
+            </div>
+          ) : (
+            <span style={selectedProvider === "zoho" ? s.zohoBadge : s.gmailBadge}>
+              {selectedProvider === "zoho" ? "Zoho" : "Gmail"}
+            </span>
+          )}
         </div>
       </div>
 
@@ -231,7 +277,7 @@ export default function DraftEmailCard({ draft, onSend }: DraftEmailCardProps) {
             ? "Sending…"
             : hasPlaceholders
             ? `Send anyway (${placeholders.length} unfilled)`
-            : "Send via Gmail"}
+            : `Send via ${selectedProvider === "zoho" ? "Zoho" : "Gmail"}`}
         </button>
       </div>
 
@@ -456,5 +502,44 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 500,
     padding: "8px 16px",
     borderTop: "1px solid var(--error-banner-border, #fee2e2)",
+  },
+  zohoBadge: {
+    fontSize: 9.5,
+    fontWeight: 700,
+    background: "rgba(31,116,255,0.1)",
+    color: "#1f74ff",
+    padding: "3px 8px",
+    borderRadius: 20,
+    border: "1px solid rgba(31,116,255,0.2)",
+    letterSpacing: "0.04em",
+    textTransform: "uppercase" as const,
+  },
+  providerSelector: {
+    display: "flex",
+    background: "var(--provider-selector-bg, rgba(255, 255, 255, 0.05))",
+    borderRadius: 8,
+    padding: 2,
+    border: "1px solid var(--border)",
+  },
+  providerTab: {
+    fontSize: 10,
+    fontWeight: 600,
+    border: "none",
+    background: "transparent",
+    color: "var(--muted-foreground, #64748b)",
+    padding: "4px 10px",
+    borderRadius: 6,
+    cursor: "pointer",
+    transition: "all 0.15s",
+  },
+  providerTabActiveGmail: {
+    background: "var(--provider-tab-active-bg, #fff)",
+    color: "#ea4335",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+  },
+  providerTabActiveZoho: {
+    background: "var(--provider-tab-active-bg, #fff)",
+    color: "#1f74ff",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
   },
 };
