@@ -34,6 +34,7 @@ import { setupCorsair } from "corsair/setup";
 import { gmail } from "@corsair-dev/gmail";
 import { googlecalendar } from "@corsair-dev/googlecalendar";
 import { Pool } from "pg";
+import { getEmbedding } from "./embeddings";
 
 // Reuse the same pg Pool across hot-reloads in development
 const globalForPool = global as unknown as { pgPool?: Pool; corsairReady?: boolean };
@@ -55,7 +56,235 @@ const pool = globalForPool.pgPool;
  * Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
  */
 export const corsair = createCorsair({
-  plugins: [gmail(), googlecalendar()],
+  plugins: [
+    gmail({
+      webhookHooks: {
+        messageChanged: {
+          after: async (ctx, response) => {
+            console.log(`[Corsair Webhook] Gmail messageChanged triggered for ${ctx.tenantId}`);
+            if (!response.success || !response.data) return;
+            const data = response.data as any;
+            const userEmail = ctx.tenantId;
+            if (!userEmail) return;
+
+            const { prisma } = await import("./prisma");
+
+            try {
+              if (data.type === "messageReceived") {
+                const message = data.message;
+                if (!message?.id) return;
+
+                const exists = await prisma.syncedEmail.findUnique({
+                  where: {
+                    userEmail_provider_messageId: {
+                      userEmail,
+                      provider: "gmail",
+                      messageId: message.id,
+                    },
+                  },
+                });
+
+                if (!exists) {
+                  const headers = (message.payload?.headers ?? []) as { name: string; value: string }[];
+                  const getH = (name: string) =>
+                    headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
+
+                  const fromRaw = getH("From");
+                  const fromMatch = fromRaw.match(/^(.+?)?\s*<([^>]+)>$/);
+                  const fromName = fromMatch?.[1]?.trim() || fromRaw.split("@")[0] || "Unknown";
+                  const fromEmail = fromMatch?.[2]?.trim() ?? fromRaw;
+                  const subject = getH("Subject") || "(no subject)";
+
+                  const receivedAt = message.internalDate
+                    ? new Date(Number(message.internalDate))
+                    : (getH("Date") ? new Date(getH("Date")) : new Date());
+
+                  const summary = (message.snippet ?? "").slice(0, 120);
+
+                  const { classifyEmailWithAI } = await import("../actions/mail-actions");
+                  const aiResult = await classifyEmailWithAI(userEmail, subject, fromEmail, fromName, summary);
+
+                  const created = await prisma.syncedEmail.create({
+                    data: {
+                      userEmail,
+                      provider: "gmail",
+                      messageId: message.id,
+                      subject,
+                      fromEmail,
+                      fromName,
+                      receivedAt,
+                      summary,
+                      isRead: !(message.labelIds ?? []).includes("UNREAD"),
+                      emailType: aiResult.type,
+                      aiSummary: aiResult.summary,
+                      sentiment: aiResult.sentiment,
+                    },
+                  });
+                  console.log(`[Corsair Webhook] Gmail messageReceived saved new message ${message.id} for ${userEmail}`);
+
+                  try {
+                    const textToEmbed = `Subject: ${subject}\nContent: ${summary}`;
+                    const embedding = await getEmbedding(textToEmbed);
+                    const vectorStr = `[${embedding.join(",")}]`;
+                    await prisma.$executeRawUnsafe(
+                      `UPDATE "SyncedEmail" SET embedding = $1::vector WHERE id = $2`,
+                      vectorStr,
+                      created.id
+                    );
+                    console.log(`[Corsair Webhook] Successfully generated embedding for new email ${created.id}`);
+                  } catch (embedErr: any) {
+                    console.error(`[Corsair Webhook] Failed to generate embedding for email ${created.id}:`, embedErr.message);
+                  }
+                }
+              } else if (data.type === "messageDeleted") {
+                const message = data.message;
+                if (message?.id) {
+                  await prisma.syncedEmail.deleteMany({
+                    where: { userEmail, provider: "gmail", messageId: message.id },
+                  });
+                  console.log(`[Corsair Webhook] Gmail messageDeleted deleted message ${message.id} for ${userEmail}`);
+                }
+              } else if (data.type === "messageLabelChanged") {
+                const message = data.message;
+                if (message?.id) {
+                  await prisma.syncedEmail.updateMany({
+                    where: { userEmail, provider: "gmail", messageId: message.id },
+                    data: {
+                      isRead: !(message.labelIds ?? []).includes("UNREAD"),
+                    },
+                  });
+                  console.log(`[Corsair Webhook] Gmail messageLabelChanged updated read status of message ${message.id} for ${userEmail}`);
+                }
+              }
+            } catch (err: any) {
+              console.error(`[Corsair Webhook] Error processing Gmail webhook:`, err);
+            }
+          },
+        },
+      },
+    }),
+    googlecalendar({
+      webhookHooks: {
+        onEventChanged: {
+          after: async (ctx, response) => {
+            console.log(`[Corsair Webhook] Google Calendar onEventChanged triggered for ${ctx.tenantId}`);
+            if (!response.success || !response.data) return;
+            const data = response.data as any;
+            const userEmail = ctx.tenantId;
+            if (!userEmail) return;
+
+            const { prisma } = await import("./prisma");
+
+            try {
+              if (data.type === "eventCreated" || data.type === "eventUpdated") {
+                const event = data.event;
+                if (!event?.id) return;
+
+                const startDateTime = event.start?.dateTime ?? event.start?.date;
+                const endDateTime = event.end?.dateTime ?? event.end?.date;
+                if (!startDateTime) return;
+
+                let durationMinutes = 30;
+                if (startDateTime && endDateTime) {
+                  const diffMs = new Date(endDateTime).getTime() - new Date(startDateTime).getTime();
+                  durationMinutes = Math.round(diffMs / (60 * 1000));
+                }
+
+                const meetLink = event.hangoutLink || null;
+                const gcalEventUrl = event.htmlLink || null;
+                const attendeeEmail = event.attendees?.find((a: any) => a.email !== userEmail)?.email || null;
+                const status = event.status === "cancelled" ? "cancelled" : "pending";
+                const title = event.summary || "Calendar Event";
+                const notes = event.description || null;
+
+                const existing = await prisma.followUp.findFirst({
+                  where: { gcalEventId: event.id, userEmail },
+                });
+
+                if (existing) {
+                  const updated = await prisma.followUp.update({
+                    where: { id: existing.id },
+                    data: {
+                      title,
+                      scheduledAt: new Date(startDateTime),
+                      durationMin: durationMinutes,
+                      meetLink,
+                      gcalEventUrl,
+                      attendeeEmail,
+                      status,
+                      notes,
+                    },
+                  });
+                  console.log(`[Corsair Webhook] Google Calendar updated followUp event ${event.id} for ${userEmail}`);
+
+                  try {
+                    const textToEmbed = `Event: ${title}\nNotes: ${notes || ""}`;
+                    const embedding = await getEmbedding(textToEmbed);
+                    const vectorStr = `[${embedding.join(",")}]`;
+                    await prisma.$executeRawUnsafe(
+                      `UPDATE "FollowUp" SET embedding = $1::vector WHERE id = $2`,
+                      vectorStr,
+                      updated.id
+                    );
+                    console.log(`[Corsair Webhook] Successfully updated embedding for calendar event ${updated.id}`);
+                  } catch (embedErr: any) {
+                    console.error(`[Corsair Webhook] Failed to embed updated event ${updated.id}:`, embedErr.message);
+                  }
+                } else {
+                  const created = await prisma.followUp.create({
+                    data: {
+                      userEmail,
+                      jobId: null,
+                      type: "call",
+                      title,
+                      scheduledAt: new Date(startDateTime),
+                      durationMin: durationMinutes,
+                      gcalEventId: event.id,
+                      meetLink,
+                      gcalEventUrl,
+                      attendeeEmail,
+                      status,
+                      notes,
+                    },
+                  });
+                  console.log(`[Corsair Webhook] Google Calendar created followUp event ${event.id} for ${userEmail}`);
+
+                  try {
+                    const textToEmbed = `Event: ${title}\nNotes: ${notes || ""}`;
+                    const embedding = await getEmbedding(textToEmbed);
+                    const vectorStr = `[${embedding.join(",")}]`;
+                    await prisma.$executeRawUnsafe(
+                      `UPDATE "FollowUp" SET embedding = $1::vector WHERE id = $2`,
+                      vectorStr,
+                      created.id
+                    );
+                    console.log(`[Corsair Webhook] Successfully created embedding for calendar event ${created.id}`);
+                  } catch (embedErr: any) {
+                    console.error(`[Corsair Webhook] Failed to embed created event ${created.id}:`, embedErr.message);
+                  }
+                }
+              } else if (data.type === "eventDeleted") {
+                if (data.eventId) {
+                  const existing = await prisma.followUp.findFirst({
+                    where: { gcalEventId: data.eventId, userEmail },
+                  });
+                  if (existing) {
+                    await prisma.followUp.update({
+                      where: { id: existing.id },
+                      data: { status: "cancelled" },
+                    });
+                    console.log(`[Corsair Webhook] Google Calendar cancelled followUp event ${data.eventId} for ${userEmail}`);
+                  }
+                }
+              }
+            } catch (err: any) {
+              console.error(`[Corsair Webhook] Error processing Calendar webhook:`, err);
+            }
+          },
+        },
+      },
+    }),
+  ],
   multiTenancy: true,
   database: pool,   // Corsair accepts a pg.Pool directly
   kek: process.env.CORSAIR_KEK!,

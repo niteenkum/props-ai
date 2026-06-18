@@ -23,6 +23,16 @@ interface ScheduleCallModalProps {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function parseLocalDateTime(localStr: string): Date {
+  if (!localStr) return new Date(NaN);
+  const m = localStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if (m) {
+    const [, y, mon, d, h, min] = m;
+    return new Date(Number(y), Number(mon) - 1, Number(d), Number(h), Number(min));
+  }
+  return new Date(localStr);
+}
+
 function getLocalISOString(offsetMinutes = 60) {
   const d = new Date(Date.now() + offsetMinutes * 60_000);
   // Round to next 30-min slot
@@ -68,7 +78,13 @@ export default function ScheduleCallModal({
     setBooking(true);
     setResult(null);
 
-    const isoStart = new Date(startDateTime).toISOString();
+    const parsedDate = parseLocalDateTime(startDateTime);
+    if (isNaN(parsedDate.getTime())) {
+      setBooking(false);
+      setResult({ error: "Invalid date format. Please choose a valid date and time." });
+      return;
+    }
+    const isoStart = parsedDate.toISOString();
 
     const res = await bookCallAction(userEmail, {
       jobId,

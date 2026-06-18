@@ -90,6 +90,52 @@ function extractMeetLink(event: any): string | null {
   return null;
 }
 
+function safeParseDate(str: string): Date {
+  if (!str) return new Date(NaN);
+  
+  // Clean string and auto-correct 5-digit year typos starting with 200 (e.g. 20022 -> 2022, 20026 -> 2026)
+  // Standard browsers sometimes produce this when year field is typed into.
+  let cleanStr = str.trim();
+  cleanStr = cleanStr.replace(/^200(\d{2})([-/\sT]|$)/, "20$1$2");
+
+  let d = new Date(cleanStr);
+  if (!isNaN(d.getTime())) return d;
+  
+  const isoPattern = /^(\d{4,5})[-/](\d{2})[-/](\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?(?:\s*(Z|[+-]\d{2}:?\d{2}))?$/i;
+  const matchIso = cleanStr.match(isoPattern);
+  if (matchIso) {
+    let [, y, m, dVal, h, min, s = "0", tz = ""] = matchIso;
+    if (y.length === 5 && y.startsWith("200")) {
+      y = "20" + y.slice(3);
+    }
+    const tzFormatted = tz ? (tz.includes(":") || tz.toLowerCase() === "z" ? tz : `${tz.slice(0, 3)}:${tz.slice(3)}`) : "";
+    const standardStr = `${y}-${m.padStart(2, "0")}-${dVal.padStart(2, "0")}T${h.padStart(2, "0")}:${min.padStart(2, "0")}:${s.padStart(2, "0")}${tzFormatted}`;
+    d = new Date(standardStr);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  const dmyPattern = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4,5})[T\s](\d{2}):(\d{2})(?::(\d{2}))?(?:\s*(Z|[+-]\d{2}:?\d{2}))?$/i;
+  const matchDmy = cleanStr.match(dmyPattern);
+  if (matchDmy) {
+    let [, day, month, year, h, min, s = "0", tz = ""] = matchDmy;
+    if (year.length === 5 && year.startsWith("200")) {
+      year = "20" + year.slice(3);
+    }
+    let actualMonth = month;
+    let actualDay = day;
+    if (Number(month) > 12 && Number(day) <= 12) {
+      actualMonth = day;
+      actualDay = month;
+    }
+    const tzFormatted = tz ? (tz.includes(":") || tz.toLowerCase() === "z" ? tz : `${tz.slice(0, 3)}:${tz.slice(3)}`) : "";
+    const standardStr = `${year}-${actualMonth.padStart(2, "0")}-${actualDay.padStart(2, "0")}T${h.padStart(2, "0")}:${min.padStart(2, "0")}:${s.padStart(2, "0")}${tzFormatted}`;
+    d = new Date(standardStr);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  return new Date(NaN);
+}
+
 export async function bookCallAction(
   userEmail: string,
   input: BookCallInput,
@@ -97,6 +143,7 @@ export async function bookCallAction(
   const { jobId, title, attendeeEmail, startDateTime, durationMinutes, notes, timeZone = "Asia/Kolkata" } = input;
 
   try {
+    console.log(`[bookCallAction] Input:`, { jobId, title, attendeeEmail, startDateTime, durationMinutes, notes, timeZone });
     // Ensure Corsair has run setupCorsair() and integration rows exist
     await ensureCorsairReady();
     // Seed credentials (idempotent)
@@ -104,12 +151,26 @@ export async function bookCallAction(
 
     const tenant = corsair.withTenant(userEmail);
 
-    // Calculate end time
-    const startMs = new Date(startDateTime).getTime();
+    // Calculate end time using safe date parsing
+    const startDateObj = safeParseDate(startDateTime);
+    const startMs = startDateObj.getTime();
+    if (isNaN(startMs)) {
+      throw new Error(`Invalid date/time value: "${startDateTime}". Please verify date format.`);
+    }
+
+    const year = startDateObj.getFullYear();
+    if (year < 1000 || year > 9999) {
+      throw new Error(`Invalid year: ${year}. Year must be between 1000 and 9999.`);
+    }
+
     const endMs   = startMs + durationMinutes * 60 * 1000;
     const endDateTime = new Date(endMs).toISOString();
 
-    console.log(`[bookCall] Creating calendar event for ${userEmail}: "${title}" at ${startDateTime}`);
+    // Build a clean, corrected ISO string from the parsed date object to avoid sending
+    // raw malformed input (e.g. 5-digit years) to Google Calendar API.
+    const cleanStartDateTime = startDateObj.toISOString();
+
+    console.log(`[bookCall] Creating calendar event for ${userEmail}: "${title}" at ${cleanStartDateTime} (raw input: ${startDateTime})`);
 
     // Create event with conferenceData to trigger Meet link generation
     // Works for both personal Gmail and Workspace accounts
@@ -120,8 +181,8 @@ export async function bookCallAction(
       event: {
         summary:     title,
         description: notes || `ThePitchly scheduled call for: ${title}`,
-        start: { dateTime: startDateTime, timeZone },
-        end:   { dateTime: endDateTime,   timeZone },
+        start: { dateTime: cleanStartDateTime, timeZone },
+        end:   { dateTime: endDateTime,          timeZone },
         attendees:    attendeeEmail ? [{ email: attendeeEmail }] : [],
         conferenceData: {
           createRequest: {
@@ -166,7 +227,7 @@ export async function bookCallAction(
         jobId:         jobId || undefined,   // undefined when no job is linked (standalone call)
         type:          "call",
         title,
-        scheduledAt:   new Date(startDateTime),
+        scheduledAt:   startDateObj,
         durationMin:   durationMinutes,
         gcalEventId,
         meetLink,

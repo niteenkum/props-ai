@@ -101,6 +101,8 @@ export interface MailMessage {
   emailType?: string;
   aiSummary?: string;
   sentiment?: string;
+  id?:        string;
+  body?:      string;
 }
 
 export interface SendResult {
@@ -240,7 +242,7 @@ async function getValidAccessToken(
 
 // ─── 4. Sync Helpers & Database Storage ──────────────────────────────────────
 
-async function classifyEmailWithAI(
+export async function classifyEmailWithAI(
   userEmail: string,
   subject: string,
   fromEmail: string,
@@ -2017,5 +2019,28 @@ export async function sendThreadReplyAction(
   } catch (err: any) {
     console.error("[sendThreadReplyAction] Error:", err);
     return { success: false, error: err?.message ?? "Unexpected error sending reply." };
+  }
+}
+
+export async function getRecentSyncedEmailsAction(
+  userEmail: string,
+  sinceIsoString: string
+): Promise<{ success: boolean; emails?: any[]; error?: string }> {
+  try {
+    const emails = await prisma.syncedEmail.findMany({
+      where: {
+        userEmail,
+        createdAt: {
+          gt: new Date(sinceIsoString),
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+    return { success: true, emails };
+  } catch (err: any) {
+    console.error("[getRecentSyncedEmailsAction] Error:", err);
+    return { success: false, error: err?.message ?? "Failed to get recent emails" };
   }
 }

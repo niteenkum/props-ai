@@ -168,6 +168,7 @@ model FollowUp {
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  embedding     Unsupported("vector(3072)")?
 
   @@index([userEmail])
   @@index([jobId])
@@ -334,6 +335,7 @@ model SyncedEmail {
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  embedding     Unsupported("vector(3072)")?
 
   @@unique([userEmail, provider, messageId])
   @@index([userEmail])

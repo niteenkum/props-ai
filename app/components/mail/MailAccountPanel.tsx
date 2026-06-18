@@ -3,7 +3,8 @@
 // ─── MailAccountPanel ─────────────────────────────────────────────────────────
 // Revamped: Category tabs, paginated inbox, premium UI, send form.
 
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Mail, Link2, Unlink, RefreshCw, Send, Inbox, CheckCircle2, AlertCircle,
   Loader2, ExternalLink, ShieldCheck, X, Star, Tag, Users, Briefcase,
@@ -27,6 +28,7 @@ import {
   type GmailSearchFilters,
   type GmailSearchResult,
 } from "../../actions/mail-actions";
+import DatePicker from "../DatePicker";
 
 // ─── Provider Badge ───────────────────────────────────────────────────────────
 
@@ -200,11 +202,19 @@ function GmailSearchPanel({
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div>
             <label style={labelStyle}>After date</label>
-            <input type="date" style={inputStyle} value={dateAfter} onChange={e => setDateAfter(e.target.value)} />
+            <DatePicker
+              value={dateAfter}
+              onChange={setDateAfter}
+              placeholder="After date"
+            />
           </div>
           <div>
             <label style={labelStyle}>Before date</label>
-            <input type="date" style={inputStyle} value={dateBefore} onChange={e => setDateBefore(e.target.value)} />
+            <DatePicker
+              value={dateBefore}
+              onChange={setDateBefore}
+              placeholder="Before date"
+            />
           </div>
         </div>
 
@@ -553,7 +563,7 @@ function getEmailTypeBadge(type?: string, isDark?: boolean) {
 // ─── MessageRow ───────────────────────────────────────────────────────────────
 
 function MessageRow({
-  msg, isDark, isStarred, onToggleStar, onClick, onTrash,
+  msg, isDark, isStarred, onToggleStar, onClick, onTrash, isHighlighted,
 }: {
   msg: MailMessage;
   isDark: boolean;
@@ -561,6 +571,7 @@ function MessageRow({
   onToggleStar: (id: string) => void;
   onClick: () => void;
   onTrash?: (id: string) => void;
+  isHighlighted?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [hovered, setHovered]   = useState(false);
@@ -570,17 +581,22 @@ function MessageRow({
     <div
       style={{
         borderRadius: 12, position: "relative",
-        border: `1px solid ${
-          !msg.isRead
-            ? (isDark ? `${color}30` : `${color}20`)
-            : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)")
-        }`,
-        background: !msg.isRead
-          ? (isDark ? `${color}08` : `${color}05`)
-          : (isDark ? "rgba(255,255,255,0.015)" : "rgba(0,0,0,0.01)"),
+        border: isHighlighted
+          ? `1.5px solid ${isDark ? "#818cf8" : "#6366f1"}`
+          : `1px solid ${
+              !msg.isRead
+                ? (isDark ? `${color}30` : `${color}20`)
+                : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)")
+            }`,
+        background: isHighlighted
+          ? (isDark ? "rgba(99,102,241,0.12)" : "rgba(99,102,241,0.06)")
+          : !msg.isRead
+            ? (isDark ? `${color}08` : `${color}05`)
+            : (isDark ? "rgba(255,255,255,0.015)" : "rgba(0,0,0,0.01)"),
         cursor: "pointer",
         transition: "all 0.18s ease",
         overflow: "hidden",
+        boxShadow: isHighlighted ? "0 4px 12px rgba(99,102,241,0.15)" : "none",
       }}
       onMouseEnter={e => {
         setHovered(true);
@@ -1100,6 +1116,46 @@ export default function MailAccountPanel({ userEmail, isDark, mode = "all" }: Ma
   const [search,      setSearch]      = useState("");
   const [showAdvSearch, setShowAdvSearch] = useState(false); // Gmail advanced search panel
 
+  const router = useRouter();
+  const [searchMode, setSearchMode] = useState<"local" | "semantic">("local");
+  const [semanticResults, setSemanticResults] = useState<{ emails: any[]; calendar: any[] } | null>(null);
+  const [isSemanticLoading, setIsSemanticLoading] = useState(false);
+  const [semanticError, setSemanticError] = useState<string | null>(null);
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
+
+  const runSemanticSearch = async () => {
+    if (!search.trim()) {
+      setSemanticResults(null);
+      return;
+    }
+    setIsSemanticLoading(true);
+    setSemanticError(null);
+    try {
+      const { localSemanticSearchAction } = await import("../../actions/vector-search-actions");
+      const res = await localSemanticSearchAction(search, userEmail);
+      if (res.success) {
+        setSemanticResults({
+          emails: res.emails || [],
+          calendar: res.calendar || [],
+        });
+      } else {
+        setSemanticError(res.error ?? "Failed to perform semantic search.");
+      }
+    } catch (err: any) {
+      setSemanticError(err.message ?? "Failed to search.");
+    } finally {
+      setIsSemanticLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (searchMode === "local") {
+      setSemanticResults(null);
+    } else if (search.trim()) {
+      runSemanticSearch();
+    }
+  }, [searchMode]);
+
   const [selectedMail, setSelectedMail] = useState<MailMessage | null>(null);
   const [threadMessages, setThreadMessages] = useState<ThreadMessage[]>([]);
   const [isFetchingThread, setIsFetchingThread] = useState(false);
@@ -1307,6 +1363,126 @@ export default function MailAccountPanel({ userEmail, isDark, mode = "all" }: Ma
     setSearch(q);
     setPage(1);
   };
+
+  useEffect(() => {
+    let keySequence = "";
+    let timeoutId: NodeJS.Timeout;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isTyping =
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+         activeEl.tagName === "TEXTAREA" ||
+         (activeEl as HTMLElement).isContentEditable);
+
+      if (e.key === "/" && !isTyping) {
+        e.preventDefault();
+        const searchInput = document.querySelector('input[placeholder*="Search messages"]') as HTMLInputElement;
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
+        }
+        return;
+      }
+
+      if (isTyping) {
+        if (e.key === "Escape") {
+          (activeEl as HTMLElement).blur();
+        }
+        return;
+      }
+
+      if (e.key === "Escape") {
+        if (selectedMail) {
+          setSelectedMail(null);
+        } else {
+          setSearch("");
+          setSemanticResults(null);
+          setHighlightedIndex(-1);
+        }
+        return;
+      }
+
+      if (e.key.toLowerCase() === "c") {
+        e.preventDefault();
+        setActiveTab("send");
+        return;
+      }
+
+      if (e.key.toLowerCase() === "r" && selectedMail) {
+        e.preventDefault();
+        const textarea = document.querySelector('textarea[placeholder*="Write a reply"]') as HTMLTextAreaElement;
+        if (textarea) {
+          textarea.focus();
+        }
+        return;
+      }
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setHighlightedIndex(prev => {
+          const count = pageItems.length;
+          if (count === 0) return -1;
+          return (prev + 1) % count;
+        });
+        return;
+      }
+
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setHighlightedIndex(prev => {
+          const count = pageItems.length;
+          if (count === 0) return -1;
+          return (prev - 1 + count) % count;
+        });
+        return;
+      }
+
+      if (e.key === "Enter" && highlightedIndex >= 0) {
+        e.preventDefault();
+        const selectedMsg = pageItems[highlightedIndex];
+        if (selectedMsg) {
+          handleSelectMail(selectedMsg);
+        }
+        return;
+      }
+
+      const char = e.key.toLowerCase();
+      if (char === "g") {
+        keySequence = "g";
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => { keySequence = ""; }, 1000);
+        return;
+      }
+
+      if (keySequence === "g") {
+        if (char === "i") {
+          e.preventDefault();
+          setActiveTab("inbox");
+        } else if (char === "c") {
+          e.preventDefault();
+          router.push("/dashboard/followups");
+        } else if (char === "w") {
+          e.preventDefault();
+          router.push("/dashboard/workspace");
+        } else if (char === "b") {
+          e.preventDefault();
+          router.push("/dashboard/your-bot");
+        } else if (char === "p") {
+          e.preventDefault();
+          router.push("/dashboard/profile");
+        }
+        keySequence = "";
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      clearTimeout(timeoutId);
+    };
+  }, [pageItems, highlightedIndex, selectedMail, router]);
 
   // ── Category counts ────────────────────────────────────────────────────────
   const countFor = (cat: Category) => {
@@ -2398,24 +2574,61 @@ export default function MailAccountPanel({ userEmail, isDark, mode = "all" }: Ma
         <div>
           {/* Toolbar */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14 }}>
-            <div style={{ position: "relative", flex: 1, maxWidth: 280 }}>
-              <Filter size={11} style={{
-                position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
-                color: "var(--muted-foreground)", pointerEvents: "none",
-              }} />
-              <input
-                type="text"
-                placeholder="Search messages…"
-                value={search}
-                onChange={e => handleSearch(e.target.value)}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, maxWidth: 500 }}>
+              <div style={{ position: "relative", flex: 1, maxWidth: 280 }}>
+                <Filter size={11} style={{
+                  position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+                  color: "var(--muted-foreground)", pointerEvents: "none",
+                }} />
+                <input
+                  type="text"
+                  placeholder={searchMode === "semantic" ? "Concept search (Press Enter)..." : "Search messages…"}
+                  value={search}
+                  onChange={e => {
+                    setSearch(e.target.value);
+                    if (searchMode === "local") {
+                      handleSearch(e.target.value);
+                    }
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && searchMode === "semantic") {
+                      runSemanticSearch();
+                    }
+                  }}
+                  style={{
+                    width: "100%", boxSizing: "border-box",
+                    padding: "7px 12px 7px 30px", borderRadius: 9, fontSize: 12,
+                    border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.09)"}`,
+                    background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                    color: "var(--foreground)", outline: "none", fontFamily: "inherit",
+                  }}
+                />
+              </div>
+
+              {/* Semantic search toggle */}
+              <button
+                onClick={() => setSearchMode(prev => prev === "local" ? "semantic" : "local")}
                 style={{
-                  width: "100%", boxSizing: "border-box",
-                  padding: "7px 12px 7px 30px", borderRadius: 9, fontSize: 12,
-                  border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.09)"}`,
-                  background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
-                  color: "var(--foreground)", outline: "none", fontFamily: "inherit",
+                  display: "flex", alignItems: "center", gap: 4,
+                  padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700,
+                  cursor: "pointer", transition: "all 0.2s",
+                  border: searchMode === "semantic"
+                    ? `1px solid ${isDark ? "rgba(20,184,166,0.4)" : "rgba(20,184,166,0.3)"}`
+                    : `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.09)"}`,
+                  background: searchMode === "semantic"
+                    ? (isDark ? "rgba(20,184,166,0.15)" : "rgba(20,184,166,0.08)")
+                    : "transparent",
+                  color: searchMode === "semantic"
+                    ? (isDark ? "#2dd4bf" : "#0d9488")
+                    : "var(--muted-foreground)",
                 }}
-              />
+              >
+                <span>✨ AI Semantic Search</span>
+              </button>
+
+              {isSemanticLoading && (
+                <Loader2 size={13} style={{ color: "#818cf8", animation: "spin 1s linear infinite" }} />
+              )}
             </div>
             {/* Advanced Gmail Search button — only when Gmail connected */}
             {isGmailConnected && (
@@ -2647,42 +2860,186 @@ export default function MailAccountPanel({ userEmail, isDark, mode = "all" }: Ma
             );
           })()}
 
-          {/* Message list */}
-          {pageItems.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {pageItems.map(msg => (
-                <MessageRow
-                  key={msg.messageId}
-                  msg={msg}
-                  isDark={isDark}
-                  isStarred={starred.has(msg.messageId)}
-                  onToggleStar={toggleStar}
-                  onTrash={handleTrash}
-                  onClick={() => handleSelectMail(msg)}
-                />
-              ))}
+          {/* Message list / Semantic results */}
+          {searchMode === "semantic" && semanticResults ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {semanticError && (
+                <div style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.22)", display: "flex", alignItems: "center", gap: 7 }}>
+                  <AlertCircle size={13} style={{ color: "#ef4444" }} />
+                  <span style={{ fontSize: 12, color: "#ef4444" }}>{semanticError}</span>
+                </div>
+              )}
+
+              {/* Emails section */}
+              <div>
+                <h4 style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--muted-foreground)", letterSpacing: "0.05em", margin: "0 0 10px", display: "flex", alignItems: "center", gap: 6 }}>
+                  📧 Matching Synced Emails ({semanticResults.emails.length})
+                </h4>
+                {semanticResults.emails.length === 0 ? (
+                  <p style={{ fontSize: 12, color: "var(--muted-foreground)", margin: "0 0 16px" }}>No matching emails found.</p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {semanticResults.emails.map((e, idx) => {
+                      const mailMsg: MailMessage = {
+                        id: e.id,
+                        messageId: e.id,
+                        subject: e.subject,
+                        fromName: e.fromName,
+                        fromEmail: e.fromEmail,
+                        summary: e.summary,
+                        receivedAt: new Date(e.receivedAt).toLocaleDateString(),
+                        isRead: true,
+                        body: e.summary,
+                        provider: "gmail",
+                        emailType: e.emailType,
+                        sentiment: e.sentiment,
+                      };
+                      const isHighlighted = idx === highlightedIndex;
+                      return (
+                        <div key={e.id} style={{ position: "relative" }}>
+                          <MessageRow
+                            msg={mailMsg}
+                            isDark={isDark}
+                            isStarred={starred.has(e.id)}
+                            onToggleStar={toggleStar}
+                            onClick={() => handleSelectMail(mailMsg)}
+                            isHighlighted={isHighlighted}
+                          />
+                          <span style={{
+                            position: "absolute", right: 80, top: 12,
+                            fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 4,
+                            background: isDark ? "rgba(99,102,241,0.2)" : "rgba(99,102,241,0.08)",
+                            color: isDark ? "#818cf8" : "#6366f1",
+                          }}>
+                            {(e.similarity * 100).toFixed(0)}% match
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Calendar Section */}
+              <div>
+                <h4 style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "var(--muted-foreground)", letterSpacing: "0.05em", margin: "0 0 10px", display: "flex", alignItems: "center", gap: 6 }}>
+                  📅 Matching Calendar Invites & Calls ({semanticResults.calendar.length})
+                </h4>
+                {semanticResults.calendar.length === 0 ? (
+                  <p style={{ fontSize: 12, color: "var(--muted-foreground)", margin: 0 }}>No matching calendar events found.</p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {semanticResults.calendar.map(item => (
+                      <div
+                        key={item.id}
+                        style={{
+                          padding: "12px 14px", borderRadius: 12,
+                          border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"}`,
+                          background: isDark ? "rgba(255,255,255,0.015)" : "rgba(0,0,0,0.01)",
+                          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10
+                        }}
+                      >
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--foreground)" }}>{item.title}</span>
+                            <span style={{
+                              fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 4,
+                              background: item.status === "cancelled" ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)",
+                              color: item.status === "cancelled" ? "#ef4444" : "#22c55e"
+                            }}>
+                              {item.status}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: 11, color: "var(--muted-foreground)", margin: "0 0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {item.notes || "No extra details."}
+                          </p>
+                          <div style={{ display: "flex", gap: 12, fontSize: 10.5, color: "var(--muted-foreground)", opacity: 0.8 }}>
+                            <span>⏰ {new Date(item.scheduledAt).toLocaleString("en-US", { dateStyle: "short", timeStyle: "short" })}</span>
+                            {item.attendeeEmail && <span>👤 Recruiter: {item.attendeeEmail}</span>}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+                          <span style={{
+                            fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 4,
+                            background: isDark ? "rgba(20,184,166,0.2)" : "rgba(20,184,166,0.08)",
+                            color: isDark ? "#2dd4bf" : "#0d9488",
+                            marginRight: 6
+                          }}>
+                            {(item.similarity * 100).toFixed(0)}% match
+                          </span>
+                          {item.meetLink && (
+                            <a
+                              href={item.meetLink} target="_blank" rel="noreferrer"
+                              style={{
+                                display: "inline-flex", alignItems: "center", gap: 4,
+                                padding: "5px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700,
+                                background: "#22c55e", color: "#ffffff", textDecoration: "none"
+                              }}
+                            >
+                              📹 Join Meet
+                            </a>
+                          )}
+                          {item.gcalEventUrl && (
+                            <a
+                              href={item.gcalEventUrl} target="_blank" rel="noreferrer"
+                              style={{
+                                display: "inline-flex", alignItems: "center", gap: 4,
+                                padding: "5px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700,
+                                border: `1px solid ${isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)"}`,
+                                color: "var(--foreground)", textDecoration: "none"
+                              }}
+                            >
+                              📅 View Calendar
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          )}
+          ) : (
+            <>
+              {/* Message list */}
+              {pageItems.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {pageItems.map((msg, idx) => (
+                    <MessageRow
+                      key={msg.messageId}
+                      msg={msg}
+                      isDark={isDark}
+                      isStarred={starred.has(msg.messageId)}
+                      onToggleStar={toggleStar}
+                      onTrash={handleTrash}
+                      onClick={() => handleSelectMail(msg)}
+                      isHighlighted={idx === highlightedIndex}
+                    />
+                  ))}
+                </div>
+              )}
 
-          {/* Pagination */}
-          {filteredMessages.length > PAGE_SIZE && (
-            <Pagination
-              page={currentPage}
-              total={filteredMessages.length}
-              pageSize={PAGE_SIZE}
-              onChange={setPage}
-              isDark={isDark}
-            />
-          )}
+              {/* Pagination */}
+              {filteredMessages.length > PAGE_SIZE && (
+                <Pagination
+                  page={currentPage}
+                  total={filteredMessages.length}
+                  pageSize={PAGE_SIZE}
+                  onChange={setPage}
+                  isDark={isDark}
+                />
+              )}
 
-          {/* Summary line */}
-          {filteredMessages.length > 0 && (
-            <p style={{
-              fontSize: 10, textAlign: "center", color: "var(--muted-foreground)",
-              opacity: 0.55, margin: "10px 0 0",
-            }}>
-              Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, filteredMessages.length)}–{Math.min(currentPage * PAGE_SIZE, filteredMessages.length)} of {filteredMessages.length} messages
-            </p>
+              {/* Summary line */}
+              {filteredMessages.length > 0 && (
+                <p style={{
+                  fontSize: 10, textAlign: "center", color: "var(--muted-foreground)",
+                  opacity: 0.55, margin: "10px 0 0",
+                }}>
+                  Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, filteredMessages.length)}–{Math.min(currentPage * PAGE_SIZE, filteredMessages.length)} of {filteredMessages.length} messages
+                </p>
+              )}
+            </>
           )}
         </div>
       )}

@@ -7,7 +7,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { generateOAuthUrl } from "corsair/oauth";
-import { corsair } from "../../../../utils/corsair";
+import { corsair, seedGmailCredentials, ensureCorsairReady } from "../../../../utils/corsair";
 
 export async function GET(req: NextRequest) {
   // Accept both ?userEmail= and ?email= (UI uses ?email=)
@@ -20,6 +20,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    // Ensure corsair_integrations row exists for gmail
+    await ensureCorsairReady();
+    // Seed credentials (idempotent)
+    await seedGmailCredentials();
+
     // Corsair generates the full Google OAuth URL with scopes + signed HMAC state
     const { url } = await generateOAuthUrl(corsair, "gmail", {
       tenantId: userEmail,

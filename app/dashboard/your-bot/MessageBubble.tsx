@@ -20,6 +20,7 @@ import {
 } from "../../actions/mail-actions";
 import DraftEmailCard from "./DraftEmailCard";
 import PitchlyOrb from "./PropBotOrb";
+import DatePicker from "../../components/DatePicker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface UIMessage {
@@ -801,10 +802,12 @@ function ScheduleJobSelectPanel({
   onBookCall,
   userEmail,
   autoStartNoJob = false,
+  initialEmail = "",
 }: {
   jobs: any[];
   userEmail?: string;
   autoStartNoJob?: boolean;
+  initialEmail?: string;
   onBookCall?: (input: {
     jobId: string; jobRole: string; jobCompany: string;
     title: string; startDateTime: string; durationMinutes: number;
@@ -815,13 +818,17 @@ function ScheduleJobSelectPanel({
   const [step, setStep] = useState<"trigger" | "schedule" | "confirm" | "done" | "error">("trigger");
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<any | null>(null); // null = no-job flow
-  const [noJobTitle, setNoJobTitle] = useState("");  // title for standalone call
+  const [noJobTitle, setNoJobTitle] = useState(
+    initialEmail && !initialEmail.includes("@") ? `Client call with ${initialEmail}` : ""
+  );  // title for standalone call
   const [meetingTitle, setMeetingTitle] = useState(""); // editable meeting title
   const [date, setDate] = useState<string>("");
   const [hour, setHour] = useState(10);
   const [minute, setMinute] = useState(0);
   const [duration, setDuration] = useState(30);
-  const [attendeeEmail, setAttendeeEmail] = useState("");
+  const [attendeeEmail, setAttendeeEmail] = useState(
+    initialEmail && initialEmail.includes("@") ? initialEmail : ""
+  );
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false); // loading AI schedule context
@@ -941,7 +948,10 @@ function ScheduleJobSelectPanel({
             <span style={styles.confirmJobRole}>{callTitle}</span>
           </div>
           <div style={{ fontSize: 12.5, color: "#374151" }}>
-            📅 {new Date(buildStartDateTime()).toLocaleString("en-IN", { dateStyle: "full", timeStyle: "short" })} · {duration} min
+            📅 {(() => {
+              const d = new Date(buildStartDateTime());
+              return isNaN(d.getTime()) ? "" : d.toLocaleString("en-IN", { dateStyle: "full", timeStyle: "short" });
+            })()} · {duration} min
           </div>
           {result?.meetLink && (
             <a href={result.meetLink} target="_blank" rel="noopener noreferrer"
@@ -975,7 +985,11 @@ function ScheduleJobSelectPanel({
 
   // ── Step: Confirm ──
   if (step === "confirm") {
-    const displayDate = date ? new Date(date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "";
+    const displayDate = (() => {
+      if (!date) return "";
+      const d = new Date(date + "T00:00:00+05:30");
+      return isNaN(d.getTime()) ? date : d.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    })();
     return (
       <div style={styles.jobPanel}>
         <div style={styles.jobPanelHeader}>
@@ -1155,7 +1169,12 @@ function ScheduleJobSelectPanel({
           {/* Date */}
           <div>
             <div style={styles.jobPanelStepLabel}>Date</div>
-            <input type="date" min={today} value={date} onChange={(e) => setDate(e.target.value)} style={styles.scheduleInput} />
+            <DatePicker
+              value={date}
+              onChange={setDate}
+              min={today}
+              placeholder="Pick a date"
+            />
           </div>
 
           {/* Duration */}
@@ -1223,34 +1242,97 @@ function ScheduleJobSelectPanel({
   }
 
   // ── Step: Trigger (compact card + modal) ──
-  // autoStartNoJob mode: render just the standalone row
-  if (autoStartNoJob) {
+
+  // ── No Jobs empty state ──
+  if (jobs.length === 0) {
     return (
-      <div
-        onClick={() => { setSelectedJob(null); setStep("schedule"); }}
-        style={{
-          display: "flex", alignItems: "center", gap: 14,
-          padding: "13px 16px",
-          cursor: "pointer",
-          transition: "background 0.15s",
-        }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#f8fafc"; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-      >
+      <div style={{
+        background: "#fff",
+        border: "1.5px solid rgba(124,58,237,0.15)",
+        borderRadius: 16,
+        overflow: "hidden",
+        boxShadow: "0 4px 20px rgba(124,58,237,0.07)",
+      }}>
+        {/* Header */}
         <div style={{
-          width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-          background: "linear-gradient(135deg, #06b6d418, #0ea5e918)",
-          border: "1px solid rgba(6,182,212,0.15)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 17,
-        }}>📆</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#1e1b4b" }}>Schedule without a job</div>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Quick standalone call — no job post needed</div>
+          background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)",
+          padding: "14px 16px",
+          display: "flex", alignItems: "center", gap: 12,
+        }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: 10,
+            background: "rgba(255,255,255,0.15)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 18, flexShrink: 0,
+          }}>📭</div>
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em" }}>No Job Posts Found</div>
+            <div style={{ fontSize: 11.5, color: "#c4b5fd", marginTop: 3, fontWeight: 500 }}>You haven&apos;t added any job posts yet</div>
+          </div>
         </div>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" strokeWidth="2.5">
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
+
+        {/* Option rows */}
+        <div style={{ display: "flex", flexDirection: "column" as const }}>
+
+          {/* Option 1 — Create a job post */}
+          <a
+            href="/dashboard/new-scan"
+            style={{
+              display: "flex", alignItems: "center", gap: 14,
+              padding: "13px 16px",
+              cursor: "pointer",
+              borderBottom: "1px solid #f1f5f9",
+              textDecoration: "none",
+              transition: "background 0.15s",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#faf5ff"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+          >
+            <div style={{
+              width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+              background: "linear-gradient(135deg, #7c3aed18, #4f46e518)",
+              border: "1px solid rgba(124,58,237,0.15)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 17,
+            }}>➕</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#1e1b4b" }}>Create a job post first</div>
+              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Add a job lead, then link this call to it</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.5">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </a>
+
+          {/* Option 2 — Schedule without a job */}
+          <div
+            onClick={() => { setSelectedJob(null); setStep("schedule"); }}
+            style={{
+              display: "flex", alignItems: "center", gap: 14,
+              padding: "13px 16px",
+              cursor: "pointer",
+              transition: "background 0.15s",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#f0fdf4"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+          >
+            <div style={{
+              width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+              background: "linear-gradient(135deg, #06b6d418, #0ea5e918)",
+              border: "1px solid rgba(6,182,212,0.2)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 17,
+            }}>📆</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#1e1b4b" }}>Schedule without a job</div>
+              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Quick standalone call — no job post needed</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" strokeWidth="2.5">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
+
+        </div>
       </div>
     );
   }
@@ -1958,84 +2040,23 @@ export default function MessageBubble({ msg, userName = "Niteen Kumar", userEmai
           />
         ) : null}
 
-        {msg.actionType === "schedule_job_select" && Array.isArray(msg.actionData) ? (
-          (msg.actionData as any[]).length > 0 ? (
-            <ScheduleJobSelectPanel
-              jobs={msg.actionData as any[]}
-              onBookCall={onBookCall}
-              userEmail={userEmail}
-            />
-          ) : (
-            /* ── No Jobs Empty State ── */
-            <div style={{
-              background: "#fff",
-              border: "1.5px solid rgba(124,58,237,0.15)",
-              borderRadius: 16,
-              overflow: "hidden",
-              boxShadow: "0 4px 20px rgba(124,58,237,0.07)",
-            }}>
-              {/* Header */}
-              <div style={{
-                background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)",
-                padding: "14px 16px",
-                display: "flex", alignItems: "center", gap: 12,
-              }}>
-                <div style={{
-                  width: 38, height: 38, borderRadius: 10,
-                  background: "rgba(255,255,255,0.15)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 18, flexShrink: 0,
-                }}>📭</div>
-                <div>
-                  <div style={{ fontSize: 13.5, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em" }}>No Job Posts Found</div>
-                  <div style={{ fontSize: 11.5, color: "#c4b5fd", marginTop: 3, fontWeight: 500 }}>You haven&apos;t added any job posts yet</div>
-                </div>
-              </div>
-
-              {/* Option rows */}
-              <div style={{ display: "flex", flexDirection: "column" as const }}>
-
-                {/* Option 1 — Create a job post */}
-                <a
-                  href="/dashboard/new-scan"
-                  style={{
-                    display: "flex", alignItems: "center", gap: 14,
-                    padding: "13px 16px",
-                    cursor: "pointer",
-                    borderBottom: "1px solid #f1f5f9",
-                    textDecoration: "none",
-                    transition: "background 0.15s",
-                  }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#faf5ff"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                >
-                  <div style={{
-                    width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-                    background: "linear-gradient(135deg, #7c3aed18, #4f46e518)",
-                    border: "1px solid rgba(124,58,237,0.15)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 17,
-                  }}>➕</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#1e1b4b" }}>Create a job post first</div>
-                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Add a job lead, then link this call to it</div>
-                  </div>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.5">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                </a>
-
-                {/* Option 2 — Schedule without a job */}
-                <ScheduleJobSelectPanel
-                  jobs={[]}
-                  onBookCall={onBookCall}
-                  userEmail={userEmail}
-                  autoStartNoJob
-                />
-
-              </div>
-            </div>
-          )
+        {msg.actionType === "schedule_job_select" ? (
+          <ScheduleJobSelectPanel
+            jobs={
+              Array.isArray(msg.actionData)
+                ? msg.actionData
+                : (msg.actionData && typeof msg.actionData === "object")
+                  ? (msg.actionData as any).jobs ?? []
+                  : []
+            }
+            initialEmail={
+              msg.actionData && !Array.isArray(msg.actionData) && typeof msg.actionData === "object"
+                ? (msg.actionData as any).initialEmail ?? ""
+                : ""
+            }
+            onBookCall={onBookCall}
+            userEmail={userEmail}
+          />
         ) : null}
 
         {msg.actionType === "stats" && msg.actionData ? (

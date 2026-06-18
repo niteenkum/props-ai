@@ -280,6 +280,24 @@ NEVER make up job details — only use what the user actually provides.`,
       required: ["jobText", "role", "company"],
     },
   },
+  {
+    name: "local_semantic_search",
+    description: "Search user's synced emails and scheduled calendar calls locally using semantic vector search. Extremely fast (under 1s) and handles concepts, context, and meanings (not just exact keywords). Always use this first if the user asks to search, find, or scan their emails/calendar.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "The search query (e.g. 'Stripe follow up', 'recruiter interview invitation', 'proposal replies').",
+        },
+        limit: {
+          type: "number",
+          description: "Optional. Maximum number of results to return (default is 8).",
+        },
+      },
+      required: ["query"],
+    },
+  },
 ];
 
 /** Execute a function_call from Gemini */
@@ -289,6 +307,32 @@ async function executeFunctionCall(
   userEmail: string
 ): Promise<{ toolResult: unknown; specialAction?: { type: string; data: unknown } }> {
   switch (name) {
+    case "local_semantic_search": {
+      const query = args.query as string;
+      const limit = (args.limit as number | undefined) ?? 8;
+      const { localSemanticSearchAction } = await import("./vector-search-actions");
+      const result = await localSemanticSearchAction(query, userEmail, limit);
+      
+      if (!result.success) {
+        return { toolResult: { error: result.error } };
+      }
+
+      return {
+        toolResult: {
+          emailMatches: result.emails,
+          calendarMatches: result.calendar
+        },
+        specialAction: {
+          type: "search_results",
+          data: {
+            emails: result.emails,
+            calendar: result.calendar,
+            query
+          }
+        }
+      };
+    }
+
     case "corsair_list_operations": {
       const ops = await listCorsairOps(args.plugin as string | undefined);
       return { toolResult: ops };
@@ -378,19 +422,35 @@ async function executeFunctionCall(
           where.OR = [
             { role: { contains: filter, mode: "insensitive" } },
             { company: { contains: filter, mode: "insensitive" } },
+            { contactEmail: { contains: filter, mode: "insensitive" } },
           ];
         }
-        const jobs = await prisma.jobPost.findMany({
+        let jobs = await prisma.jobPost.findMany({
           where,
           orderBy: { postedDate: "desc" },
           take: 10,
           select: { id: true, role: true, company: true, matchScore: true, status: true, contactEmail: true },
         });
-        // Detect if called from a scheduling context by checking recent history
-        // We use a heuristic: if Gemini called db_query(job_list) it's almost always for schedule_call flow
+
+        // Fallback: if a filter was used but found 0 jobs, query again without filter so
+        // the user is not stuck on an empty/broken card and can choose from other jobs or schedule standalone
+        if (jobs.length === 0 && filter) {
+          jobs = await prisma.jobPost.findMany({
+            orderBy: { postedDate: "desc" },
+            take: 10,
+            select: { id: true, role: true, company: true, matchScore: true, status: true, contactEmail: true },
+          });
+        }
+
         return {
           toolResult: jobs,
-          specialAction: { type: "schedule_job_select", data: jobs },
+          specialAction: {
+            type: "schedule_job_select",
+            data: {
+              jobs,
+              initialEmail: filter || "",
+            },
+          },
         };
       }
 
@@ -771,6 +831,7 @@ You can:
 10. Schedule a Google Meet call linked to a job (use schedule_call tool — see workflow below)
 11. **Create a new job post** from a description the user provides (use create_job_post tool)
 12. **Show prioritized inbox** — use db_query({ type: 'synced_emails' }) to show AI-classified emails with priority badges (interview calls, offer letters, rejections, freelance leads) and sentiment dots. Use this whenever user asks: "show my inbox", "list my emails", "any interview calls?", "show priority emails", "check inbox", "any rejections?", "any offers?".
+13. **Semantic search across entire email and calendar** — use local_semantic_search to search synced emails and scheduled calls locally. Use this for queries like "find client messages about React", "any calls with Vercel scheduled?", "search for interview schedules".
 
 ## INBOX / PRIORITY EMAIL — WORKFLOW
 When the user asks to see their inbox OR asks about specific email types (interviews, offers, rejections, leads):
@@ -795,8 +856,8 @@ STEP 4: Tell the user the job was created and suggest they open it in the Jobs p
 When a user asks to schedule a call, interview, meeting, or book time with a client:
 
 STEP 1: Call db_query({ type: 'job_list' }) to fetch their job posts.
-STEP 2: STOP — say only "Here are your jobs — please select the one this call is for:" and nothing else. The UI will render a job selection card automatically.
-STEP 3: The user picks the job and fills in the time/date via the interactive scheduling UI. You do NOT need to do anything else.
+STEP 2: STOP — the UI will automatically render an interactive scheduling card. If jobs exist, say "Here are your jobs — please select the one this call is for:" and nothing else. If NO jobs exist, say "I don't see any job posts yet. You can create one first, or schedule a standalone call directly using the card below." and nothing else.
+STEP 3: The user picks a job (or uses "Schedule without a job") and fills in the time/date via the interactive scheduling UI. You do NOT need to do anything else.
 
 NEVER call schedule_call — it does not exist. NEVER ask the user for time/date/duration in text. The UI handles the entire scheduling flow after you call db_query(job_list).
 NEVER use corsair_run for calendar event creation.
@@ -805,7 +866,7 @@ NEVER use corsair_run for calendar event creation.
 - If the user asks you to find job leads, search for freelance projects, or scan for new gigs, DO NOT try to search. Instead, decline politely and inform them: "Currently you have to connect your own WhatsApp group and you can read messages, or directly paste any job post. We are currently working on it so that we can have a scraper as well."
 - For ALL Gmail operations, ALWAYS use the corsair_run tool. NEVER attempt to call Gmail API directly.
 - For sending emails, first use draft_email to show a compose card. Never auto-send without user approval.
-- When fetching emails, use gmail.api.messages.list with a 'q' parameter for search queries.
+- When searching, finding, scanning, or querying user emails or calendar events, PREFER the local_semantic_search tool first. It provides extremely fast semantic search across all synced emails and calendar follow-ups locally.
 - For local job/application/call data, use db_query (types: 'job_stats', 'job_list', 'pending_jobs', 'calls', 'sent_emails', 'synced_emails').
 - **PREFER db_query(synced_emails) over corsair_run for inbox listing** — it's faster and shows AI-classified priority data (emailType, aiSummary, sentiment).
 - For scheduling calls, call db_query({ type: 'job_list' }) — the UI card handles all booking. Do NOT call schedule_call.
@@ -872,10 +933,18 @@ Calendar: googlecalendar.api.events.getMany, googlecalendar.api.events.create`;
 
     // 5. Return response
     if (specialAction) {
+      let actionData = specialAction.data;
+      if (specialAction.type === "schedule_job_select" && actionData && typeof actionData === "object") {
+        const lastUserMsg = history.filter((m) => m.role === "user").pop();
+        const emailMatch = lastUserMsg?.content.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/i);
+        if (emailMatch) {
+          (actionData as any).initialEmail = emailMatch[1];
+        }
+      }
       return {
         reply: finalText,
         actionType: specialAction.type as ChatResponse["actionType"],
-        actionData: specialAction.data,
+        actionData,
       };
     }
 
