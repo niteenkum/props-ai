@@ -134,7 +134,7 @@ export function useSignupForm() {
     });
     setOtpLoading(false);
     if (res.success && res.user) {
-      handleLoginSuccess(res.user.email, res.user.status, res.user.name);
+      handleLoginSuccess(res.user.email, res.user.status, res.user.name, "/dashboard/profile?tab=integrations");
     } else {
       setError(res.error || "Verification failed.");
     }

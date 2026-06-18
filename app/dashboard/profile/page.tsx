@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   FileText, Users, Award, Terminal, GraduationCap,
   UploadCloud, Plus, Trash2, X, Check, Loader2, Save,
@@ -101,13 +102,29 @@ function FieldInput({ label, value, onChange, type = "text", icon, placeholder, 
 // ─── Main Page Component ────────────────────────────────────────────────────
 
 export default function ProfilePage() {
+  return (
+    <Suspense fallback={null}>
+      <ProfilePageContent />
+    </Suspense>
+  );
+}
+
+function ProfilePageContent() {
   const { userEmail, isReady } = useAuth({ requiredStatus: "ACTIVE" });
   const p                      = useProfile(userEmail);
   const { theme, toggleTheme } = useTheme();
   const isDark                 = theme === "dark";
+  const searchParams           = useSearchParams();
 
   // ─── Tab state ───
   const [activeTab, setActiveTab] = useState<"profile" | "integrations" | "preferences">("profile");
+
+  useEffect(() => {
+    const tabParam = searchParams?.get("tab");
+    if (tabParam === "integrations" || tabParam === "preferences" || tabParam === "profile") {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
 
   // ─── Settings state (WhatsApp + Preferences) ───
   const [waStatus, setWaStatus]   = useState<{ connected: boolean; phone: string | null; name: string | null } | null>(null);

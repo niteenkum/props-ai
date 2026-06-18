@@ -7,7 +7,7 @@ type AuthStatus = "PENDING" | "ACTIVE";
 export function useLoginSuccess() {
   const router = useRouter();
 
-  const handleLoginSuccess = (email: string, status: AuthStatus, name: string) => {
+  const handleLoginSuccess = (email: string, status: AuthStatus, name: string, redirectTo?: string) => {
     // ── 1. localStorage (for useAuth hook) ──────────────────────────────────
     localStorage.setItem("proposalizer_auth_token", "demo-token-active-session");
     localStorage.setItem("proposalizer_user_email", email);
@@ -20,7 +20,11 @@ export function useLoginSuccess() {
     document.cookie = `thepitchly-session=${encodeURIComponent(payload)}; path=/; max-age=${maxAge}; SameSite=Lax`;
 
     // ── 3. Navigate ─────────────────────────────────────────────────────────
-    router.push(status === "ACTIVE" ? "/dashboard" : "/pending");
+    if (redirectTo) {
+      router.push(redirectTo);
+    } else {
+      router.push(status === "ACTIVE" ? "/dashboard" : "/pending");
+    }
   };
 
   return { handleLoginSuccess };
