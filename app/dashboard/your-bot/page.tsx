@@ -44,6 +44,11 @@ function PropBotContent() {
   const inputRef                   = useRef<HTMLTextAreaElement>(null);
   const hasMessages                = messages.length > 0;
 
+  const [showPalette, setShowPalette] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const paletteSearchRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("chatbot_greeting");
@@ -62,6 +67,15 @@ function PropBotContent() {
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // Focus search input when palette opens
+  useEffect(() => {
+    if (showPalette) {
+      setTimeout(() => {
+        paletteSearchRef.current?.focus();
+      }, 50);
+    }
+  }, [showPalette]);
 
   // ── Send a message ──────────────────────────────────────────────────────
   const handleSend = useCallback(async (text?: string) => {
@@ -122,6 +136,150 @@ function PropBotContent() {
     }
   };
 
+  const COMMANDS = React.useMemo(() => [
+    {
+      id: "inbox",
+      name: "Show Priority Inbox",
+      shortcut: "I",
+      description: "Fetch synced emails with AI priority classification",
+      action: () => handleSend("Show me my priority inbox with AI-classified emails"),
+    },
+    {
+      id: "pitch",
+      name: "Draft Cold Pitch",
+      shortcut: "C",
+      description: "Write a personalized cold outreach pitch for clients",
+      action: () => handleSend("Help me draft a personalized cold pitch to a potential client looking for a freelance web developer"),
+    },
+    {
+      id: "create-job",
+      name: "Create Job Post",
+      shortcut: "J",
+      description: "Paste a job description to create and analyze a job",
+      action: () => {
+        const template = "Here is a job description. Please create a new job post and analyze it for me:\n\n";
+        setInput(template);
+        setTimeout(() => {
+          if (inputRef.current) {
+            inputRef.current.focus();
+            inputRef.current.selectionStart = template.length;
+            inputRef.current.selectionEnd = template.length;
+          }
+        }, 50);
+      }
+    },
+    {
+      id: "stats",
+      name: "Show Proposal Stats",
+      shortcut: "S",
+      description: "View outreach conversion rates and pipeline counts",
+      action: () => handleSend("Show me my proposal statistics, active rates, and lead pipeline updates"),
+    },
+    {
+      id: "schedule",
+      name: "Schedule Client Call",
+      shortcut: "F",
+      description: "Schedule a Google Meet call linked to a job post",
+      action: () => handleSend("Schedule a client call"),
+    },
+    {
+      id: "clear",
+      name: "Clear Conversation",
+      shortcut: "X",
+      description: "Wipe chat history and reset screen",
+      action: () => setMessages([]),
+    }
+  ], [handleSend, setInput, setMessages]);
+
+  const filteredCommands = React.useMemo(() => {
+    return COMMANDS.filter(cmd =>
+      cmd.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      cmd.description.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [COMMANDS, searchQuery]);
+
+  // Listen for global keyboard shortcuts
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isTyping =
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+         activeEl.tagName === "TEXTAREA" ||
+         (activeEl as HTMLElement).isContentEditable);
+
+      // Cmd+K or Ctrl+K toggle palette
+      if ((e.metaKey || e.ctrlKey) && e.key?.toLowerCase() === "k") {
+        e.preventDefault();
+        setShowPalette((prev) => !prev);
+        setSearchQuery("");
+        setActiveIndex(0);
+        return;
+      }
+
+      if (showPalette) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setShowPalette(false);
+          return;
+        }
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setActiveIndex((prev) => (prev + 1) % filteredCommands.length);
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setActiveIndex((prev) => (prev - 1 + filteredCommands.length) % filteredCommands.length);
+          return;
+        }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (filteredCommands[activeIndex]) {
+            filteredCommands[activeIndex].action();
+            setShowPalette(false);
+          }
+          return;
+        }
+      } else {
+        // Direct shortcuts when NOT typing
+        if (!isTyping) {
+          const key = e.key?.toLowerCase();
+          if (key === "i") {
+            e.preventDefault();
+            handleSend("Show me my priority inbox with AI-classified emails");
+          } else if (key === "c") {
+            e.preventDefault();
+            handleSend("Help me draft a personalized cold pitch to a potential client looking for a freelance web developer");
+          } else if (key === "s") {
+            e.preventDefault();
+            handleSend("Show me my proposal statistics, active rates, and lead pipeline updates");
+          } else if (key === "j") {
+            e.preventDefault();
+            const template = "Here is a job description. Please create a new job post and analyze it for me:\n\n";
+            setInput(template);
+            setTimeout(() => {
+              if (inputRef.current) {
+                inputRef.current.focus();
+                inputRef.current.selectionStart = template.length;
+                inputRef.current.selectionEnd = template.length;
+              }
+            }, 50);
+          } else if (key === "f") {
+            e.preventDefault();
+            handleSend("Schedule a client call");
+          } else if (key === "x") {
+            e.preventDefault();
+            setMessages([]);
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [showPalette, activeIndex, filteredCommands, handleSend]);
+
   const handleSelectSuggestion = useCallback((prompt: string) => {
     if (prompt.includes("[Paste job description here]")) {
       const template = "Here is a job description. Please create a new job post and analyze it for me:\n\n";
@@ -181,6 +339,37 @@ function PropBotContent() {
   return (
     <div style={styles.page}>
 
+      {/* ── Header ── */}
+      <div style={styles.header}>
+        <div style={styles.headerLeft}>
+          <div style={styles.headerDot} />
+          <div>
+            <h2 style={styles.headerTitle}>PropBot Assistant</h2>
+            <p style={styles.headerSub}>Active Session · Connected via Corsair</p>
+          </div>
+        </div>
+        
+        <div style={styles.headerRight}>
+          <button 
+            onClick={() => setShowPalette(true)}
+            style={styles.headerShortcutBtn}
+            title="Open Command Palette (Cmd+K)"
+          >
+            <span style={styles.shortcutIconKey}>⌘</span>
+            <span style={styles.shortcutIconKey}>K</span>
+            <span style={styles.shortcutIconText}>Palette</span>
+          </button>
+          <div style={styles.divider} />
+          <button 
+            onClick={clearChat} 
+            style={styles.actionIconBtn}
+            title="Clear Chat History (X)"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </div>
+
       {/* ── Chat Content Scroll Area ─────────────────────────────────────── */}
       <div style={styles.body}>
         {/* EMPTY STATE */}
@@ -193,6 +382,13 @@ function PropBotContent() {
               <p style={styles.greetingHint}>
                 Ask me anything — draft proposals, calculate freelance rates, find gig leads, and track active clients.
               </p>
+              <div style={styles.keyboardTipContainer}>
+                <span>Press</span>
+                <kbd style={styles.keyboardTipBadge}>⌘ K</kbd>
+                <span>or</span>
+                <kbd style={styles.keyboardTipBadge}>Ctrl K</kbd>
+                <span>for Command Palette</span>
+              </div>
             </div>
             <QuickActionsGrid onSelect={handleSelectSuggestion} />
           </div>
@@ -219,6 +415,91 @@ function PropBotContent() {
           </div>
         )}
       </div>
+
+      {/* ── Command Palette Overlay ── */}
+      {showPalette && (
+        <div 
+          style={styles.paletteOverlay} 
+          onClick={() => setShowPalette(false)}
+        >
+          <div 
+            style={styles.paletteContainer} 
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Search Input Row */}
+            <div style={styles.paletteSearchRow}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.5" style={{ opacity: 0.8 }}>
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                ref={paletteSearchRef}
+                type="text"
+                placeholder="Type a command to run..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setActiveIndex(0);
+                }}
+                style={styles.paletteSearchInput}
+              />
+              <span style={styles.paletteEscBadge} onClick={() => setShowPalette(false)}>ESC</span>
+            </div>
+
+            {/* Commands List */}
+            <div style={styles.paletteList}>
+              {filteredCommands.length > 0 ? (
+                filteredCommands.map((cmd, index) => {
+                  const isHoveredOrActive = index === activeIndex;
+                  return (
+                    <div
+                      key={cmd.id}
+                      onClick={() => {
+                        cmd.action();
+                        setShowPalette(false);
+                      }}
+                      onMouseEnter={() => setActiveIndex(index)}
+                      style={{
+                        ...styles.paletteItem,
+                        background: isHoveredOrActive ? "rgba(124, 58, 237, 0.08)" : "transparent",
+                        borderLeftColor: isHoveredOrActive ? "#7c3aed" : "transparent",
+                      }}
+                    >
+                      <div style={styles.paletteItemLeft}>
+                        <div style={styles.paletteItemIconBox}>
+                          {cmd.id === "inbox" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>}
+                          {cmd.id === "pitch" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>}
+                          {cmd.id === "create-job" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>}
+                          {cmd.id === "stats" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>}
+                          {cmd.id === "schedule" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>}
+                          {cmd.id === "clear" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>}
+                        </div>
+                        <div>
+                          <div style={styles.paletteItemName}>{cmd.name}</div>
+                          <div style={styles.paletteItemDesc}>{cmd.description}</div>
+                        </div>
+                      </div>
+                      <div style={styles.paletteItemRight}>
+                        <span style={styles.paletteItemShortcut}>{cmd.shortcut}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={styles.paletteNoResults}>
+                  No commands match &quot;{searchQuery}&quot;
+                </div>
+              )}
+            </div>
+
+            {/* Footer Row */}
+            <div style={styles.paletteFooter}>
+              <span>↑↓ to navigate · Enter to select · Esc to close</span>
+              <span>PropBot Command Palette</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Bottom Input Container ──────────────────────────────────────── */}
       <div style={styles.bottom}>
@@ -527,5 +808,177 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
     boxShadow: "0 4px 14px rgba(124,58,237,0.35)",
     cursor: "pointer",
+  },
+  paletteOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: "rgba(15, 23, 42, 0.45)",
+    backdropFilter: "blur(6px)",
+    WebkitBackdropFilter: "blur(6px)",
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "center",
+    paddingTop: "15vh",
+    zIndex: 9999,
+    animation: "propbot-fadein 0.2s ease-out",
+  },
+  paletteContainer: {
+    maxWidth: 550,
+    width: "90%",
+    background: "rgba(255, 255, 255, 0.95)",
+    border: "1.5px solid rgba(124, 58, 237, 0.18)",
+    borderRadius: 18,
+    boxShadow: "0 10px 40px rgba(124, 58, 237, 0.15), 0 2px 10px rgba(0,0,0,0.05)",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+    backdropFilter: "blur(10px)",
+    WebkitBackdropFilter: "blur(10px)",
+  },
+  paletteSearchRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "16px 20px",
+    borderBottom: "1px solid rgba(124, 58, 237, 0.1)",
+  },
+  paletteSearchInput: {
+    flex: 1,
+    background: "transparent",
+    border: "none",
+    outline: "none",
+    fontSize: 15,
+    color: "#1e1b4b",
+    fontFamily: "inherit",
+  },
+  paletteEscBadge: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: "var(--muted-foreground)",
+    background: "rgba(0,0,0,0.05)",
+    padding: "3px 7px",
+    borderRadius: 5,
+    cursor: "pointer",
+  },
+  paletteList: {
+    maxHeight: 320,
+    overflowY: "auto",
+    padding: 8,
+  },
+  paletteItem: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "10px 14px",
+    borderRadius: 10,
+    cursor: "pointer",
+    transition: "background 0.1s ease, border-left-color 0.15s ease",
+    borderLeft: "3.5px solid transparent",
+  },
+  paletteItemLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+  },
+  paletteItemIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    background: "rgba(124, 58, 237, 0.06)",
+    color: "#7c3aed",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  paletteItemName: {
+    fontSize: 13.5,
+    fontWeight: 650,
+    color: "var(--foreground)",
+  },
+  paletteItemDesc: {
+    fontSize: 11,
+    color: "var(--muted-foreground)",
+    marginTop: 2,
+  },
+  paletteItemRight: {
+    display: "flex",
+    alignItems: "center",
+  },
+  paletteItemShortcut: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: "#7c3aed",
+    background: "rgba(124, 58, 237, 0.08)",
+    padding: "3px 6px",
+    borderRadius: 4,
+    minWidth: 18,
+    textAlign: "center",
+  },
+  paletteNoResults: {
+    padding: "24px 16px",
+    textAlign: "center",
+    fontSize: 13,
+    color: "var(--muted-foreground)",
+  },
+  paletteFooter: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "10px 16px",
+    borderTop: "1px solid rgba(124, 58, 237, 0.06)",
+    background: "rgba(124, 58, 237, 0.02)",
+    fontSize: 10.5,
+    color: "var(--muted-foreground)",
+    fontWeight: 500,
+  },
+  headerShortcutBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "6px 10px",
+    borderRadius: 8,
+    background: "rgba(124, 58, 237, 0.06)",
+    border: "1px solid rgba(124, 58, 237, 0.12)",
+    cursor: "pointer",
+    transition: "all 0.15s ease",
+  },
+  shortcutIconKey: {
+    fontSize: 10.5,
+    fontWeight: 700,
+    color: "#7c3aed",
+    background: "rgba(255,255,255,0.7)",
+    border: "1px solid rgba(124, 58, 237, 0.15)",
+    padding: "1px 4px",
+    borderRadius: 3,
+    lineHeight: 1,
+  },
+  shortcutIconText: {
+    fontSize: 11.5,
+    fontWeight: 600,
+    color: "#7c3aed",
+    marginLeft: 3,
+  },
+  keyboardTipContainer: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 12,
+    fontSize: 12,
+    color: "var(--muted-foreground)",
+  },
+  keyboardTipBadge: {
+    fontSize: 10.5,
+    fontWeight: 700,
+    color: "#7c3aed",
+    background: "rgba(124, 58, 237, 0.06)",
+    border: "1px solid rgba(124, 58, 237, 0.15)",
+    padding: "2px 5px",
+    borderRadius: 4,
+    fontFamily: "inherit",
   },
 };

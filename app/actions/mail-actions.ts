@@ -905,6 +905,119 @@ export async function gmailTrashAction(
 }
 
 
+// ─── Gmail Advanced Search via Corsair ───────────────────────────────────────
+// Builds a Gmail API `q` query string from structured filters,
+// calls Corsair gmail.api.messages.list, then hydrates with metadata.
+
+export interface GmailSearchFilters {
+  from?:          string;
+  to?:            string;
+  subject?:       string;
+  hasAttachment?: boolean;
+  isUnread?:      boolean;
+  isStarred?:     boolean;
+  dateAfter?:     string;   // YYYY-MM-DD
+  dateBefore?:    string;   // YYYY-MM-DD
+  rawQuery?:      string;
+  maxResults?:    number;
+}
+
+export interface GmailSearchResult {
+  messageId:   string;
+  subject:     string;
+  fromEmail:   string;
+  fromName:    string;
+  receivedAt:  string;
+  snippet:     string;
+  isRead:      boolean;
+  isStarred:   boolean;
+  labels:      string[];
+}
+
+export async function gmailSearchAction(
+  userEmail: string,
+  filters: GmailSearchFilters,
+): Promise<{ success: boolean; results?: GmailSearchResult[]; query?: string; error?: string }> {
+  try {
+    const account = await prisma.mailAccount.findUnique({
+      where: { userEmail_provider: { userEmail, provider: "gmail" } },
+    });
+    if (!account) return { success: false, error: "Gmail account not connected." };
+
+    // Build Gmail `q` string
+    const parts: string[] = [];
+    if (filters.from?.trim())       parts.push(`from:${filters.from.trim()}`);
+    if (filters.to?.trim())         parts.push(`to:${filters.to.trim()}`);
+    if (filters.subject?.trim())    parts.push(`subject:${filters.subject.trim()}`);
+    if (filters.hasAttachment)      parts.push("has:attachment");
+    if (filters.isUnread === true)  parts.push("is:unread");
+    if (filters.isUnread === false) parts.push("is:read");
+    if (filters.isStarred)          parts.push("is:starred");
+    if (filters.dateAfter?.trim()) {
+      const d = new Date(filters.dateAfter);
+      if (!isNaN(d.getTime()))
+        parts.push(`after:${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}`);
+    }
+    if (filters.dateBefore?.trim()) {
+      const d = new Date(filters.dateBefore);
+      if (!isNaN(d.getTime()))
+        parts.push(`before:${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}`);
+    }
+    if (filters.rawQuery?.trim())   parts.push(filters.rawQuery.trim());
+    if (!parts.length)              parts.push("in:inbox");
+
+    const q = parts.join(" ");
+    const maxResults = Math.min(filters.maxResults ?? 25, 50);
+
+    console.log(`[gmailSearch] 🔍 q="${q}" max=${maxResults}`);
+
+    const { corsair } = await import("../utils/corsair");
+    const tenant = corsair.withTenant(userEmail);
+
+    // Step 1: Corsair list → message IDs
+    const listRes = await (tenant.gmail.api.messages.list as any)({ q, maxResults }) as any;
+    const msgIds: string[] = (listRes?.messages ?? []).map((m: any) => m.id).filter(Boolean);
+    console.log(`[gmailSearch] Corsair returned ${msgIds.length} message IDs`);
+
+    if (!msgIds.length) return { success: true, results: [], query: q };
+
+    // Step 2: Hydrate each message
+    const results: GmailSearchResult[] = [];
+    for (const id of msgIds.slice(0, maxResults)) {
+      try {
+        const meta = await (tenant.gmail.api.messages.get as any)({
+          id, format: "metadata",
+          metadataHeaders: ["From", "To", "Subject", "Date"],
+        }) as any;
+
+        const hdrs = (meta?.payload?.headers ?? []) as { name: string; value: string }[];
+        const h = (n: string) => hdrs.find((x: any) => x.name?.toLowerCase() === n.toLowerCase())?.value ?? "";
+
+        const fromRaw  = h("From");
+        const fm = fromRaw.match(/^(.+?)?\s*<([^>]+)>$/);
+        const labelIds = (meta?.labelIds ?? []) as string[];
+
+        results.push({
+          messageId:  id,
+          subject:    h("Subject") || "(no subject)",
+          fromEmail:  fm?.[2]?.trim() ?? fromRaw,
+          fromName:   fm?.[1]?.trim() || fromRaw.split("@")[0],
+          receivedAt: meta?.internalDate ? new Date(Number(meta.internalDate)).toISOString() : new Date().toISOString(),
+          snippet:    (meta?.snippet ?? "").slice(0, 140),
+          isRead:     !labelIds.includes("UNREAD"),
+          isStarred:  labelIds.includes("STARRED"),
+          labels:     labelIds,
+        });
+      } catch { /* skip bad messages */ }
+    }
+
+    return { success: true, results, query: q };
+  } catch (err: any) {
+    console.error("[gmailSearch] Error:", err?.message);
+    return { success: false, error: err?.message ?? "Search failed." };
+  }
+}
+
 // ─── 4h. Star / Unstar a Zoho message ────────────────────────────────────────
 // Uses Zoho updatemessage API: PUT /accounts/{accountId}/updatemessage
 // mode=setFlag + flagid=important → stars the message (yellow flag in Zoho)

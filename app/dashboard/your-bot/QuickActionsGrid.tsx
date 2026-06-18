@@ -21,6 +21,14 @@ export interface QuickAction {
 export const QUICK_ACTIONS: QuickAction[] = [
   {
     icon: <Mail size={20} />,
+    label: "Priority Inbox",
+    description: "AI-sorted emails & alerts",
+    prompt: "Show me my priority inbox with AI-classified emails",
+    accentColor: "#6366f1",
+    bgGradient: "rgba(99,102,241,0.06)",
+  },
+  {
+    icon: <Mail size={20} />,
     label: "Cold Pitch Client",
     description: "Write personalised outreach",
     prompt: "Help me draft a personalized cold pitch to a potential client looking for a freelance web developer",
@@ -117,7 +125,7 @@ export default function QuickActionsGrid({ onSelect }: QuickActionsGridProps) {
 const styles: Record<string, React.CSSProperties> = {
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
+    gridTemplateColumns: "repeat(4, 1fr)",
     gap: 14,
     width: "100%",
     maxWidth: 760,

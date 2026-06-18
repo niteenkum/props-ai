@@ -6,10 +6,18 @@
  * and inline action items.
  */
 
-import React, { useState } from "react";
-import { ThumbsUp, ThumbsDown, Copy, Share2, MoreHorizontal, Sparkles, Video, Calendar } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { ThumbsUp, ThumbsDown, Copy, Share2, MoreHorizontal, Sparkles, Video, Calendar, X, Send, Loader2, ChevronLeft, AlertCircle, Paperclip, Maximize2, Minimize2 } from "lucide-react";
 import type { ChatResponse, DraftEmail } from "../../actions/chat-actions";
 import { getScheduleContextAction } from "../../actions/chat-actions";
+import {
+  fetchGmailThreadAction,
+  getEmailThreadAction,
+  sendThreadReplyAction,
+  sendGmailNewAction,
+  gmailMarkAsReadAction,
+  type ThreadMessage,
+} from "../../actions/mail-actions";
 import DraftEmailCard from "./DraftEmailCard";
 import PitchlyOrb from "./PropBotOrb";
 
@@ -36,8 +44,364 @@ function formatTime(date: Date) {
   }
 }
 
+function fmtThreadTime(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = now.getTime() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+}
+
+function threadAvatarColor(email: string) {
+  const colors = ["#6366f1", "#8b5cf6", "#ec4899", "#14b8a6", "#f59e0b", "#22c55e", "#3b82f6", "#ef4444"];
+  let hash = 0;
+  for (let i = 0; i < email.length; i++) hash = email.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+}
+
+function renderThreadBody(text: string, isSent: boolean) {
+  if (!text) return null;
+  const paragraphs = text.split(/\n{2,}/);
+  return paragraphs.map((para, pi) => {
+    const lines = para.split(/\n/);
+    const renderedLines = lines.map((line, li) => {
+      const parts: React.ReactNode[] = [];
+      const re = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s\]\[)]+)/g;
+      let last = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(line)) !== null) {
+        if (m.index > last) parts.push(line.slice(last, m.index));
+        const url = m[2] || m[3];
+        const label = m[1] || (() => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return "Open Link"; } })();
+        parts.push(<a key={`${pi}-${li}-${m.index}`} href={url} target="_blank" rel="noopener noreferrer" style={{ color: isSent ? "rgba(255,255,255,0.85)" : "#6366f1", textDecoration: "underline" }}>{label}</a>);
+        last = m.index + m[0].length;
+      }
+      if (last < line.length) parts.push(line.slice(last));
+      return <span key={`${pi}-${li}`}>{parts.length > 0 ? parts : line}{li < lines.length - 1 && <br />}</span>;
+    });
+    return <p key={`p-${pi}`} style={{ margin: pi === 0 ? 0 : "8px 0 0", lineHeight: 1.65 }}>{renderedLines}</p>;
+  });
+}
+
+// ─── Email Thread Modal ───────────────────────────────────────────────────────
+function EmailThreadModal({
+  email,
+  userEmail,
+  onClose,
+}: {
+  email: any;
+  userEmail?: string;
+  onClose: () => void;
+}) {
+  const [threadMessages, setThreadMessages] = useState<ThreadMessage[]>([]);
+  const [loading, setLoading]               = useState(true);
+  const [error, setError]                   = useState<string | null>(null);
+  const [replyText, setReplyText]           = useState("");
+  const [sending, setSending]               = useState(false);
+  const [sendError, setSendError]           = useState<string | null>(null);
+  const [gmailThreadId, setGmailThreadId]   = useState<string | null>(null);
+  const [expanded, setExpanded]             = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const provider   = (email.provider as "gmail" | "zoho") || "gmail";
+  const messageId  = email.messageId || email.id || "";
+  const fromEmail  = email.fromEmail || email.from || "";
+  const fromName   = email.fromName || email.from?.split("@")[0] || "Unknown";
+  const subject    = email.subject || "(no subject)";
+  const avatarColor = threadAvatarColor(fromEmail);
+
+  // Fetch thread on mount
+  React.useEffect(() => {
+    if (!userEmail || !messageId) {
+      setLoading(false);
+      setError("Missing email details.");
+      return;
+    }
+    (async () => {
+      try {
+        let res: { success: boolean; messages?: ThreadMessage[]; error?: string; threadId?: string };
+        if (provider === "gmail") {
+          res = await fetchGmailThreadAction(userEmail, messageId);
+          if (res.threadId) setGmailThreadId(res.threadId);
+          // Mark as read silently
+          if (!email.isRead) gmailMarkAsReadAction(userEmail, messageId).catch(() => {});
+        } else {
+          res = await getEmailThreadAction(userEmail, messageId, subject, fromEmail);
+        }
+        if (res.success && res.messages) {
+          setThreadMessages(res.messages);
+        } else {
+          setError(res.error ?? "Could not load thread.");
+        }
+      } catch (e: any) {
+        setError(e?.message ?? "An error occurred.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSend = async () => {
+    if (!replyText.trim() || !userEmail) return;
+    setSending(true);
+    setSendError(null);
+    try {
+      const lastMsg = threadMessages.length > 0 ? threadMessages[threadMessages.length - 1] : null;
+      const replyToId = provider === "gmail"
+        ? (lastMsg?.rfc822MsgId || lastMsg?.zohoMsgId || messageId)
+        : (lastMsg?.zohoMsgId || messageId);
+      await sendThreadReplyAction(
+        userEmail, fromEmail, subject, replyText, replyToId,
+        provider, gmailThreadId || undefined,
+      );
+      const newMsg: ThreadMessage = {
+        id: Date.now().toString(), direction: "sent",
+        fromEmail: userEmail, fromName: "You",
+        toEmail: fromEmail, subject: subject.startsWith("Re:") ? subject : `Re: ${subject}`,
+        body: replyText, sentAt: new Date().toISOString(),
+      };
+      setThreadMessages(prev => [...prev, newMsg]);
+      setReplyText("");
+    } catch (e: any) {
+      setSendError(e?.message ?? "Send failed.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    // Backdrop
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 9999,
+        background: "rgba(0,0,0,0.55)",
+        backdropFilter: "blur(6px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 20,
+        animation: "fadeIn 0.18s ease",
+      }}
+    >
+      {/* Modal panel */}
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: "100%", maxWidth: 680,
+          maxHeight: "90vh",
+          background: "#fff",
+          borderRadius: 20,
+          boxShadow: "0 32px 80px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.06)",
+          display: "flex", flexDirection: "column",
+          overflow: "hidden",
+          animation: "slideUp 0.22s cubic-bezier(0.34,1.56,0.64,1)",
+        }}
+      >
+        {/* ── Modal Header ── */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "14px 18px",
+          borderBottom: "1px solid rgba(0,0,0,0.07)",
+          background: "linear-gradient(135deg, #f8f7ff, #f0f0ff)",
+          flexShrink: 0,
+        }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
+            background: `${avatarColor}18`, border: `2px solid ${avatarColor}30`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 16, fontWeight: 800, color: avatarColor,
+          }}>
+            {(fromName).charAt(0).toUpperCase()}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 800, color: "#1e1b4b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {fromName}
+            </div>
+            <div style={{ fontSize: 11, color: "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {subject}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: "rgba(0,0,0,0.06)", border: "none", cursor: "pointer",
+              width: 30, height: 30, borderRadius: "50%",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "#64748b", flexShrink: 0, transition: "background 0.15s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.1)"}
+            onMouseLeave={e => e.currentTarget.style.background = "rgba(0,0,0,0.06)"}
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* ── Thread Messages ── */}
+        <div style={{
+          flex: 1, overflowY: "auto",
+          padding: "16px 18px",
+          display: "flex", flexDirection: "column", gap: 12,
+          background: "#fafaf9",
+          minHeight: 200,
+        }}>
+          {loading && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 200, gap: 10 }}>
+              <Loader2 size={28} style={{ color: "#6366f1", animation: "spin 1s linear infinite" }} />
+              <span style={{ fontSize: 12.5, color: "#94a3b8" }}>Loading thread…</span>
+            </div>
+          )}
+          {error && !loading && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 200, gap: 8, color: "#ef4444" }}>
+              <AlertCircle size={24} />
+              <span style={{ fontSize: 13 }}>{error}</span>
+            </div>
+          )}
+          {!loading && !error && threadMessages.length === 0 && (
+            <div style={{ textAlign: "center", padding: "40px 0", color: "#94a3b8" }}>
+              <span style={{ fontSize: 13 }}>No messages in this thread.</span>
+            </div>
+          )}
+          {!loading && !error && threadMessages.map((m, i) => {
+            const isSent = m.direction === "sent";
+            return (
+              <div key={m.id || i} style={{
+                display: "flex", flexDirection: "column",
+                alignSelf: isSent ? "flex-end" : "flex-start",
+                maxWidth: "82%",
+                alignItems: isSent ? "flex-end" : "flex-start",
+              }}>
+                {/* Sender name + time */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                  {!isSent && (
+                    <div style={{
+                      width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                      background: `${avatarColor}18`, border: `1.5px solid ${avatarColor}30`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 9, fontWeight: 800, color: avatarColor,
+                    }}>
+                      {(m.fromName || m.fromEmail || "?").charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <span style={{ fontSize: 10, fontWeight: 700, color: isSent ? "#6366f1" : "#64748b" }}>
+                    {isSent ? "You" : (m.fromName || m.fromEmail?.split("@")[0])}
+                  </span>
+                  <span style={{ fontSize: 9.5, color: "#94a3b8" }}>{fmtThreadTime(m.sentAt)}</span>
+                </div>
+                {/* Bubble */}
+                <div style={{
+                  padding: "10px 14px",
+                  borderRadius: 16,
+                  borderTopRightRadius: isSent ? 4 : 16,
+                  borderTopLeftRadius: isSent ? 16 : 4,
+                  background: isSent ? "linear-gradient(135deg, #6366f1, #4f46e5)" : "#fff",
+                  color: isSent ? "#fff" : "#1e293b",
+                  fontSize: 12.5, lineHeight: 1.65,
+                  boxShadow: isSent
+                    ? "0 2px 12px rgba(99,102,241,0.3)"
+                    : "0 1px 4px rgba(0,0,0,0.07)",
+                  wordBreak: "break-word",
+                  border: isSent ? "none" : "1px solid rgba(0,0,0,0.06)",
+                }}>
+                  {renderThreadBody(m.body, isSent)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── Reply Composer ── */}
+        {userEmail && (
+          <div style={{
+            borderTop: "1px solid rgba(0,0,0,0.07)",
+            background: "#fff",
+            padding: "12px 18px",
+            flexShrink: 0,
+          }}>
+            {/* To / Subject row */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", width: 40, flexShrink: 0 }}>To</span>
+              <span style={{ fontSize: 12, color: "#1e293b", fontWeight: 500 }}>{fromEmail}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", width: 40, flexShrink: 0 }}>Re:</span>
+              <span style={{ fontSize: 11.5, color: "#475569" }}>{subject.toLowerCase().startsWith("re:") ? subject : `Re: ${subject}`}</span>
+            </div>
+            {/* Textarea */}
+            <textarea
+              ref={textareaRef}
+              value={replyText}
+              onChange={e => setReplyText(e.target.value)}
+              placeholder={`Reply to ${fromName}… (Enter to send, Shift+Enter for new line)`}
+              rows={expanded ? 8 : 3}
+              onKeyDown={e => {
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+              }}
+              style={{
+                width: "100%", boxSizing: "border-box",
+                padding: "10px 12px", borderRadius: 10, fontSize: 13,
+                border: "1.5px solid rgba(99,102,241,0.2)",
+                background: "#fafaf9",
+                color: "#1e293b", outline: "none",
+                fontFamily: "inherit", lineHeight: 1.6, resize: "none",
+                transition: "border-color 0.15s",
+              }}
+              onFocus={e => e.target.style.borderColor = "#6366f1"}
+              onBlur={e => e.target.style.borderColor = "rgba(99,102,241,0.2)"}
+            />
+            {sendError && (
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6, fontSize: 11.5, color: "#ef4444" }}>
+                <AlertCircle size={12} /> {sendError}
+              </div>
+            )}
+            {/* Toolbar */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+              <button
+                onClick={() => setExpanded(e => !e)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600 }}
+              >
+                {expanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+                {expanded ? "Collapse" : "Expand"}
+              </button>
+              <button
+                onClick={handleSend}
+                disabled={sending || !replyText.trim()}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "8px 20px", borderRadius: 9,
+                  background: replyText.trim() && !sending
+                    ? "linear-gradient(135deg, #818cf8, #6366f1)"
+                    : "rgba(0,0,0,0.07)",
+                  color: replyText.trim() && !sending ? "#fff" : "#94a3b8",
+                  border: "none", cursor: replyText.trim() && !sending ? "pointer" : "not-allowed",
+                  fontSize: 13, fontWeight: 700,
+                  boxShadow: replyText.trim() && !sending ? "0 4px 14px rgba(99,102,241,0.35)" : "none",
+                  transition: "all 0.15s",
+                }}
+              >
+                {sending ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Send size={13} />}
+                {sending ? "Sending…" : "Send Reply"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes slideUp { from { opacity: 0; transform: scale(0.96) translateY(10px) } to { opacity: 1; transform: scale(1) translateY(0) } }
+        @keyframes spin { to { transform: rotate(360deg) } }
+      `}</style>
+    </div>
+  );
+}
+
 // ─── Email Result Card (received inbox emails) ───────────────────────────────
-function EmailResultCard({ email }: { email: any }) {
+function EmailResultCard({ email, userEmail, onClick }: { email: any; userEmail?: string; onClick?: () => void }) {
   const typeColors: Record<string, string> = {
     interview_call: "#8b5cf6",
     offer_letter: "#22c55e",
@@ -52,7 +416,25 @@ function EmailResultCard({ email }: { email: any }) {
     : "var(--muted-foreground)";
 
   return (
-    <div style={styles.emailCard}>
+    <div
+      onClick={onClick}
+      style={{
+        ...styles.emailCard,
+        cursor: onClick ? "pointer" : "default",
+        transition: "box-shadow 0.15s, transform 0.12s, border-color 0.15s",
+        position: "relative" as const,
+      }}
+      onMouseEnter={e => {
+        if (!onClick) return;
+        (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 20px rgba(99,102,241,0.15)";
+        (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(99,102,241,0.35)";
+      }}
+      onMouseLeave={e => {
+        if (!onClick) return;
+        (e.currentTarget as HTMLDivElement).style.boxShadow = (styles.emailCard as any).boxShadow || "";
+        (e.currentTarget as HTMLDivElement).style.borderColor = "";
+      }}
+    >
       <div style={styles.emailCardRow}>
         <div style={styles.emailAvatar}>
           {(email.fromName || email.from || "?").charAt(0).toUpperCase()}
@@ -79,8 +461,31 @@ function EmailResultCard({ email }: { email: any }) {
           {email.date || (email.receivedAt ? new Date(email.receivedAt).toLocaleDateString("en", { month: "short", day: "numeric" }) : "")}
         </span>
         {!email.isRead && <span style={styles.unreadPill}>New</span>}
+        {onClick && (
+          <span style={{
+            marginLeft: "auto", fontSize: 10, fontWeight: 700,
+            color: "#818cf8", letterSpacing: "0.02em",
+          }}>Read thread →</span>
+        )}
       </div>
     </div>
+  );
+}
+
+// Wrapper that manages modal state for inbox email cards
+function ClickableEmailResultCard({ email, userEmail }: { email: any; userEmail?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <EmailResultCard email={email} userEmail={userEmail} onClick={() => setOpen(true)} />
+      {open && (
+        <EmailThreadModal
+          email={email}
+          userEmail={userEmail}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
   );
 }
 
@@ -436,24 +841,51 @@ function ScheduleJobSelectPanel({
   };
 
   // Clock math
-  const clockRadius = 72;
-  const center = clockRadius + 4;
-  const svgSize = center * 2;
+  const clockRadius = 68;
+  const center      = clockRadius + 6;
+  const svgSize     = center * 2;
   const toRad = (deg: number) => (deg * Math.PI) / 180;
+
+  // Live second hand (updates each second)
+  const [nowSec, setNowSec] = useState(new Date().getSeconds());
+  React.useEffect(() => {
+    const id = setInterval(() => setNowSec(new Date().getSeconds()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const hourAngle = ((hour % 12) / 12 + minute / 720) * 360 - 90;
   const minAngle  = (minute / 60) * 360 - 90;
-  const hx = center + clockRadius * 0.55 * Math.cos(toRad(hourAngle));
-  const hy = center + clockRadius * 0.55 * Math.sin(toRad(hourAngle));
-  const mx = center + clockRadius * 0.80 * Math.cos(toRad(minAngle));
-  const my = center + clockRadius * 0.80 * Math.sin(toRad(minAngle));
-  const clockTicks = Array.from({ length: 12 }, (_, i) => {
-    const a = (i / 12) * 360 - 90;
-    const r = toRad(a);
-    return { x1: center + (clockRadius - 6) * Math.cos(r), y1: center + (clockRadius - 6) * Math.sin(r),
-             x2: center + clockRadius * Math.cos(r),         y2: center + clockRadius * Math.sin(r),
-             n: i === 0 ? 12 : i };
+  const secAngle  = (nowSec / 60) * 360 - 90;
+
+  const hx = center + clockRadius * 0.50 * Math.cos(toRad(hourAngle));
+  const hy = center + clockRadius * 0.50 * Math.sin(toRad(hourAngle));
+  const mx = center + clockRadius * 0.75 * Math.cos(toRad(minAngle));
+  const my = center + clockRadius * 0.75 * Math.sin(toRad(minAngle));
+  const sx = center + clockRadius * 0.82 * Math.cos(toRad(secAngle));
+  const sy = center + clockRadius * 0.82 * Math.sin(toRad(secAngle));
+  const sxTail = center - clockRadius * 0.18 * Math.cos(toRad(secAngle));
+  const syTail = center - clockRadius * 0.18 * Math.sin(toRad(secAngle));
+
+  // 12 tick marks + numbers
+  const clockMarkers = Array.from({ length: 12 }, (_, i) => {
+    const a  = (i / 12) * 360 - 90;
+    const r  = toRad(a);
+    const isMajor = i % 3 === 0;
+    return {
+      x1: center + (clockRadius - (isMajor ? 9 : 6)) * Math.cos(r),
+      y1: center + (clockRadius - (isMajor ? 9 : 6)) * Math.sin(r),
+      x2: center + clockRadius * Math.cos(r),
+      y2: center + clockRadius * Math.sin(r),
+      nx: center + (clockRadius - 20) * Math.cos(r),
+      ny: center + (clockRadius - 20) * Math.sin(r),
+      n:  i === 0 ? 12 : i,
+      isMajor,
+    };
   });
-  const timeStr = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+
+  const ampm  = hour < 12 ? "AM" : "PM";
+  const h12   = hour % 12 || 12;
+  const timeStr = `${String(h12).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
   const buildStartDateTime = () => date ? `${date}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+05:30` : "";
 
   // Derived call title (user can override via meetingTitle)
@@ -606,35 +1038,88 @@ function ScheduleJobSelectPanel({
         </div>
 
         <div style={{ padding: "14px", display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Analog Clock */}
+          {/* Apple Watch-style Clock Card */}
           <div style={styles.analogClockCard}>
+            {/* Left: Digital time + label */}
+            <div style={{ display: "flex", flexDirection: "column" as const, justifyContent: "center", flex: 1, gap: 6 }}>
+              <div style={styles.analogDigitalTime}>
+                {timeStr}
+                <span style={styles.analogAmPm}>{ampm}</span>
+              </div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", fontWeight: 400, lineHeight: 1.4 }}>
+                Today, India
+              </div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
+                +0hrs · IST
+              </div>
+            </div>
+
+            {/* Right: Analog SVG Clock */}
             <svg width={svgSize} height={svgSize} style={{ flexShrink: 0 }}>
-              <circle cx={center} cy={center} r={clockRadius} fill="white" stroke="#e2d9f3" strokeWidth="2" />
-              {clockTicks.map((t, i) => (
-                <line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2}
-                  stroke={i % 3 === 0 ? "#7c3aed" : "#cbd5e1"}
-                  strokeWidth={i % 3 === 0 ? 2.5 : 1.5} strokeLinecap="round" />
+              {/* Clock face */}
+              <circle cx={center} cy={center} r={clockRadius} fill="#1c1c1e" />
+              <circle cx={center} cy={center} r={clockRadius} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
+
+              {/* Tick marks */}
+              {clockMarkers.map((t, i) => (
+                <line key={i}
+                  x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2}
+                  stroke={t.isMajor ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.25)"}
+                  strokeWidth={t.isMajor ? 2 : 1}
+                  strokeLinecap="round"
+                />
               ))}
-              {clockTicks.map((t, i) => {
-                const a = (i / 12) * 360 - 90;
-                const nx = center + (clockRadius - 18) * Math.cos(toRad(a));
-                const ny = center + (clockRadius - 18) * Math.sin(toRad(a));
-                return <text key={i} x={nx} y={ny} textAnchor="middle" dominantBaseline="central" fontSize="9" fontWeight="600" fill="#4c1d95" fontFamily="system-ui">{t.n}</text>;
-              })}
-              <line x1={center} y1={center} x2={hx} y2={hy} stroke="#4c1d95" strokeWidth="3.5" strokeLinecap="round" />
-              <line x1={center} y1={center} x2={mx} y2={my} stroke="#7c3aed" strokeWidth="2.5" strokeLinecap="round" />
-              <circle cx={center} cy={center} r="4" fill="#7c3aed" />
+
+              {/* Numbers */}
+              {clockMarkers.map((t, i) => (
+                <text
+                  key={i}
+                  x={t.nx} y={t.ny}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fontSize={t.isMajor ? "10" : "8"}
+                  fontWeight={t.isMajor ? "600" : "400"}
+                  fill={t.isMajor ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.45)"}
+                  fontFamily="system-ui, -apple-system"
+                >
+                  {t.n}
+                </text>
+              ))}
+
+              {/* Hour hand */}
+              <line x1={center} y1={center} x2={hx} y2={hy}
+                stroke="white" strokeWidth="3.5" strokeLinecap="round" />
+              {/* Minute hand */}
+              <line x1={center} y1={center} x2={mx} y2={my}
+                stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+              {/* Second hand (live, red) */}
+              <line x1={sxTail} y1={syTail} x2={sx} y2={sy}
+                stroke="#ff3b30" strokeWidth="1.5" strokeLinecap="round" />
+              {/* Center dot */}
+              <circle cx={center} cy={center} r={3.5} fill="white" />
+              <circle cx={center} cy={center} r={2} fill="#ff3b30" />
             </svg>
-            <div style={{ flex: 1, display: "flex", flexDirection: "column" as const, gap: 12 }}>
-              <div style={styles.analogDigitalTime}>{timeStr}<span style={styles.analogAmPm}>{hour < 12 ? "AM" : "PM"}</span></div>
-              <div>
-                <div style={styles.sliderLabel}>Hour: <b>{hour}:00</b></div>
-                <input type="range" min={0} max={23} value={hour} onChange={(e) => setHour(Number(e.target.value))} style={styles.clockSlider} />
+          </div>
+
+          {/* Time sliders below the dark clock card */}
+          <div style={{ display: "flex", flexDirection: "column" as const, gap: 10 }}>
+            <div>
+              <div style={{ ...styles.sliderLabel, display: "flex", justifyContent: "space-between" }}>
+                <span>Hour</span>
+                <b style={{ color: "#1e1b4b" }}>{String(h12).padStart(2, "0")}:00 {ampm}</b>
               </div>
-              <div>
-                <div style={styles.sliderLabel}>Minute: <b>:{String(minute).padStart(2, "0")}</b></div>
-                <input type="range" min={0} max={59} step={5} value={minute} onChange={(e) => setMinute(Number(e.target.value))} style={styles.clockSlider} />
+              <input type="range" min={0} max={23} value={hour}
+                onChange={e => setHour(Number(e.target.value))}
+                style={styles.clockSlider} />
+            </div>
+            <div>
+              <div style={{ ...styles.sliderLabel, display: "flex", justifyContent: "space-between" }}>
+                <span>Minute</span>
+                <b style={{ color: "#1e1b4b" }}>:{String(minute).padStart(2, "0")}</b>
               </div>
+              <input type="range" min={0} max={59} step={5} value={minute}
+                onChange={e => setMinute(Number(e.target.value))}
+                style={styles.clockSlider} />
             </div>
           </div>
 
@@ -1307,10 +1792,10 @@ function parseMarkdown(text: string): React.ReactNode {
 // ─── Helper to generate contextual suggestions ───────────────────────────────
 function getSuggestionsForMessage(msg: UIMessage): { label: string; prompt: string }[] {
   const defaultSuggestions = [
+    { label: "📬 Check priority inbox", prompt: "Show me my priority inbox with AI-classified emails" },
     { label: "✉️ Draft an email", prompt: "Help me draft a cold email to a client" },
     { label: "📅 Schedule a meeting", prompt: "Help me schedule a calendar meeting for a client call" },
     { label: "🕒 Any pending jobs?", prompt: "Do I have any pending job posts that I haven't applied to yet?" },
-    { label: "💰 Negotiate rate", prompt: "Help me draft a rate negotiation response to a client" },
     { label: "📝 Create job from lead", prompt: "Here is a job description. Please create a new job post and analyze it for me:\n\n[Paste job description here]" }
   ];
 
@@ -1338,8 +1823,8 @@ function getSuggestionsForMessage(msg: UIMessage): { label: string; prompt: stri
       return [
         { label: `✉️ Draft reply to ${name}`, prompt: `Help me draft a reply to the email from ${name} regarding "${email.subject || "our proposal"}"` },
         { label: `📅 Schedule meeting with ${name}`, prompt: `Help me schedule a call with ${name} to discuss their email` },
-        { label: "🕒 Check pending jobs", prompt: "Do I have any pending job posts that I haven't applied to yet?" },
-        { label: "📝 Create job from lead", prompt: "Here is a job description. Please create a new job post and analyze it for me:\n\n[Paste job description here]" }
+        { label: "📋 Show interview calls", prompt: "Show me any interview call emails in my inbox" },
+        { label: "🎉 Any offer letters?", prompt: "Do I have any offer letters or positive responses in my inbox?" },
       ];
     }
   }
@@ -1455,7 +1940,7 @@ export default function MessageBubble({ msg, userName = "Niteen Kumar", userEmai
             {(msg.actionData as any[]).map((e, i) =>
               e.toEmail && !e.fromName && !e.from
                 ? <SentEmailResultCard key={i} email={e} />
-                : <EmailResultCard key={i} email={e} />
+                : <ClickableEmailResultCard key={i} email={e} userEmail={userEmail} />
             )}
           </div>
         ) : null}
@@ -2184,27 +2669,28 @@ const styles: Record<string, React.CSSProperties> = {
   analogClockCard: {
     display: "flex",
     alignItems: "center",
-    gap: 16,
-    padding: "14px",
-    background: "linear-gradient(135deg, #f5f3ff, #ede9fe)",
-    borderRadius: 14,
-    border: "1.5px solid #ddd6fe",
-    boxShadow: "0 4px 16px rgba(124,58,237,0.1)",
+    gap: 20,
+    padding: "18px 20px",
+    background: "#2c2c2e",
+    borderRadius: 18,
+    border: "1px solid rgba(255,255,255,0.08)",
+    boxShadow: "0 8px 32px rgba(0,0,0,0.35), 0 2px 8px rgba(0,0,0,0.2)",
   },
   analogDigitalTime: {
-    fontSize: 26,
+    fontSize: 32,
     fontWeight: 800,
-    color: "#4c1d95",
-    fontFamily: "monospace",
-    letterSpacing: "0.05em",
+    color: "#ffffff",
+    fontFamily: "-apple-system, BlinkMacSystemFont, monospace",
+    letterSpacing: "-0.02em",
+    lineHeight: 1,
     display: "flex",
     alignItems: "baseline",
     gap: 6,
   },
   analogAmPm: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: 600,
-    color: "#7c3aed",
+    color: "rgba(255,255,255,0.65)",
     fontFamily: "inherit",
   },
   sliderLabel: {

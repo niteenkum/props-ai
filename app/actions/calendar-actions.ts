@@ -17,7 +17,7 @@ import { corsair, seedCalendarCredentials, ensureCorsairReady } from "../utils/c
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type BookCallInput = {
-  jobId: string;
+  jobId?: string;           // optional — empty for standalone/no-job calls
   title: string;
   attendeeEmail: string;
   startDateTime: string;   // ISO 8601, e.g. "2026-06-20T15:00:00+05:30"
@@ -38,7 +38,7 @@ export type BookCallResult = {
 export type FollowUpWithJob = {
   id: string;
   userEmail: string;
-  jobId: string;
+  jobId: string | null;   // null for standalone calls not linked to a job post
   type: string;
   title: string;
   scheduledAt: string;
@@ -125,7 +125,7 @@ export async function bookCallAction(
         attendees:    attendeeEmail ? [{ email: attendeeEmail }] : [],
         conferenceData: {
           createRequest: {
-            requestId:             `thepitchly-${jobId}-${Date.now()}`,
+            requestId:             `thepitchly-${jobId || "standalone"}-${Date.now()}`,
             conferenceSolutionKey: { type: "hangoutsMeet" },
           },
         },
@@ -159,11 +159,11 @@ export async function bookCallAction(
       } catch { /* non-fatal */ }
     }
 
-    // Save follow-up to DB
+    // Save follow-up to DB (jobId is optional — null for standalone/no-job calls)
     const followUp = await prisma.followUp.create({
       data: {
         userEmail,
-        jobId,
+        jobId:         jobId || undefined,   // undefined when no job is linked (standalone call)
         type:          "call",
         title,
         scheduledAt:   new Date(startDateTime),
@@ -246,7 +246,7 @@ export async function getFollowUpsAction(
     return rows.map(r => ({
       id:            r.id,
       userEmail:     r.userEmail,
-      jobId:         r.jobId,
+      jobId:         r.jobId ?? "",
       type:          r.type,
       title:         r.title,
       scheduledAt:   r.scheduledAt.toISOString(),
@@ -259,10 +259,10 @@ export async function getFollowUpsAction(
       notes:         r.notes,
       createdAt:     r.createdAt.toISOString(),
       job: {
-        role:         r.jobPost.role,
-        company:      r.jobPost.company,
-        contactEmail: r.jobPost.contactEmail,
-        matchScore:   r.jobPost.matchScore,
+        role:         r.jobPost?.role         ?? "Standalone Call",
+        company:      r.jobPost?.company       ?? "",
+        contactEmail: r.jobPost?.contactEmail  ?? null,
+        matchScore:   r.jobPost?.matchScore    ?? 0,
       },
     }));
   } catch (err: any) {
@@ -344,7 +344,7 @@ export async function getJobFollowUpsAction(
     return rows.map(r => ({
       id:            r.id,
       userEmail:     r.userEmail,
-      jobId:         r.jobId,
+      jobId:         r.jobId ?? "",
       type:          r.type,
       title:         r.title,
       scheduledAt:   r.scheduledAt.toISOString(),
@@ -357,10 +357,10 @@ export async function getJobFollowUpsAction(
       notes:         r.notes,
       createdAt:     r.createdAt.toISOString(),
       job: {
-        role:         r.jobPost.role,
-        company:      r.jobPost.company,
-        contactEmail: r.jobPost.contactEmail,
-        matchScore:   r.jobPost.matchScore,
+        role:         r.jobPost?.role         ?? "Standalone Call",
+        company:      r.jobPost?.company       ?? "",
+        contactEmail: r.jobPost?.contactEmail  ?? null,
+        matchScore:   r.jobPost?.matchScore    ?? 0,
       },
     }));
   } catch (err: any) {

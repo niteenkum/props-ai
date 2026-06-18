@@ -148,8 +148,8 @@ model AiUsageLog {
 model FollowUp {
   id            String   @id @default(uuid())
   userEmail     String                          // ThePitchly user
-  jobId         String                          // linked job post
-  jobPost       JobPost  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId         String?                         // linked job post (optional for standalone calls)
+  jobPost       JobPost?  @relation(fields: [jobId], references: [id], onDelete: SetNull)
 
   type          String   @default("call")       // "call" | "email" | "manual"
   title         String                          // e.g. "Interview call with Stripe"

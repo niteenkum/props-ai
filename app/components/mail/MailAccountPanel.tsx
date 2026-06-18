@@ -20,9 +20,12 @@ import {
   gmailMarkAsReadAction,
   gmailToggleStarAction,
   gmailTrashAction,
+  gmailSearchAction,
   zohoToggleStarAction,
   type MailMessage,
   type ThreadMessage,
+  type GmailSearchFilters,
+  type GmailSearchResult,
 } from "../../actions/mail-actions";
 
 // ─── Provider Badge ───────────────────────────────────────────────────────────
@@ -43,7 +46,337 @@ function ProviderBadge({ provider }: { provider: "zoho" | "gmail" | string }) {
   );
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Gmail Advanced Search Panel ─────────────────────────────────────────────
+function GmailSearchPanel({
+  userEmail,
+  isDark,
+  onClose,
+}: {
+  userEmail: string;
+  isDark: boolean;
+  onClose: () => void;
+}) {
+  const [from,       setFrom]       = useState("");
+  const [subject,    setSubject]    = useState("");
+  const [rawQuery,   setRawQuery]   = useState("");
+  const [dateAfter,  setDateAfter]  = useState("");
+  const [dateBefore, setDateBefore] = useState("");
+  const [hasAttach,  setHasAttach]  = useState(false);
+  const [isUnread,   setIsUnread]   = useState<boolean | undefined>(undefined);
+  const [isStarred,  setIsStarred]  = useState(false);
+  const [loading,    setLoading]    = useState(false);
+  const [results,    setResults]    = useState<GmailSearchResult[] | null>(null);
+  const [queryUsed,  setQueryUsed]  = useState("");
+  const [error,      setError]      = useState("");
+  const [page,       setPage]       = useState(1);
+  const RESULTS_PER_PAGE = 8;
+
+  // Live query preview
+  const buildPreview = () => {
+    const p: string[] = [];
+    if (from.trim())         p.push(`from:${from.trim()}`);
+    if (subject.trim())      p.push(`subject:${subject.trim()}`);
+    if (hasAttach)           p.push("has:attachment");
+    if (isUnread === true)   p.push("is:unread");
+    if (isUnread === false)  p.push("is:read");
+    if (isStarred)           p.push("is:starred");
+    if (dateAfter.trim())    p.push(`after:${dateAfter}`);
+    if (dateBefore.trim())   p.push(`before:${dateBefore}`);
+    if (rawQuery.trim())     p.push(rawQuery.trim());
+    return p.join(" ") || "in:inbox";
+  };
+
+  const handleSearch = async () => {
+    setLoading(true);
+    setError("");
+    setResults(null);
+    setPage(1);
+    const filters: GmailSearchFilters = {
+      from: from || undefined,
+      subject: subject || undefined,
+      hasAttachment: hasAttach || undefined,
+      isUnread,
+      isStarred: isStarred || undefined,
+      dateAfter: dateAfter || undefined,
+      dateBefore: dateBefore || undefined,
+      rawQuery: rawQuery || undefined,
+    };
+    const res = await gmailSearchAction(userEmail, filters);
+    setLoading(false);
+    if (!res.success) {
+      setError(res.error ?? "Search failed.");
+    } else {
+      setResults(res.results ?? []);
+      setQueryUsed(res.query ?? "");
+    }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%", boxSizing: "border-box" as const,
+    padding: "7px 10px", borderRadius: 8, fontSize: 12,
+    border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+    background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.025)",
+    color: "var(--foreground)", outline: "none", fontFamily: "inherit",
+  };
+  const labelStyle: React.CSSProperties = {
+    fontSize: 10, fontWeight: 700, color: "var(--muted-foreground)",
+    textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: 4, display: "block",
+  };
+  const chipStyle = (active: boolean): React.CSSProperties => ({
+    display: "inline-flex", alignItems: "center", gap: 4,
+    padding: "4px 10px", borderRadius: 50, fontSize: 11, fontWeight: 600,
+    cursor: "pointer", border: active
+      ? `1.5px solid ${isDark ? "#818cf8" : "#6366f1"}`
+      : `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+    background: active
+      ? (isDark ? "rgba(99,102,241,0.18)" : "rgba(99,102,241,0.09)")
+      : "transparent",
+    color: active ? (isDark ? "#818cf8" : "#6366f1") : "var(--muted-foreground)",
+    transition: "all 0.15s",
+    userSelect: "none" as const,
+  });
+
+  const pageItems = results ? results.slice((page - 1) * RESULTS_PER_PAGE, page * RESULTS_PER_PAGE) : [];
+  const totalPages = results ? Math.ceil(results.length / RESULTS_PER_PAGE) : 0;
+
+  return (
+    <div style={{
+      marginBottom: 18,
+      border: `1.5px solid ${isDark ? "rgba(99,102,241,0.25)" : "rgba(99,102,241,0.18)"}`,
+      borderRadius: 14,
+      overflow: "hidden",
+      background: isDark ? "rgba(15,15,30,0.7)" : "#f8f8ff",
+      boxShadow: "0 4px 24px rgba(99,102,241,0.09)",
+    }}>
+      {/* Header */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "11px 16px",
+        borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)"}`,
+        background: isDark ? "rgba(99,102,241,0.08)" : "rgba(99,102,241,0.05)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          <span style={{ fontSize: 13 }}>🔍</span>
+          <span style={{ fontSize: 13, fontWeight: 800, color: "var(--foreground)" }}>Gmail Advanced Search</span>
+          <span style={{
+            fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 50,
+            background: isDark ? "rgba(234,67,53,0.18)" : "rgba(234,67,53,0.09)",
+            color: isDark ? "#f87171" : "#dc2626",
+            border: `1px solid ${isDark ? "rgba(234,67,53,0.3)" : "rgba(234,67,53,0.2)"}`,
+          }}>via Corsair</span>
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            background: "none", border: "none", cursor: "pointer",
+            color: "var(--muted-foreground)", display: "flex", padding: 4, borderRadius: 6,
+          }}
+        ><X size={14} /></button>
+      </div>
+
+      {/* Filters */}
+      <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* Row 1: From + Subject */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div>
+            <label style={labelStyle}>From</label>
+            <input
+              style={inputStyle} value={from} placeholder="user@gmail.com"
+              onChange={e => setFrom(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSearch()}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Subject contains</label>
+            <input
+              style={inputStyle} value={subject} placeholder="invoice, proposal…"
+              onChange={e => setSubject(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSearch()}
+            />
+          </div>
+        </div>
+
+        {/* Row 2: Date range */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div>
+            <label style={labelStyle}>After date</label>
+            <input type="date" style={inputStyle} value={dateAfter} onChange={e => setDateAfter(e.target.value)} />
+          </div>
+          <div>
+            <label style={labelStyle}>Before date</label>
+            <input type="date" style={inputStyle} value={dateBefore} onChange={e => setDateBefore(e.target.value)} />
+          </div>
+        </div>
+
+        {/* Row 3: Toggle chips */}
+        <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 6 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--muted-foreground)", textTransform: "uppercase" as const, letterSpacing: "0.06em", alignSelf: "center", marginRight: 2 }}>Filters</span>
+          <button style={chipStyle(isUnread === true)} onClick={() => setIsUnread(isUnread === true ? undefined : true)}>📬 Unread</button>
+          <button style={chipStyle(isUnread === false)} onClick={() => setIsUnread(isUnread === false ? undefined : false)}>✉️ Read</button>
+          <button style={chipStyle(hasAttach)} onClick={() => setHasAttach(!hasAttach)}>📎 Has attachment</button>
+          <button style={chipStyle(isStarred)} onClick={() => setIsStarred(!isStarred)}>⭐ Starred</button>
+        </div>
+
+        {/* Row 4: Raw query + search button */}
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Raw query (Gmail syntax)</label>
+            <input
+              style={inputStyle} value={rawQuery}
+              placeholder="e.g. has:attachment larger:5M"
+              onChange={e => setRawQuery(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSearch()}
+            />
+          </div>
+          <button
+            onClick={handleSearch}
+            disabled={loading}
+            style={{
+              alignSelf: "flex-end",
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "7px 18px", borderRadius: 9,
+              background: "linear-gradient(135deg, #6366f1, #4f46e5)",
+              color: "#fff", fontSize: 12.5, fontWeight: 700,
+              border: "none", cursor: loading ? "wait" : "pointer",
+              boxShadow: "0 3px 12px rgba(99,102,241,0.35)",
+              transition: "opacity 0.15s",
+              opacity: loading ? 0.7 : 1,
+              whiteSpace: "nowrap" as const,
+            }}
+          >
+            {loading ? <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> : <span>🔍</span>}
+            {loading ? "Searching…" : "Search"}
+          </button>
+        </div>
+
+        {/* Query preview */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "6px 10px", borderRadius: 8,
+          background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+          border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+        }}>
+          <span style={{ fontSize: 9.5, fontWeight: 700, color: "var(--muted-foreground)", textTransform: "uppercase" as const, flexShrink: 0 }}>Gmail q:</span>
+          <code style={{
+            fontSize: 11, color: isDark ? "#a5b4fc" : "#4f46e5",
+            fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const,
+          }}>{buildPreview()}</code>
+        </div>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div style={{ padding: "0 16px 12px" }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "8px 12px", borderRadius: 8,
+            background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.2)",
+            fontSize: 12, color: "#ef4444",
+          }}>
+            <AlertCircle size={13} /> {error}
+          </div>
+        </div>
+      )}
+
+      {/* Results */}
+      {results !== null && (
+        <div style={{
+          borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)"}`,
+          padding: "12px 16px",
+        }}>
+          {/* Results header */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--foreground)" }}>
+              {results.length === 0 ? "No results found" : `${results.length} result${results.length !== 1 ? "s" : ""} for`}
+            </span>
+            {queryUsed && (
+              <code style={{
+                fontSize: 10, color: isDark ? "#818cf8" : "#6366f1",
+                background: isDark ? "rgba(99,102,241,0.12)" : "rgba(99,102,241,0.07)",
+                padding: "2px 7px", borderRadius: 6,
+                maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const,
+                display: "block",
+              }}>{queryUsed}</code>
+            )}
+          </div>
+
+          {results.length === 0 && (
+            <div style={{ textAlign: "center", padding: "24px 0", color: "var(--muted-foreground)" }}>
+              <EyeOff size={28} style={{ margin: "0 auto 8px", opacity: 0.2, display: "block" }} />
+              <p style={{ fontSize: 13, fontWeight: 600, margin: "0 0 4px" }}>No emails match your search</p>
+              <p style={{ fontSize: 11, margin: 0, opacity: 0.6 }}>Try different filters or a broader query.</p>
+            </div>
+          )}
+
+          {pageItems.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {pageItems.map((r) => (
+                <div key={r.messageId} style={{
+                  display: "flex", alignItems: "flex-start", gap: 10,
+                  padding: "9px 12px", borderRadius: 10,
+                  background: isDark ? "rgba(255,255,255,0.03)" : "#fff",
+                  border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"}`,
+                  transition: "background 0.15s",
+                }}>
+                  {/* Avatar */}
+                  <div style={{
+                    width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
+                    background: "linear-gradient(135deg, #ea4335, #c5221f)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 13, fontWeight: 700, color: "#fff",
+                  }}>
+                    {(r.fromName || r.fromEmail || "?").charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: r.isRead ? 500 : 800, color: "var(--foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                        {r.fromName || r.fromEmail.split("@")[0]}
+                      </span>
+                      <span style={{ fontSize: 10, color: "var(--muted-foreground)", flexShrink: 0 }}>
+                        {new Date(r.receivedAt).toLocaleDateString("en", { month: "short", day: "numeric" })}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11.5, fontWeight: r.isRead ? 500 : 700, color: "var(--foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, marginTop: 1 }}>
+                      {r.subject}
+                    </div>
+                    {r.snippet && (
+                      <div style={{ fontSize: 11, color: "var(--muted-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, marginTop: 2 }}>
+                        {r.snippet}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" as const }}>
+                      {!r.isRead && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 50, background: isDark ? "rgba(99,102,241,0.2)" : "rgba(99,102,241,0.1)", color: isDark ? "#818cf8" : "#6366f1" }}>NEW</span>}
+                      {r.isStarred && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 50, background: "rgba(245,158,11,0.12)", color: "#d97706" }}>⭐ STARRED</span>}
+                      {r.labels.includes("IMPORTANT") && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 50, background: "rgba(239,68,68,0.1)", color: "#dc2626" }}>IMPORTANT</span>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                style={{ background: "none", border: "none", cursor: page === 1 ? "default" : "pointer", opacity: page === 1 ? 0.3 : 1, color: "var(--muted-foreground)", display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600 }}
+              ><ChevronLeft size={13} /> Prev</button>
+              <span style={{ fontSize: 10, color: "var(--muted-foreground)" }}>Page {page} of {totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                style={{ background: "none", border: "none", cursor: page === totalPages ? "default" : "pointer", opacity: page === totalPages ? 0.3 : 1, color: "var(--muted-foreground)", display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600 }}
+              >Next <ChevronRight size={13} /></button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 const PAGE_SIZE = 8;
 
@@ -349,15 +682,34 @@ function MessageRow({
             {msg.subject}
           </p>
 
-          {/* Preview / AI Summary */}
+          {/* Preview / AI Summary + Sentiment */}
           {!expanded && (msg.aiSummary || msg.summary) && (
             <p style={{
               fontSize: 11, color: msg.aiSummary ? "var(--foreground)" : "var(--muted-foreground)",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               margin: 0, opacity: msg.aiSummary ? 0.9 : 0.75,
               fontWeight: msg.aiSummary ? 500 : 400,
+              display: "flex", alignItems: "center", gap: 4,
             }}>
-              {msg.aiSummary ? `✨ AI Summary: ${msg.aiSummary}` : msg.summary}
+              {/* Sentiment dot */}
+              {msg.sentiment && (
+                <span
+                  title={`Sentiment: ${msg.sentiment}`}
+                  style={{
+                    width: 6, height: 6, borderRadius: "50%", flexShrink: 0, display: "inline-block",
+                    background:
+                      msg.sentiment === "positive" ? "#22c55e" :
+                      msg.sentiment === "negative" ? "#ef4444" :
+                      "#94a3b8",
+                    boxShadow:
+                      msg.sentiment === "positive" ? "0 0 4px rgba(34,197,94,0.5)" :
+                      msg.sentiment === "negative" ? "0 0 4px rgba(239,68,68,0.5)" : "none",
+                  }}
+                />
+              )}
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {msg.aiSummary ? `✨ ${msg.aiSummary}` : msg.summary}
+              </span>
             </p>
           )}
         </div>
@@ -746,6 +1098,7 @@ export default function MailAccountPanel({ userEmail, isDark, mode = "all" }: Ma
   const [localRead,   setLocalRead]   = useState<Set<string>>(new Set()); // optimistic read tracking
   const [trashed,     setTrashed]     = useState<Set<string>>(new Set()); // optimistically hidden trashed msgs
   const [search,      setSearch]      = useState("");
+  const [showAdvSearch, setShowAdvSearch] = useState(false); // Gmail advanced search panel
 
   const [selectedMail, setSelectedMail] = useState<MailMessage | null>(null);
   const [threadMessages, setThreadMessages] = useState<ThreadMessage[]>([]);
@@ -2064,6 +2417,29 @@ export default function MailAccountPanel({ userEmail, isDark, mode = "all" }: Ma
                 }}
               />
             </div>
+            {/* Advanced Gmail Search button — only when Gmail connected */}
+            {isGmailConnected && (
+              <button
+                onClick={() => setShowAdvSearch(s => !s)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  padding: "7px 12px", borderRadius: 9,
+                  border: showAdvSearch
+                    ? `1.5px solid ${isDark ? "#818cf8" : "#6366f1"}`
+                    : `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.09)"}`,
+                  background: showAdvSearch
+                    ? (isDark ? "rgba(99,102,241,0.14)" : "rgba(99,102,241,0.07)")
+                    : (isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.025)"),
+                  color: showAdvSearch ? (isDark ? "#818cf8" : "#6366f1") : "var(--muted-foreground)",
+                  fontSize: 11, fontWeight: 600,
+                  cursor: "pointer", transition: "all 0.15s",
+                  whiteSpace: "nowrap" as const,
+                }}
+              >
+                <Filter size={11} />
+                Advanced
+              </button>
+            )}
             <button
               onClick={() => {
                 console.log("[MailAccountPanel] Refresh clicked — calling mail.fetchInbox()");
@@ -2086,6 +2462,15 @@ export default function MailAccountPanel({ userEmail, isDark, mode = "all" }: Ma
               {mail.isFetchingInbox ? "Loading…" : "Refresh"}
             </button>
           </div>
+
+          {/* Advanced Gmail Search Panel */}
+          {showAdvSearch && isGmailConnected && (
+            <GmailSearchPanel
+              userEmail={userEmail}
+              isDark={isDark}
+              onClose={() => setShowAdvSearch(false)}
+            />
+          )}
 
           {/* Category pills */}
           <div style={{
@@ -2231,6 +2616,36 @@ export default function MailAccountPanel({ userEmail, isDark, mode = "all" }: Ma
               <p style={{ fontSize: 12, margin: 0, opacity: 0.6 }}>Try "All Mail" or a different filter.</p>
             </div>
           )}
+
+          {/* ── Priority Insight Bar ── */}
+          {mail.inbox.length > 0 && (() => {
+            const interviews  = mail.inbox.filter(m => m.emailType === "interview_call").length;
+            const offers      = mail.inbox.filter(m => m.emailType === "offer_letter").length;
+            const rejections  = mail.inbox.filter(m => m.emailType === "rejection").length;
+            const freelance   = mail.inbox.filter(m => m.emailType === "freelance_opportunity" || m.emailType === "remote_opportunity").length;
+            const positive    = mail.inbox.filter(m => m.sentiment === "positive").length;
+            const negative    = mail.inbox.filter(m => m.sentiment === "negative").length;
+            const hasAny = interviews > 0 || offers > 0 || rejections > 0 || freelance > 0;
+            if (!hasAny) return null;
+            return (
+              <div style={{
+                display: "flex", flexWrap: "wrap" as const, gap: 6, marginBottom: 12,
+                padding: "10px 12px", borderRadius: 10,
+                background: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)",
+                border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+              }}>
+                <span style={{ fontSize: 10, fontWeight: 800, color: "var(--muted-foreground)", textTransform: "uppercase" as const, letterSpacing: "0.05em", alignSelf: "center", marginRight: 2 }}>Priority</span>
+                {interviews > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 50, background: isDark ? "rgba(139,92,246,0.15)" : "rgba(139,92,246,0.08)", color: isDark ? "#c084fc" : "#7c3aed", border: `1px solid ${isDark ? "rgba(139,92,246,0.3)" : "rgba(139,92,246,0.2)"}` }}>📅 {interviews} Interview{interviews > 1 ? "s" : ""}</span>}
+                {offers > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 50, background: isDark ? "rgba(34,197,94,0.15)" : "rgba(34,197,94,0.08)", color: isDark ? "#4ade80" : "#16a34a", border: `1px solid ${isDark ? "rgba(34,197,94,0.3)" : "rgba(34,197,94,0.2)"}` }}>🎉 {offers} Offer{offers > 1 ? "s" : ""}</span>}
+                {freelance > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 50, background: isDark ? "rgba(20,184,166,0.15)" : "rgba(20,184,166,0.08)", color: isDark ? "#2dd4bf" : "#0d9488", border: `1px solid ${isDark ? "rgba(20,184,166,0.3)" : "rgba(20,184,166,0.2)"}` }}>⚡ {freelance} Lead{freelance > 1 ? "s" : ""}</span>}
+                {rejections > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 50, background: isDark ? "rgba(239,68,68,0.12)" : "rgba(239,68,68,0.07)", color: isDark ? "#f87171" : "#dc2626", border: `1px solid ${isDark ? "rgba(239,68,68,0.28)" : "rgba(239,68,68,0.18)"}` }}>✕ {rejections} Rejection{rejections > 1 ? "s" : ""}</span>}
+                <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--muted-foreground)", display: "flex", alignItems: "center", gap: 6 }}>
+                  {positive > 0 && <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />{positive} positive</span>}
+                  {negative > 0 && <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", display: "inline-block" }} />{negative} negative</span>}
+                </span>
+              </div>
+            );
+          })()}
 
           {/* Message list */}
           {pageItems.length > 0 && (
