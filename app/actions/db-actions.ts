@@ -301,51 +301,52 @@ export async function saveUserProfileAction(profile: UserProfile, userEmail?: st
       throw new Error(`User not found for email ${targetEmail}`);
     }
 
-    await prisma.$transaction([
-      prisma.userProfile.upsert({
-        where: { userId: user.id },
-        update: {
-          name:             profile.name,
-          role:             profile.role,
-          email:            profile.email,
-          skills:           profile.skills,
-          portfolioUrl:     profile.portfolioUrl,
-          githubUrl:        profile.githubUrl,
-          linkedinUrl:      profile.linkedinUrl,
-          resumeFileName:   profile.resumeFileName   || null,
-          resumeText:       profile.resumeText        || null,
-          resumePdfBase64:  profile.resumePdfBase64   || null,
-          education:        profile.education as any,
-        },
-        create: {
-          userId:           user.id,
-          name:             profile.name,
-          role:             profile.role,
-          email:            profile.email,
-          skills:           profile.skills,
-          portfolioUrl:     profile.portfolioUrl,
-          githubUrl:        profile.githubUrl,
-          linkedinUrl:      profile.linkedinUrl,
-          resumeFileName:   profile.resumeFileName   || null,
-          resumeText:       profile.resumeText        || null,
-          resumePdfBase64:  profile.resumePdfBase64   || null,
-          education:        profile.education as any,
-        },
-      }),
-      // Synchronize projects: delete old and create new
-      prisma.project.deleteMany({
-        where: { userId: user.id }
-      }),
-      prisma.project.createMany({
+    // Run sequentially — no need for a transaction lock here.
+    // (Previously used $transaction which timed out after 5s for large resume payloads)
+    await prisma.userProfile.upsert({
+      where: { userId: user.id },
+      update: {
+        name:             profile.name,
+        role:             profile.role,
+        email:            profile.email,
+        skills:           profile.skills,
+        portfolioUrl:     profile.portfolioUrl,
+        githubUrl:        profile.githubUrl,
+        linkedinUrl:      profile.linkedinUrl,
+        resumeFileName:   profile.resumeFileName   || null,
+        resumeText:       profile.resumeText        || null,
+        resumePdfBase64:  profile.resumePdfBase64   || null,
+        education:        profile.education as any,
+      },
+      create: {
+        userId:           user.id,
+        name:             profile.name,
+        role:             profile.role,
+        email:            profile.email,
+        skills:           profile.skills,
+        portfolioUrl:     profile.portfolioUrl,
+        githubUrl:        profile.githubUrl,
+        linkedinUrl:      profile.linkedinUrl,
+        resumeFileName:   profile.resumeFileName   || null,
+        resumeText:       profile.resumeText        || null,
+        resumePdfBase64:  profile.resumePdfBase64   || null,
+        education:        profile.education as any,
+      },
+    });
+
+    // Synchronize projects: delete old ones then insert new ones
+    await prisma.project.deleteMany({ where: { userId: user.id } });
+    if ((profile.projects || []).length > 0) {
+      await prisma.project.createMany({
         data: (profile.projects || []).map((proj) => ({
-          userId: user.id,
-          name: proj.name,
-          tech: proj.tech,
+          userId:      user.id,
+          name:        proj.name,
+          tech:        proj.tech,
           description: proj.description,
-          links: proj.links || [],
-        }))
-      })
-    ]);
+          links:       proj.links || [],
+        })),
+      });
+    }
   } catch (error) {
     console.error("Error in saveUserProfileAction:", error);
     throw error;
