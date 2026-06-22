@@ -1,18 +1,20 @@
 "use client";
 
 /**
- * ThePitchly — Sidebar Navigation
- * - Toggle icon always stays at the top
- * - Smooth slide animation via CSS width transition + overflow clip
+ * ThePitchly — Premium Sidebar Navigation
+ * - Floating glassmorphic surface
+ * - Modern typography hierarchy
+ * - Hardware-accelerated hover translations
+ * - Dynamic theme adaptations using Tailwind v4
  */
 
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LogOut, User, Sun, Moon, Search, Settings,
-  BookOpen, ChevronLeft, ChevronRight, MessageCircle, Mail,
-  FilePlus2, CalendarDays, BarChart3, Sparkles
+  LogOut, Sun, Moon, Search, BookOpen, ChevronRight, 
+  MessageCircle, Mail, FilePlus2, CalendarDays, BarChart3, 
+  Sparkles, Keyboard, LogIn
 } from "lucide-react";
 import { useTheme } from "./theme-provider";
 
@@ -28,9 +30,6 @@ const QUICK_PROMPTS = [
   { label: "Show outreach stats", query: "Show me my job outreach statistics and application summary" },
   { label: "Latest job matches", query: "List my most recent job applications and their current status" }
 ] as const;
-
-const COLLAPSED_W = 72;
-const EXPANDED_W = 265;
 
 export default function Sidebar({
   onLogout,
@@ -51,8 +50,6 @@ export default function Sidebar({
     .slice(0, 2)
     .toUpperCase() || "PA";
 
-  const w = collapsed ? COLLAPSED_W : EXPANDED_W;
-
   const handleRecentItemClick = (queryText: string) => {
     router.push(`/dashboard/your-bot?q=${encodeURIComponent(queryText)}`);
   };
@@ -71,298 +68,155 @@ export default function Sidebar({
         key={href}
         href={href}
         title={collapsed ? label : undefined}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: collapsed ? "12px 0" : "10px 12px",
-          justifyContent: collapsed ? "center" : "flex-start",
-          borderRadius: 10,
-          background: active
-            ? (isDark ? "rgba(249, 250, 251, 0.08)" : "rgba(10, 10, 10, 0.06)")
-            : "transparent",
-          color: active
-            ? (isDark ? "#F9FAFB" : "#0A0A0A")
-            : "var(--muted-foreground)",
-          fontWeight: active ? 700 : 500,
-          fontSize: 13,
-          textDecoration: "none",
-          transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
-          border: active
-            ? (isDark ? "1px solid rgba(249, 250, 251, 0.12)" : "1px solid rgba(10, 10, 10, 0.12)")
-            : "1px solid transparent",
-          boxShadow: "none",
-          position: "relative",
-          overflow: "hidden",
-          whiteSpace: "nowrap",
-        }}
-        onMouseEnter={e => {
-          if (!active) {
-            e.currentTarget.style.background = isDark ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.03)";
-            e.currentTarget.style.color = "var(--foreground)";
-          }
-        }}
-        onMouseLeave={e => {
-          if (!active) {
-            e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.color = "var(--muted-foreground)";
-          }
-        }}
+        className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 select-none ${
+          collapsed ? "justify-center" : "justify-start"
+        } ${
+          active
+            ? "bg-primary text-primary-foreground font-bold shadow-[0_4px_12px_rgba(0,176,255,0.15)] border border-primary/20"
+            : "text-muted-foreground hover:text-foreground hover:bg-input/60 border border-transparent hover:translate-x-0.5"
+        }`}
       >
+        {/* Left vertical active bar */}
         {active && !collapsed && (
-          <div style={{
-            position: "absolute", left: 0, top: "25%", bottom: "25%",
-            width: 3.5, borderRadius: 2,
-            background: isDark ? "#F9FAFB" : "#0A0A0A",
-          }} />
+          <div className="absolute left-0 top-[25%] bottom-[25%] w-1 rounded-r bg-primary-foreground" />
         )}
-        <Icon size={15.5} style={{ color: active ? (color || (isDark ? "#F9FAFB" : "#0A0A0A")) : "inherit", transition: "color 0.25s", flexShrink: 0 }} />
-        {/* Label: uses max-width + opacity for smooth slide */}
-        <span style={{
-          maxWidth: collapsed ? 0 : 180,
-          opacity: collapsed ? 0 : 1,
-          overflow: "hidden",
-          display: "inline-block",
-          transition: "max-width 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease",
-          whiteSpace: "nowrap",
-        }}>
+        
+        {/* Icon */}
+        <Icon 
+          size={16} 
+          className={`shrink-0 transition-transform duration-300 group-hover:scale-110 ${
+            active ? "text-primary-foreground" : ""
+          }`}
+          style={!active && color ? { color } : undefined}
+        />
+        
+        {/* Label text */}
+        <span
+          className={`text-xs font-semibold tracking-wide transition-all duration-300 whitespace-nowrap overflow-hidden ${
+            collapsed ? "max-w-0 opacity-0" : "max-w-[180px] opacity-100"
+          }`}
+        >
           {label}
         </span>
+
+        {/* Outer highlight border on hover */}
+        {!active && (
+          <div className="absolute inset-0 rounded-xl border border-border/0 group-hover:border-border/60 transition-colors pointer-events-none" />
+        )}
       </Link>
     );
   };
 
   return (
     <aside
-      style={{
-        width: w,
-        minWidth: w,
-        height: "100%",
-        maxHeight: "100%",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-between",
-        padding: collapsed ? "16px 10px" : "22px 18px",
-        background: isDark
-          ? "#000000"
-          : "linear-gradient(180deg, #FFFFFF 0%, #F4F7FF 100%)",
-        border: isDark ? "1px solid rgba(255, 255, 255, 0.06)" : "1px solid var(--border)",
-        borderRadius: 20,
-        boxShadow: isDark
-          ? "0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04)"
-          : "0 8px 24px rgba(0, 0, 0, 0.05)",
-        backdropFilter: "blur(20px)",
-        transition: "width 0.35s cubic-bezier(0.16, 1, 0.3, 1), min-width 0.35s cubic-bezier(0.16, 1, 0.3, 1), padding 0.35s cubic-bezier(0.16, 1, 0.3, 1)",
-        overflowY: "auto",
-        overflowX: "hidden",
-        scrollbarWidth: "none",
-        flexShrink: 0,
-        zIndex: 10,
-      }}
+      className={`h-full flex flex-col justify-between p-4 transition-all duration-500 ease-out border shadow-lg backdrop-blur-xl shrink-0 z-20 ${
+        collapsed ? "w-[76px] px-2.5" : "w-[260px]"
+      } ${
+        isDark
+          ? "bg-black/35 border-white/5 shadow-[0_12px_40px_rgba(0,0,0,0.6)]"
+          : "bg-white/60 border-black/5 shadow-[0_12px_32px_rgba(0,0,0,0.03)]"
+      }`}
+      style={{ borderRadius: "24px" }}
     >
       {/* ── TOP SECTION ──────────────────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="flex flex-col gap-5">
 
-        {/* Brand row — toggle button ALWAYS lives here at the top */}
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: collapsed ? "center" : "space-between",
-          gap: collapsed ? 0 : 8,
-          padding: "0 2px",
-          minHeight: 30,
-        }}>
-          {/* Brand text / monogram — transitions in place */}
-          <span style={{
-            fontSize: 17,
-            fontWeight: 800,
-            color: isDark ? "#F9FAFB" : "#0A0A0A",
-            fontFamily: "'Inter', sans-serif",
-            letterSpacing: -0.5,
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            maxWidth: collapsed ? 0 : 180,
-            opacity: collapsed ? 0 : 1,
-            transition: "max-width 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease",
-          }}>
-            The Pitchly
-          </span>
+        {/* Brand header */}
+        <div className="flex items-center justify-between min-h-[32px] px-1">
+          {/* Logo & Text */}
+          <div className="flex items-center gap-2 overflow-hidden">
+            <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-white font-black text-sm shrink-0 shadow-md">
+              P
+            </div>
+            <span
+              className={`font-black text-sm tracking-tight text-foreground transition-all duration-300 ${
+                collapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"
+              }`}
+            >
+              The Pitchly
+            </span>
+          </div>
 
-          {/* ✔ Toggle button — always at top-right, never moves */}
+          {/* Toggle Expand / Collapse button */}
           <button
             onClick={() => setCollapsed(c => !c)}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            style={{
-              flexShrink: 0,
-              width: 26,
-              height: 26,
-              borderRadius: 8,
-              border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"}`,
-              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-              color: "var(--muted-foreground)",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transition: "background 0.2s ease, color 0.2s ease",
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)";
-              e.currentTarget.style.color = "var(--foreground)";
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)";
-              e.currentTarget.style.color = "var(--muted-foreground)";
-            }}
+            className="w-7 h-7 rounded-lg border border-border bg-input/40 hover:bg-input hover:text-foreground text-muted-foreground flex items-center justify-center cursor-pointer transition-all duration-200 active:scale-90 shrink-0"
           >
-            {/* Chevron rotates: points right (expand) when collapsed, left (collapse) when expanded */}
-            <span style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              transform: collapsed ? "rotate(0deg)" : "rotate(180deg)",
-              transition: "transform 0.35s cubic-bezier(0.16, 1, 0.3, 1)",
-            }}>
+            <span
+              className="flex items-center justify-center transition-transform duration-300"
+              style={{ transform: collapsed ? "rotate(0deg)" : "rotate(180deg)" }}
+            >
               <ChevronRight size={13} />
             </span>
           </button>
         </div>
 
-        {/* User Profile Area — clickable card → /dashboard/profile */}
-        <Link
-          href="/dashboard/profile"
-          title="View your profile"
-          style={{ textDecoration: "none" }}
-        >
+        {/* User Profile Card */}
+        <Link href="/dashboard/profile" className="no-underline">
           <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: collapsed ? "8px" : "10px 12px",
-              background: isActive("/dashboard/profile")
-                ? (isDark ? "rgba(99,102,241,0.10)" : "rgba(99,102,241,0.06)")
-                : (isDark ? "rgba(255, 255, 255, 0.03)" : "rgba(0, 0, 0, 0.02)"),
-              borderRadius: 14,
-              border: isActive("/dashboard/profile")
-                ? (isDark ? "1px solid rgba(99,102,241,0.3)" : "1px solid rgba(99,102,241,0.2)")
-                : (isDark ? "1px solid rgba(255, 255, 255, 0.05)" : "1px solid var(--border)"),
-              boxShadow: isDark ? "0 4px 12px rgba(0, 0, 0, 0.15)" : "none",
-              transition: "all 0.2s ease",
-              cursor: "pointer",
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = isDark ? "rgba(99,102,241,0.12)" : "rgba(99,102,241,0.06)";
-              e.currentTarget.style.borderColor = isDark ? "rgba(99,102,241,0.35)" : "rgba(99,102,241,0.2)";
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = isActive("/dashboard/profile")
-                ? (isDark ? "rgba(99,102,241,0.10)" : "rgba(99,102,241,0.06)")
-                : (isDark ? "rgba(255, 255, 255, 0.03)" : "rgba(0, 0, 0, 0.02)");
-              e.currentTarget.style.borderColor = isActive("/dashboard/profile")
-                ? (isDark ? "rgba(99,102,241,0.3)" : "rgba(99,102,241,0.2)")
-                : (isDark ? "rgba(255, 255, 255, 0.05)" : "var(--border)");
-            }}
+            className={`flex items-center justify-between transition-all duration-300 cursor-pointer border rounded-2xl group ${
+              collapsed ? "p-1.5 justify-center" : "p-2.5"
+            } ${
+              isActive("/dashboard/profile")
+                ? "bg-primary/5 border-primary/20 shadow-inner"
+                : "bg-input/20 border-border/40 hover:bg-input/55 hover:border-border"
+            }`}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-              {/* Avatar — always visible */}
-              <div style={{
-                width: 32, height: 32,
-                borderRadius: "50%",
-                background: isDark ? "linear-gradient(135deg, #374151, #1F2937)" : "linear-gradient(135deg, #1F2937, #0A0A0A)",
-                color: "#FFFFFF",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 12, fontWeight: 700,
-                flexShrink: 0, position: "relative",
-              }}>
+            <div className="flex items-center gap-2.5 min-w-0">
+              {/* Avatar circle */}
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-blue-500 text-white flex items-center justify-center text-xs font-black shrink-0 relative shadow-sm">
                 {initials}
-                <span style={{
-                  position: "absolute", bottom: 0, right: 0,
-                  width: 8, height: 8, borderRadius: "50%",
-                  background: "#22c55e", border: "2px solid var(--card)",
-                }} />
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-card shadow-sm" />
               </div>
 
-              {/* Name/role: slide in/out */}
-              <div style={{
-                maxWidth: collapsed ? 0 : 140,
-                opacity: collapsed ? 0 : 1,
-                overflow: "hidden",
-                minWidth: 0,
-                transition: "max-width 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease",
-              }}>
-                <p style={{
-                  fontSize: 12.5, fontWeight: 700, color: "var(--foreground)",
-                  margin: 0, overflow: "hidden", textOverflow: "ellipsis",
-                  whiteSpace: "nowrap", letterSpacing: -0.2,
-                }}>
+              {/* Profile Details */}
+              <div
+                className={`flex flex-col min-w-0 transition-all duration-300 ${
+                  collapsed ? "max-w-0 opacity-0" : "max-w-[130px] opacity-100"
+                }`}
+              >
+                <p className="text-xs font-bold text-foreground truncate m-0 leading-tight">
                   {userName}
                 </p>
-                <p style={{
-                  fontSize: 9.5, color: "var(--muted-foreground)",
-                  margin: 0, overflow: "hidden", textOverflow: "ellipsis",
-                  whiteSpace: "nowrap", fontWeight: 500,
-                }}>
+                <p className="text-[10px] font-semibold text-muted-foreground truncate m-0 mt-0.5 uppercase tracking-wide">
                   {userRole}
                 </p>
               </div>
             </div>
 
-            {/* Arrow hint — fades in when expanded */}
-            <div style={{
-              maxWidth: collapsed ? 0 : 20,
-              opacity: collapsed ? 0 : 0.5,
-              overflow: "hidden",
-              transition: "max-width 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease",
-              display: "flex", alignItems: "center",
-            }}>
-              <ChevronRight size={13} />
-            </div>
+            {/* Profile Arrow indicator */}
+            <ChevronRight 
+              size={13} 
+              className={`text-muted-foreground/60 transition-all duration-300 shrink-0 group-hover:translate-x-0.5 ${
+                collapsed ? "max-w-0 opacity-0" : "max-w-[16px] opacity-100"
+              }`}
+            />
           </div>
         </Link>
 
-        {/* Search Input: slides out */}
-        <div style={{
-          maxHeight: collapsed ? 0 : 50,
-          opacity: collapsed ? 0 : 1,
-          overflow: "hidden",
-          transition: "max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease",
-        }}>
-          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-            <Search size={13} style={{
-              position: "absolute", left: 12,
-              color: "var(--muted-foreground)", pointerEvents: "none", opacity: 0.6,
-            }} />
-            <input
-              type="text"
-              placeholder="Search features..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              style={{
-                width: "100%", padding: "9px 32px 9px 32px",
-                fontSize: 12, borderRadius: 10,
-                border: isDark ? "1px solid rgba(255, 255, 255, 0.05)" : "1px solid var(--border)",
-                background: isDark ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.02)",
-                color: "var(--foreground)", outline: "none",
-                transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
-              }}
-              onFocus={e => {
-                e.currentTarget.style.borderColor = isDark ? "rgba(249,250,251,0.3)" : "rgba(0,0,0,0.3)";
-                e.currentTarget.style.background = isDark ? "rgba(255, 255, 255, 0.04)" : "#FFFFFF";
-                e.currentTarget.style.boxShadow = isDark ? "0 0 0 3px rgba(249,250,251,0.08)" : "0 0 0 3px rgba(0,0,0,0.06)";
-              }}
-              onBlur={e => {
-                e.currentTarget.style.borderColor = isDark ? "rgba(255, 255, 255, 0.05)" : "var(--border)";
-                e.currentTarget.style.background = isDark ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.02)";
-                e.currentTarget.style.boxShadow = "none";
-              }}
-            />
-          </div>
+        {/* Sleek Search bar */}
+        <div
+          className={`relative flex items-center transition-all duration-300 ${
+            collapsed ? "max-h-0 opacity-0 overflow-hidden" : "max-h-[40px] opacity-100"
+          }`}
+        >
+          <Search size={13} className="absolute left-3.5 text-muted-foreground pointer-events-none opacity-50" />
+          <input
+            type="text"
+            placeholder="Search dashboard..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-border bg-input/20 text-foreground placeholder-muted-foreground/60 outline-none transition-all focus:border-primary/40 focus:bg-card focus:shadow-inner"
+          />
+          <Keyboard size={12} className="absolute right-3.5 text-muted-foreground/40 pointer-events-none hidden sm:block" />
         </div>
 
-        {/* Navigation Categories */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* Navigation links categories */}
+        <div className="flex flex-col gap-4">
 
-          {/* Main Workspace Pages */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          {/* Main Bot Workspace */}
+          <div className="flex flex-col gap-1">
             {[
               { href: "/dashboard/your-bot", label: "ThePitchly AI", icon: Sparkles },
               { href: "/dashboard/workspace", label: "Workspace Library", icon: BookOpen },
@@ -370,96 +224,55 @@ export default function Sidebar({
           </div>
 
           {/* Connections Section */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <div style={{
-              maxHeight: collapsed ? 0 : 20,
-              opacity: collapsed ? 0 : 1,
-              overflow: "hidden",
-              transition: "max-height 0.3s ease, opacity 0.18s ease",
-            }}>
-              <span style={{
-                fontSize: 9, fontWeight: 800, color: "var(--muted-foreground)",
-                letterSpacing: "0.08em", textTransform: "uppercase",
-                paddingLeft: 10, marginBottom: 2, opacity: 0.6, display: "block",
-              }}>
-                Connections
-              </span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              {[
-                { href: "/dashboard/whatsapp", label: "WhatsApp", icon: MessageCircle, color: "#22c55e" },
-              ].map(({ href, label, icon, color }) => renderNavLink(href, label, icon, color))}
-            </div>
+          <div className="flex flex-col gap-1">
+            <span
+              className={`text-[9px] font-black text-muted-foreground/50 tracking-widest uppercase pl-3 mb-1 transition-all duration-300 ${
+                collapsed ? "max-h-0 opacity-0 overflow-hidden" : "max-h-[16px] opacity-100"
+              }`}
+            >
+              Connections
+            </span>
+            {[
+              { href: "/dashboard/whatsapp", label: "WhatsApp Link", icon: MessageCircle, color: "#22c55e" },
+            ].map(({ href, label, icon, color }) => renderNavLink(href, label, icon, color))}
           </div>
 
           {/* Tools & Outreach Section */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <div style={{
-              maxHeight: collapsed ? 0 : 20,
-              opacity: collapsed ? 0 : 1,
-              overflow: "hidden",
-              transition: "max-height 0.3s ease, opacity 0.18s ease",
-            }}>
-              <span style={{
-                fontSize: 9, fontWeight: 800, color: "var(--muted-foreground)",
-                letterSpacing: "0.08em", textTransform: "uppercase",
-                paddingLeft: 10, marginBottom: 2, opacity: 0.6, display: "block",
-              }}>
-                Tools & Outreach
-              </span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              {[
-                { href: "/dashboard/mail", label: "Smart Inbox", icon: Mail },
-                { href: "/dashboard/new", label: "New Scan", icon: FilePlus2 },
-                { href: "/dashboard/followups", label: "Calls & Follow-ups", icon: CalendarDays },
-                { href: "/dashboard/expense", label: "AI Expense", icon: BarChart3 },
-              ].map(({ href, label, icon }) => renderNavLink(href, label, icon))}
-            </div>
+          <div className="flex flex-col gap-1">
+            <span
+              className={`text-[9px] font-black text-muted-foreground/50 tracking-widest uppercase pl-3 mb-1 transition-all duration-300 ${
+                collapsed ? "max-h-0 opacity-0 overflow-hidden" : "max-h-[16px] opacity-100"
+              }`}
+            >
+              Outreach & Tools
+            </span>
+            {[
+              { href: "/dashboard/mail", label: "Smart Inbox", icon: Mail },
+              { href: "/dashboard/new", label: "New Scan", icon: FilePlus2 },
+              { href: "/dashboard/followups", label: "Calls & Followups", icon: CalendarDays },
+              { href: "/dashboard/expense", label: "AI Expense Logs", icon: BarChart3 },
+            ].map(({ href, label, icon }) => renderNavLink(href, label, icon))}
           </div>
 
-          {/* Quick Prompts — slides out entirely */}
-          <div style={{
-            maxHeight: collapsed ? 0 : 200,
-            opacity: collapsed ? 0 : 1,
-            overflow: "hidden",
-            transition: "max-height 0.38s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease",
-          }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{
-                fontSize: 9, fontWeight: 800, color: "var(--muted-foreground)",
-                letterSpacing: "0.08em", textTransform: "uppercase",
-                paddingLeft: 10, marginBottom: 2, opacity: 0.6, display: "block",
-              }}>
-                Quick Prompts
-              </span>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                {QUICK_PROMPTS.map((item, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleRecentItemClick(item.query)}
-                    style={{
-                      background: "transparent", border: "none",
-                      textAlign: "left", padding: "6px 10px",
-                      borderRadius: 8, fontSize: 12, fontWeight: 500,
-                      color: "var(--muted-foreground)", cursor: "pointer",
-                      whiteSpace: "nowrap", overflow: "hidden",
-                      textOverflow: "ellipsis", width: "100%",
-                      transition: "all 0.15s ease",
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)";
-                      e.currentTarget.style.color = "var(--foreground)";
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.background = "transparent";
-                      e.currentTarget.style.color = "var(--muted-foreground)";
-                    }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
+          {/* Quick Prompts list */}
+          <div
+            className={`flex flex-col gap-1.5 transition-all duration-500 overflow-hidden ${
+              collapsed ? "max-h-0 opacity-0" : "max-h-[180px] opacity-100"
+            }`}
+          >
+            <span className="text-[9px] font-black text-muted-foreground/50 tracking-widest uppercase pl-3 mb-1">
+              Quick Prompts
+            </span>
+            <div className="flex flex-col gap-1.5 pl-1.5">
+              {QUICK_PROMPTS.map((item, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleRecentItemClick(item.query)}
+                  className="bg-transparent border-0 text-left px-2 py-1.5 rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-input/40 cursor-pointer w-full truncate transition-all duration-200 hover:translate-x-0.5"
+                >
+                  {item.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -467,80 +280,55 @@ export default function Sidebar({
       </div>
 
       {/* ── BOTTOM SECTION ─────────────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 16 }}>
+      <div className="flex flex-col gap-1.5 mt-auto pt-4 border-t border-border/40">
 
-        {/* Theme Toggle */}
+        {/* Theme Toggle switch */}
         <button
           onClick={toggleTheme}
-          style={{
-            display: "flex", alignItems: "center",
-            justifyContent: collapsed ? "center" : "flex-start",
-            gap: 10, padding: "9px 12px",
-            background: "transparent", border: "none", borderRadius: 10,
-            color: "var(--muted-foreground)", cursor: "pointer",
-            fontSize: 12.5, fontWeight: 500, transition: "all 0.2s",
-            overflow: "hidden", whiteSpace: "nowrap",
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)";
-            e.currentTarget.style.color = "var(--foreground)";
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.color = "var(--muted-foreground)";
-          }}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl bg-transparent border border-transparent text-muted-foreground hover:text-foreground hover:bg-input/60 cursor-pointer transition-all duration-200 select-none hover:translate-x-0.5 ${
+            collapsed ? "justify-center" : "justify-start"
+          }`}
         >
           {isDark ? (
             <>
-              <Sun size={14.5} style={{ color: "#f59e0b", flexShrink: 0 }} />
-              <span style={{
-                maxWidth: collapsed ? 0 : 100, opacity: collapsed ? 0 : 1,
-                overflow: "hidden", display: "inline-block",
-                transition: "max-width 0.32s cubic-bezier(0.16,1,0.3,1), opacity 0.2s ease",
-                whiteSpace: "nowrap",
-              }}>Light Mode</span>
+              <Sun size={15} className="text-amber-500 shrink-0 animate-[spin_4s_linear_infinite]" />
+              <span
+                className={`text-xs font-semibold tracking-wide transition-all duration-300 ${
+                  collapsed ? "max-w-0 opacity-0 overflow-hidden" : "max-w-[100px] opacity-100"
+                }`}
+              >
+                Light Mode
+              </span>
             </>
           ) : (
             <>
-              <Moon size={14.5} style={{ color: "var(--muted-foreground)", flexShrink: 0 }} />
-              <span style={{
-                maxWidth: collapsed ? 0 : 100, opacity: collapsed ? 0 : 1,
-                overflow: "hidden", display: "inline-block",
-                transition: "max-width 0.32s cubic-bezier(0.16,1,0.3,1), opacity 0.2s ease",
-                whiteSpace: "nowrap",
-              }}>Dark Mode</span>
+              <Moon size={15} className="text-muted-foreground shrink-0" />
+              <span
+                className={`text-xs font-semibold tracking-wide transition-all duration-300 ${
+                  collapsed ? "max-w-0 opacity-0 overflow-hidden" : "max-w-[100px] opacity-100"
+                }`}
+              >
+                Dark Mode
+              </span>
             </>
           )}
         </button>
 
-        {/* Sign Out */}
+        {/* Log Out button */}
         <button
           onClick={onLogout}
-          style={{
-            display: "flex", alignItems: "center",
-            justifyContent: collapsed ? "center" : "flex-start",
-            gap: 10, padding: "9px 12px",
-            background: "transparent", border: "none", borderRadius: 10,
-            color: "var(--muted-foreground)", cursor: "pointer",
-            fontSize: 12.5, fontWeight: 500, transition: "all 0.2s",
-            overflow: "hidden", whiteSpace: "nowrap",
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = "rgba(239, 68, 68, 0.08)";
-            e.currentTarget.style.color = "#ef4444";
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.color = "var(--muted-foreground)";
-          }}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl bg-transparent border border-transparent text-muted-foreground hover:text-red-500 hover:bg-red-500/10 cursor-pointer transition-all duration-200 select-none hover:translate-x-0.5 ${
+            collapsed ? "justify-center" : "justify-start"
+          }`}
         >
-          <LogOut size={14.5} style={{ flexShrink: 0 }} />
-          <span style={{
-            maxWidth: collapsed ? 0 : 100, opacity: collapsed ? 0 : 1,
-            overflow: "hidden", display: "inline-block",
-            transition: "max-width 0.32s cubic-bezier(0.16,1,0.3,1), opacity 0.2s ease",
-            whiteSpace: "nowrap",
-          }}>Sign Out</span>
+          <LogOut size={15} className="shrink-0" />
+          <span
+            className={`text-xs font-semibold tracking-wide transition-all duration-300 ${
+              collapsed ? "max-w-0 opacity-0 overflow-hidden" : "max-w-[100px] opacity-100"
+                }`}
+          >
+            Sign Out
+          </span>
         </button>
 
       </div>

@@ -10,6 +10,60 @@ import {
 } from "lucide-react";
 import { useTheme } from "./components/theme-provider";
 
+interface TiltCardProps extends React.HTMLAttributes<HTMLDivElement> {
+  children: React.ReactNode;
+  className?: string;
+  maxRotate?: number;
+  scale?: number;
+}
+
+const TiltCard: React.FC<TiltCardProps> = ({ 
+  children, 
+  className = "", 
+  maxRotate = 4,
+  scale = 1.012,
+  ...props 
+}) => {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [transform, setTransform] = useState("");
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cardRef.current) return;
+    const card = cardRef.current;
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const xc = rect.width / 2;
+    const yc = rect.height / 2;
+    const rotateY = ((x - xc) / xc) * maxRotate;
+    const rotateX = -((y - yc) / yc) * maxRotate;
+    
+    setTransform(`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(${scale}, ${scale}, ${scale})`);
+  };
+
+  const handleMouseLeave = () => {
+    setTransform("");
+  };
+
+  return (
+    <div
+      ref={cardRef}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      style={{
+        transform: transform,
+        transition: "transform 0.15s cubic-bezier(0.25, 1, 0.5, 1)",
+        transformStyle: "preserve-3d"
+      }}
+      className={className}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+};
+
 const SAMPLES = [
   {
     title: "React/Next.js Dev (Stripe)",
@@ -177,20 +231,6 @@ export default function LandingPage() {
       {/* Global Interactive Cursor Spotlight (Torch effect) */}
       {isMouseInWindow && (
         <>
-          {/* Torch Spotlight (Wide Ambient Indigo Glow) */}
-          <div
-            className="pointer-events-none fixed inset-0 z-30 transition-opacity duration-300"
-            style={{
-              background: `radial-gradient(450px circle at ${mousePos.x}px ${mousePos.y}px, rgba(99, 102, 241, 0.08) 0%, rgba(0, 176, 255, 0.02) 60%, transparent 100%)`,
-            }}
-          />
-          {/* Torch Core (Bright Center Blue Beam) */}
-          <div
-            className="pointer-events-none fixed inset-0 z-30 transition-opacity duration-300"
-            style={{
-              background: `radial-gradient(130px circle at ${mousePos.x}px ${mousePos.y}px, rgba(0, 176, 255, 0.25) 0%, rgba(99, 102, 241, 0.06) 50%, transparent 100%)`,
-            }}
-          />
           {/* Global Custom Cursor Ring (Torch light bulb style) */}
           <div
             className="pointer-events-none fixed w-8 h-8 rounded-full border border-primary/40 bg-primary/10 shadow-[0_0_15px_rgba(0,176,255,0.4)] flex items-center justify-center z-50 transition-transform duration-75 ease-out hidden md:flex"
@@ -337,7 +377,7 @@ export default function LandingPage() {
           <div className="absolute w-[120%] h-[120%] bg-gradient-to-tr from-primary/10 to-blue-500/20 rounded-full blur-[60px] pointer-events-none" />
 
           {/* Glass dashboard frame */}
-          <div className="relative w-full h-full rounded-2xl border border-border bg-card/60 backdrop-blur-xl shadow-card overflow-hidden p-6 flex flex-col justify-between">
+          <TiltCard className="relative w-full h-full rounded-2xl border border-border bg-card/60 backdrop-blur-xl shadow-card overflow-hidden p-6 flex flex-col justify-between transition-all duration-300 ease-out hover:shadow-lg hover:border-primary/20">
             {/* Window header */}
             <div className="flex items-center justify-between border-b border-border/60 pb-3">
               <div className="flex items-center gap-1.5">
@@ -398,7 +438,7 @@ export default function LandingPage() {
               <p className="text-muted-foreground">&gt; [OK] Skills overlap found: React, Next.js, Postgres</p>
               <p className="text-emerald-300 font-bold">&gt; [AI] Drafted highly custom email pitch in 1.2s</p>
             </div>
-          </div>
+          </TiltCard>
         </div>
       </section>
 
@@ -440,7 +480,7 @@ export default function LandingPage() {
               </div>
 
               {/* Job post display */}
-              <div className="flex-1 rounded-xl border border-border bg-card p-5 flex flex-col justify-between shadow-sm">
+              <TiltCard className="flex-1 rounded-xl border border-border bg-card p-5 flex flex-col justify-between shadow-sm transition-all duration-300 ease-out hover:shadow-lg hover:border-primary/20">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b border-border/50 pb-3">
                     <span className="text-xs font-bold text-foreground uppercase tracking-wider">Job Description</span>
@@ -466,11 +506,11 @@ export default function LandingPage() {
                     </>
                   )}
                 </button>
-              </div>
+              </TiltCard>
             </div>
 
             {/* Right Column: AI Analysis Result Display */}
-            <div className="lg:col-span-7 rounded-2xl border border-border bg-card overflow-hidden shadow-sm flex flex-col items-stretch min-h-[460px]">
+            <TiltCard className="lg:col-span-7 rounded-2xl border border-border bg-card overflow-hidden shadow-sm flex flex-col items-stretch min-h-[460px] transition-all duration-300 ease-out hover:shadow-lg hover:border-primary/20">
               
               {/* Simulation is idle or starting */}
               {simStep === 0 && (
@@ -613,7 +653,7 @@ export default function LandingPage() {
                   </div>
                 </div>
               )}
-            </div>
+            </TiltCard>
           </div>
         </div>
       </section>
@@ -636,9 +676,9 @@ export default function LandingPage() {
             { step: "03", icon: Sparkles, title: "Generate Fit", desc: "The AI calculates your fit score, highlights matching assets, and flags missing experience.", color: "border-primary/40 shadow-[0_0_15px_rgba(0,176,255,0.1)]" },
             { step: "04", icon: Mail, title: "Deploy Outreach", desc: "Send tailored cold emails with attachments directly via connected Gmail or Zoho mailboxes.", color: "border-border" }
           ].map((item, idx) => (
-            <div
+            <TiltCard
               key={item.step}
-              className={`glass-card p-6 rounded-2xl bg-card border relative z-10 flex flex-col items-center text-center transition-all duration-300 hover:-translate-y-1 ${item.color}`}
+              className={`glass-card p-6 rounded-2xl bg-card border relative z-10 flex flex-col items-center text-center transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-lg hover:border-primary/20 ${item.color}`}
             >
               <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-5 text-primary border border-primary/20 shadow-inner">
                 <item.icon size={22} />
@@ -646,7 +686,7 @@ export default function LandingPage() {
               <span className="text-xs font-black text-primary/30 font-mono tracking-widest">{item.step}</span>
               <h3 className="text-base font-extrabold text-foreground mt-2 mb-1.5">{item.title}</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
-            </div>
+            </TiltCard>
           ))}
         </div>
       </section>
@@ -664,7 +704,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[280px] sm:auto-rows-[300px]">
             
             {/* Box 1: Large (2 Columns wide) */}
-            <div className="md:col-span-2 rounded-2xl border border-border bg-input/20 p-8 flex flex-col justify-between relative overflow-hidden group shadow-sm">
+            <TiltCard className="md:col-span-2 rounded-2xl border border-border bg-input/20 p-8 flex flex-col justify-between relative overflow-hidden group shadow-sm transition-all duration-300 ease-out hover:shadow-lg hover:border-primary/20">
               <div className="max-w-md relative z-10">
                 <h3 className="text-xl font-bold text-foreground mb-2">Contextual AI Writing Models</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">
@@ -677,10 +717,10 @@ export default function LandingPage() {
               <div className="absolute bottom-6 right-6 w-28 h-28 border border-border bg-card rounded-xl shadow-md flex items-center justify-center rotate-6 group-hover:rotate-0 transition-transform duration-500">
                 <Sparkles size={40} className="text-primary" />
               </div>
-            </div>
+            </TiltCard>
 
             {/* Box 2: Small */}
-            <div className="rounded-2xl border border-border bg-input/20 p-8 flex flex-col justify-between shadow-sm relative overflow-hidden group">
+            <TiltCard className="rounded-2xl border border-border bg-input/20 p-8 flex flex-col justify-between shadow-sm relative overflow-hidden group transition-all duration-300 ease-out hover:shadow-lg hover:border-primary/20">
               <div>
                 <Activity size={24} className="text-primary mb-4" />
                 <h3 className="text-lg font-bold text-foreground mb-1">Deep Analytics</h3>
@@ -696,10 +736,10 @@ export default function LandingPage() {
                 <div className="flex-1 bg-primary rounded-t h-[90%] group-hover:h-[100%] transition-all duration-500" />
                 <div className="flex-1 bg-border rounded-t h-[50%] group-hover:h-[70%] transition-all duration-500" />
               </div>
-            </div>
+            </TiltCard>
 
             {/* Box 3: Small */}
-            <div className="rounded-2xl border border-border bg-input/20 p-8 flex flex-col justify-between shadow-sm group">
+            <TiltCard className="rounded-2xl border border-border bg-input/20 p-8 flex flex-col justify-between shadow-sm group transition-all duration-300 ease-out hover:shadow-lg hover:border-primary/20">
               <div>
                 <Calendar size={24} className="text-primary mb-4" />
                 <h3 className="text-lg font-bold text-foreground mb-1">OAuth Mail Sync</h3>
@@ -712,10 +752,10 @@ export default function LandingPage() {
                 <span className="text-[10px] font-bold px-2 py-1 rounded bg-card text-foreground border border-border">Zoho</span>
                 <span className="text-[10px] font-bold px-2 py-1 rounded bg-card text-foreground border border-border">Google Calendar</span>
               </div>
-            </div>
+            </TiltCard>
 
             {/* Box 4: Large */}
-            <div className="md:col-span-2 rounded-2xl border border-border bg-input/20 p-8 flex flex-col justify-between relative overflow-hidden group shadow-sm">
+            <TiltCard className="md:col-span-2 rounded-2xl border border-border bg-input/20 p-8 flex flex-col justify-between relative overflow-hidden group shadow-sm transition-all duration-300 ease-out hover:shadow-lg hover:border-primary/20">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
                 <div>
                   <h3 className="text-xl font-bold text-foreground mb-2">A/B Testing Autopilot</h3>
@@ -747,7 +787,7 @@ export default function LandingPage() {
                   </div>
                 </div>
               </div>
-            </div>
+            </TiltCard>
 
           </div>
         </div>
@@ -779,7 +819,7 @@ export default function LandingPage() {
           </div>
 
           {/* Right Column: Visual Simulated Feed */}
-          <div className="lg:col-span-7 rounded-2xl border border-border bg-input/10 p-6 shadow-sm">
+          <TiltCard className="lg:col-span-7 rounded-2xl border border-border bg-input/10 p-6 shadow-sm transition-all duration-300 ease-out hover:shadow-lg hover:border-primary/20">
             <div className="rounded-xl border border-border bg-card overflow-hidden shadow-md flex flex-col">
               
               {/* Header */}
@@ -836,14 +876,14 @@ export default function LandingPage() {
               </div>
 
             </div>
-          </div>
+          </TiltCard>
 
         </div>
       </section>
 
       {/* ── CTA BANNER ──────────────────────────────────────────────────── */}
       <section className="py-24 px-6 max-w-[1200px] mx-auto z-10 relative">
-        <div className="rounded-3xl border border-border/80 bg-gradient-to-tr from-primary/10 via-card to-blue-500/5 p-8 md:p-16 text-center shadow-lg relative overflow-hidden group select-none transition-all duration-300 hover:border-primary/20 hover:shadow-xl">
+        <TiltCard scale={1.006} className="rounded-3xl border border-border/80 bg-gradient-to-tr from-primary/10 via-card to-blue-500/5 p-8 md:p-16 text-center shadow-lg relative overflow-hidden group select-none transition-all duration-300 ease-out hover:border-primary/20 hover:shadow-xl">
 
           {/* Glow circle overlay */}
           <div className="absolute -bottom-20 -left-20 w-60 h-60 bg-primary/10 rounded-full blur-[80px] pointer-events-none" />
@@ -872,7 +912,7 @@ export default function LandingPage() {
               Play in Sandbox
             </button>
           </div>
-        </div>
+        </TiltCard>
       </section>
 
       {/* ── FOOTER ─────────────────────────────────────────────────────── */}
