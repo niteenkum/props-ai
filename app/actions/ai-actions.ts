@@ -430,10 +430,34 @@ ${duplicateSection}
 NEW JOB POST:
 ${jobText.slice(0, 1200)}
 
-SCORING RULES:
-- Look BEYOND exact keywords — "web developer" = match for React/Next.js/Node.js developer
-- "Full Stack" matches frontend + backend skills
-- 0 = wrong field, 50 = partial overlap, 85-100 = strong match
+SCORING RULES — follow in this exact priority order:
+
+STEP 1 — ROLE MATCH (highest weight):
+- The candidate's stated Role is the STRONGEST signal. If the job title or description semantically matches the candidate's role, start at 65-80%.
+- "Website Developer" / "Web Developer" / "Web Designer" = match for any web development role (Full Stack, Frontend, Backend, WordPress, Laravel, React, etc.)
+- "Video Editor" job = match for any candidate whose role or skills include video editing
+- "Content Writer" job = match for any content writing / copywriting role
+- A vague job with no specific tech requirement means: if the candidate's role fits the general domain → score 65-80+
+
+STEP 2 — SKILL & PROJECT DEPTH (adjust up/down from STEP 1):
+- Use the candidate's listed skills, resume, and projects to fine-tune the score
+- More relevant skills/projects → push score higher (toward 85-100)
+- Candidate skills in wrong domain entirely → push score lower (toward 20-40)
+- DO NOT penalize for having extra skills (LLMs, AI, etc.) that the job didn't ask for
+
+STEP 3 — MISSING SKILLS (only genuinely absent capabilities):
+- A broader skill implies its sub-skills. "Full Stack Developer" covers frontend, backend, web development
+- "Laravel Developer" implies PHP, MySQL, MVC. "Content Writing" implies copywriting, SEO writing, blog writing
+- ONLY list a skill as missing if the job specifically requires something the candidate has ZERO evidence of
+- If the job is vague (no specific tech stack listed), missingSkills should be EMPTY or just 1-2 items max
+
+SCORE FLOORS:
+- If job domain matches candidate's role → minimum score is 50, never give 0-30 unless it's a completely different field
+- 0-30 = completely wrong field (e.g., doctor applying for software job)
+- 40-60 = same broad domain but missing some specific things
+- 65-80 = good match, candidate can do this job
+- 85-100 = strong match with directly relevant skills
+
 - Extract phone numbers as contactPhone
 - Extract Upwork job URLs (upwork.com/jobs/... or upwork.com/ab/...) as upworkJobUrl
 - Extract any application/apply URL (google forms, typeform, careers page, etc.) as applyUrl
@@ -449,9 +473,9 @@ Return ONLY this JSON:
   "contactPhone": "<phone or ''>",
   "upworkJobUrl": "<upwork job link or ''>",
   "applyUrl": "<any other application URL or ''>",
-  "explanation": "<1-2 honest sentences about fit>",
-  "matchedSkills": ["<your skill relevant to job>"],
-  "missingSkills": ["<skill the job needs that you lack>"]${duplicateFields}
+  "explanation": "<1-2 honest sentences about fit based on candidate's actual role and skills>",
+  "matchedSkills": ["<skills from the candidate's profile that are directly or implicitly relevant>"],
+  "missingSkills": ["<only genuinely absent capabilities not coverable from existing profile — keep empty [] for vague job posts>"]${duplicateFields}
 }`;
 
     const raw = await provider.generate({

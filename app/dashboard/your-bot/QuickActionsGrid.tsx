@@ -125,123 +125,118 @@ export default function QuickActionsGrid({ onSelect }: QuickActionsGridProps) {
   return (
     <>
       <style>{`
-        .propbot-quick-card {
+        .propbot-pill-container {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 10px;
+          width: 100%;
+          max-width: 720px;
+          margin-top: 24px;
+        }
+
+        .propbot-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px;
+          border-radius: 9999px;
+          border: 1px solid #e2e8f0;
+          background: #ffffff;
+          color: #475569;
+          font-size: 13px;
+          font-weight: 550;
+          cursor: pointer;
+          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.02);
           position: relative;
+          outline: none;
+          animation: pill-fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+
+        [data-theme="dark"] .propbot-pill {
+          background: #09090b;
+          border-color: #27272a;
+          color: #a1a1aa;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .propbot-pill:hover {
+          transform: translateY(-2px);
+          color: var(--accent-color) !important;
+          border-color: var(--accent-color) !important;
+          background: var(--bg-color) !important;
+          box-shadow: 0 6px 20px var(--glow-color);
+        }
+
+        [data-theme="dark"] .propbot-pill:hover {
+          color: #ffffff !important;
+          background: var(--bg-color-dark) !important;
+          border-color: var(--accent-color) !important;
+        }
+
+        .propbot-pill:active {
+          transform: translateY(-0.5px);
+        }
+
+        .propbot-pill-icon {
           display: flex;
           align-items: center;
-          gap: 12px;
-          padding: 14px 16px 14px 14px;
-          border-radius: 14px;
-          border: 1.5px solid rgba(226,217,243,0.7);
-          cursor: pointer;
-          text-align: left;
-          transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-          background: rgba(255,255,255,0.75);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          box-shadow: 0 2px 12px rgba(0,0,0,0.03);
-          outline: none;
-          overflow: hidden;
+          justify-content: center;
+          transition: transform 0.25s ease;
         }
 
-        [data-theme="dark"] .propbot-quick-card {
-          background: rgba(9, 9, 11, 0.45);
-          border-color: rgba(31, 41, 55, 0.7);
-          box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+        .propbot-pill:hover .propbot-pill-icon {
+          transform: scale(1.1) rotate(4deg);
         }
 
-        .propbot-quick-card:hover {
-          border-color: var(--hover-accent-color) !important;
-          transform: translateY(-3px);
-          box-shadow: 0 12px 32px var(--hover-accent-glow), 0 2px 8px rgba(0,0,0,0.04);
+        .propbot-pill-icon svg {
+          width: 14px !important;
+          height: 14px !important;
         }
 
-        :root:not([data-theme="dark"]) .propbot-quick-card:hover {
-          background: linear-gradient(135deg, #ffffff 0%, var(--hover-accent-bg) 100%) !important;
+        @keyframes pill-fade-in {
+          from {
+            opacity: 0;
+            transform: translateY(12px) scale(0.96);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
         }
 
-        [data-theme="dark"] .propbot-quick-card:hover {
-          background: linear-gradient(135deg, #09090b 0%, var(--hover-accent-bg) 100%) !important;
-          box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0,0,0,0.2);
-        }
+        .propbot-pill:nth-child(1) { animation-delay: 0.04s; }
+        .propbot-pill:nth-child(2) { animation-delay: 0.08s; }
+        .propbot-pill:nth-child(3) { animation-delay: 0.12s; }
+        .propbot-pill:nth-child(4) { animation-delay: 0.16s; }
+        .propbot-pill:nth-child(5) { animation-delay: 0.20s; }
+        .propbot-pill:nth-child(6) { animation-delay: 0.24s; }
       `}</style>
-      <div style={styles.grid}>
+      <div className="propbot-pill-container">
         {QUICK_ACTIONS.map((action) => (
           <button
             key={action.label}
             id={`propbot-quick-${action.label.toLowerCase().replace(/\s+/g, "-")}`}
             onClick={() => onSelect(action.prompt)}
-            className="propbot-quick-card"
+            className="propbot-pill"
             style={{
-              "--hover-accent-color": `${action.accentColor}50`,
-              "--hover-accent-bg": action.bgColor,
-              "--hover-accent-glow": `${action.accentColor}18`,
+              "--accent-color": action.accentColor,
+              "--bg-color": action.bgColor,
+              "--bg-color-dark": `${action.accentColor}18`,
+              "--glow-color": `${action.accentColor}15`,
             } as React.CSSProperties}
           >
             {/* Icon */}
-            <div style={{ ...styles.iconBox, color: action.accentColor, background: action.bgColor }}>
+            <span className="propbot-pill-icon" style={{ color: action.accentColor }}>
               {action.icon}
-            </div>
+            </span>
 
-            {/* Text */}
-            <div style={styles.cardContent}>
-              <span style={styles.cardLabel}>{action.label}</span>
-              <span style={styles.cardDesc}>{action.description}</span>
-            </div>
-
-            {/* Arrow */}
-            <div style={{ ...styles.arrow, color: action.accentColor }}>›</div>
+            {/* Label */}
+            <span>{action.label}</span>
           </button>
         ))}
       </div>
     </>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
-    gap: 12,
-    width: "100%",
-    maxWidth: 780,
-  },
-  iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  cardContent: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 3,
-    flex: 1,
-    minWidth: 0,
-  },
-  cardLabel: {
-    fontSize: 13,
-    fontWeight: 650,
-    color: "var(--foreground)",
-    textAlign: "left",
-    lineHeight: 1.3,
-  },
-  cardDesc: {
-    fontSize: 11,
-    color: "#94a3b8",
-    textAlign: "left",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-  arrow: {
-    fontSize: 20,
-    opacity: 0.5,
-    flexShrink: 0,
-    lineHeight: 1,
-    marginLeft: 2,
-  },
-};

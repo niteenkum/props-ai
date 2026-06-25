@@ -21,7 +21,7 @@ import { prisma } from "../utils/prisma";
 import { getUserProfileAction } from "./db-actions";
 import { getFollowUpsAction, bookCallAction } from "./calendar-actions";
 import { addJobPostAction } from "./db-actions";
-import { analyzeAndGenerateAction } from "./ai-actions";
+import { analyzeAndGenerateAction, analyzeJobCandidacyAction } from "./ai-actions";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -34,7 +34,7 @@ export interface ChatMessage {
 
 export interface ChatResponse {
   reply: string;
-  actionType: "text" | "emails" | "jobs" | "draft" | "stats" | "calls" | "schedule_job_select" | "error";
+  actionType: "text" | "emails" | "jobs" | "draft" | "stats" | "calls" | "schedule_job_select" | "job_candidacy_decision" | "error";
   actionData?: unknown;
 }
 
@@ -242,23 +242,14 @@ const FUNCTION_DECLARATIONS = [
   // The UI's ScheduleJobSelectPanel handles booking via bookCallFromBotAction directly.
   // AI only triggers db_query({type:'job_list'}) → schedule_job_select card → client books.
   {
-    name: "create_job_post",
-    description: `Create a new job post in ThePitchly from a job description the user provides.
-
-WORKFLOW:
-1. Ask the user to paste or describe the job posting (role, company, requirements, contact info if any).
-2. If they give you a short description, ask for more detail (company name, role title, key requirements) so the AI can score it properly.
-3. Once you have enough information (at minimum: role title + brief description), call create_job_post.
-4. The system will run full AI analysis: match scoring, cold email draft, proposal, cover letter — all auto-generated.
-5. The new job will appear in the Jobs list with status 'Draft'.
-
-NEVER make up job details — only use what the user actually provides.`,
+    name: "analyze_job_candidacy",
+    description: `Analyze a job posting's compatibility and match score for the user before saving it. Returns match score, matched and missing skills, explanation, role, and company. The UI will render a decision card for the user to save or skip.`,
     parameters: {
       type: "object",
       properties: {
         jobText: {
           type: "string",
-          description: "The raw job description text provided by the user. Include everything: role, company, requirements, contact details, apply URL, etc. The more detail, the better the AI analysis.",
+          description: "The raw job description text provided by the user. Include everything: role, company, requirements, contact details, apply URL, etc.",
         },
         role: {
           type: "string",
@@ -268,16 +259,8 @@ NEVER make up job details — only use what the user actually provides.`,
           type: "string",
           description: "Company name. Use 'Not specified' if not mentioned.",
         },
-        contactEmail: {
-          type: "string",
-          description: "Recruiter or contact email address, if mentioned in the job text.",
-        },
-        notes: {
-          type: "string",
-          description: "Any extra notes the user wants to add to this job.",
-        },
       },
-      required: ["jobText", "role", "company"],
+      required: ["jobText"],
     },
   },
   {
@@ -648,72 +631,41 @@ async function executeFunctionCall(
       }
     }
 
-    case "create_job_post": {
-      const jobText      = args.jobText as string;
-      const hintRole     = (args.role as string) || "";
-      const hintCompany  = (args.company as string) || "Not specified";
-      const contactEmail = (args.contactEmail as string | undefined) ?? "";
-      const notes        = (args.notes as string | undefined) ?? "";
+    case "analyze_job_candidacy": {
+      const jobText     = args.jobText as string;
+      const hintRole    = (args.role as string) || "";
+      const hintCompany = (args.company as string) || "Not specified";
 
       if (!jobText || jobText.trim().length < 20) {
-        return { toolResult: { error: "Job description is too short. Please ask the user to provide more details about the role, company, and requirements." } };
+        return { toolResult: { error: "Job description is too short." } };
       }
 
-      console.log(`[create_job_post] Starting AI analysis for "${hintRole}" at "${hintCompany}"...`);
+      console.log(`[analyze_job_candidacy] Starting AI candidacy analysis for "${hintRole}" at "${hintCompany}"...`);
 
       try {
-        // Run full AI analysis — same pipeline as the main Jobs page
-        const analysis = await analyzeAndGenerateAction(jobText, userEmail);
-
-        if (!analysis.success || !analysis.result) {
-          return { toolResult: { error: analysis.error ?? "AI analysis failed. Please try again." } };
+        const analysis = await analyzeJobCandidacyAction(jobText, userEmail);
+        if (!analysis.success) {
+          return { toolResult: { error: analysis.error ?? "Failed to analyze candidacy." } };
         }
 
-        const r = analysis.result;
-
-        // Prefer user-provided hints over AI extraction if AI says "Unknown" / "Not specified"
-        const finalRole    = (r.role && r.role !== "Unknown") ? r.role : hintRole;
-        const finalCompany = (r.company && r.company !== "Not specified") ? r.company : hintCompany;
-
-        // Save to DB via addJobPostAction
-        const saved = await addJobPostAction({
-          role:          finalRole,
-          company:       finalCompany,
-          originalText:  jobText,
-          parsedSummary: r.parsedSummary ?? "",
-          contactName:   r.contactName  ?? undefined,
-          contactEmail:  r.contactEmail || contactEmail || undefined,
-          matchScore:    r.matchScore ?? 50,
-          tags:          r.tags ?? [],
-          notes:         notes || r.notes || undefined,
-          generatedTemplates: {
-            coldEmail:   r.generatedTemplates?.coldEmail,
-            proposal:    r.generatedTemplates?.proposal,
-            linkedin:    r.generatedTemplates?.linkedin,
-            coverLetter: r.generatedTemplates?.coverLetter,
-          },
-          suggestAttachResume: r.suggestAttachResume ?? undefined,
-        });
-
-        const jobData = {
-          id:          saved.id,
-          role:        saved.role,
-          company:     saved.company,
-          matchScore:  saved.matchScore,
-          status:      saved.status,
-          contactEmail: saved.contactEmail,
-          tags:        saved.tags,
+        const analysisData = {
+          role:          (analysis.role && analysis.role !== "Unknown") ? analysis.role : hintRole,
+          company:       (analysis.company && analysis.company !== "Not specified") ? analysis.company : hintCompany,
+          contactEmail:  analysis.contactEmail || "",
+          matchScore:    analysis.score ?? 50,
+          explanation:   analysis.explanation || "",
+          matchedSkills: analysis.matchedSkills || [],
+          missingSkills: analysis.missingSkills || [],
+          jobText:       jobText,
         };
-
-        console.log(`[create_job_post] Created job ${saved.id} — ${saved.role} at ${saved.company} (score: ${saved.matchScore})`);
 
         return {
-          toolResult: { created: true, ...jobData },
-          specialAction: { type: "jobs", data: [jobData] },
+          toolResult: analysisData,
+          specialAction: { type: "job_candidacy_decision", data: analysisData },
         };
       } catch (err: any) {
-        console.error("[create_job_post] Error:", err?.message);
-        return { toolResult: { error: err?.message ?? "Failed to create job post" } };
+        console.error("[analyze_job_candidacy] Error:", err?.message);
+        return { toolResult: { error: err?.message ?? "Candidacy analysis error." } };
       }
     }
 
@@ -828,8 +780,7 @@ You can:
 7. Query unapplied / pending jobs where status is Draft or Generated (use db_query with type 'pending_jobs')
 8. Query scheduled calls/follow-ups (use db_query with type 'calls')
 9. List calendar events (googlecalendar.api.events.getMany)
-10. Schedule a Google Meet call linked to a job (use schedule_call tool — see workflow below)
-11. **Create a new job post** from a description the user provides (use create_job_post tool)
+11. **Analyze a new job post** compatibility from a description the user provides (use analyze_job_candidacy tool)
 12. **Show prioritized inbox** — use db_query({ type: 'synced_emails' }) to show AI-classified emails with priority badges (interview calls, offer letters, rejections, freelance leads) and sentiment dots. Use this whenever user asks: "show my inbox", "list my emails", "any interview calls?", "show priority emails", "check inbox", "any rejections?", "any offers?".
 13. **Semantic search across entire email and calendar** — use local_semantic_search to search synced emails and scheduled calls locally. Use this for queries like "find client messages about React", "any calls with Vercel scheduled?", "search for interview schedules".
 
@@ -844,13 +795,31 @@ If user asks specifically for a type, filter by keyword. Examples:
 - "any rejections?" → db_query({ type: 'synced_emails', filter: 'rejection' })
 - "show positive emails" → db_query({ type: 'synced_emails' }) then mention in text reply
 
-## CREATING A JOB POST — WORKFLOW
+## JOB POST ANALYSIS AND DECISION WORKFLOW
 When the user wants to add a new job, says "add this job", "save this job", "create a job post", or pastes a job description:
 
 STEP 1: If they only mentioned a company/role name without details, ask: "Could you paste the job description or share more details? (requirements, contact email, etc.)"
-STEP 2: Once you have at least a role title + brief description (20+ characters), call create_job_post immediately.
-STEP 3: The system will auto-analyze: match score, cold email, proposal, cover letter are all auto-generated.
-STEP 4: Tell the user the job was created and suggest they open it in the Jobs page to review the generated templates.
+STEP 2: Once you have at least a role title + brief description (20+ characters), call analyze_job_candidacy immediately.
+STEP 3: In your text reply, summarize the candidacy match score and matched/missing skills, and give a recommendation (e.g. "Your match score is 45% which is low. I don't recommend applying." or "Your match score is 85% which is a strong match!"). Ask: "Would you like to save this job post to your dashboard?"
+STEP 4: Do not say that you saved it. The UI will automatically render the decision card with Save/Skip buttons. Just ask if they want to save it.
+
+### ⚠️ CRITICAL: JOB POSTS FROM SOCIAL MEDIA OR LINKEDIN
+Users often paste job opportunities directly from LinkedIn, WhatsApp groups, or other social platforms. These messages may contain:
+- Hashtags (e.g. #WebDeveloper #Freelancer #HTML #CSS)
+- Casual CTAs like "Follow for updates", "DM to apply", "Repost to help"
+- A person's name as the poster (e.g. "From Ashish Tyagi")
+- Emojis, separators (━━━), or promotional language
+
+**These ARE valid job posts / freelance leads. You MUST treat them as job descriptions and call analyze_job_candidacy immediately.**
+
+RULES for social-media style posts:
+- NEVER say "This looks like a social post, not a job description."
+- NEVER say "This seems to be a graphic/link."
+- NEVER ask the user to confirm whether it's a job post.
+- If the pasted text contains ANY job-related keywords (developer, designer, freelancer, web, mobile, React, Node, Python, UI, UX, hire, looking for, need a, etc.) — treat it as a job post and call analyze_job_candidacy immediately with the full pasted text as jobText.
+- Extract the role from hashtags if no explicit title (e.g. #WebDeveloper → role = "Web Developer").
+- Extract company/poster name if visible (e.g. "From Ashish Tyagi" → company = "Ashish Tyagi").
+- Pass the entire pasted text as jobText so the AI can extract all requirements.
 
 ## SCHEDULING A CALL — MANDATORY WORKFLOW
 When a user asks to schedule a call, interview, meeting, or book time with a client:
@@ -1170,5 +1139,61 @@ Write a 3-bullet agenda for an intro/interview call.`;
     };
   } catch (err: any) {
     return { error: err?.message ?? "Failed to fetch context" };
+  }
+}
+
+/**
+ * Creates a job post in the database after the user confirms they want to save it
+ * from the chat candidacy decision card.
+ */
+export async function createJobPostFromAnalysisAction(
+  userEmail: string,
+  analysisData: {
+    role: string;
+    company: string;
+    jobText: string;
+    matchScore: number;
+    contactEmail?: string;
+    tags?: string[];
+  }
+): Promise<{ success: boolean; jobId?: string; error?: string; templates?: { coldEmail?: string; proposal?: string; linkedin?: string; coverLetter?: string } }> {
+  try {
+    // Run full AI analysis to generate templates
+    const analysis = await analyzeAndGenerateAction(analysisData.jobText, userEmail);
+    if (!analysis.success || !analysis.result) {
+      return { success: false, error: analysis.error ?? "Failed to analyze and generate templates." };
+    }
+    const r = analysis.result;
+
+    const saved = await addJobPostAction({
+      role: analysisData.role || r.role || "Unknown",
+      company: analysisData.company || r.company || "Not specified",
+      originalText: analysisData.jobText,
+      parsedSummary: r.parsedSummary ?? "",
+      contactName: r.contactName ?? undefined,
+      contactEmail: r.contactEmail || analysisData.contactEmail || undefined,
+      matchScore: r.matchScore ?? analysisData.matchScore ?? 50,
+      tags: r.tags ?? analysisData.tags ?? [],
+      generatedTemplates: {
+        coldEmail: r.generatedTemplates?.coldEmail,
+        proposal: r.generatedTemplates?.proposal,
+        linkedin: r.generatedTemplates?.linkedin,
+        coverLetter: r.generatedTemplates?.coverLetter,
+      },
+      suggestAttachResume: r.suggestAttachResume ?? undefined,
+    });
+
+    return {
+      success: true,
+      jobId: saved.id,
+      templates: {
+        coldEmail: r.generatedTemplates?.coldEmail,
+        proposal: r.generatedTemplates?.proposal,
+        linkedin: r.generatedTemplates?.linkedin,
+        coverLetter: r.generatedTemplates?.coverLetter,
+      },
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message ?? "Failed to save job post." };
   }
 }

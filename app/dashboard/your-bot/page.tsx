@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback, Suspense } from "react";
-import { Clock, Trash2, Sparkles, Plus, Settings, Share2, MoreHorizontal } from "lucide-react";
+import { Clock, Trash2, Sparkles, Plus, Settings, Share2, MoreHorizontal, Globe, Zap, Shield, ArrowRight, ChevronRight, Loader2, Send } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "../../hooks/useAuth";
 import {
@@ -31,9 +31,30 @@ const LATEST_PROMPTS = [
   "How many jobs am I actively tracking?",
 ];
 
+const AISparkleIcon = () => (
+  <div className="relative w-16 h-16 flex items-center justify-center mb-2">
+    <div className="absolute w-12 h-12 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-full blur-xl opacity-15 dark:opacity-25 animate-pulse" style={{ animationDuration: "3s" }} />
+    <svg className="w-12 h-12 relative z-10" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2C12 7.5 7.5 12 2 12C7.5 12 12 16.5 12 22C12 16.5 16.5 12 22 12C16.5 12 12 7.5 12 2Z" fill="url(#ai-sparkle-grad)" />
+      <path d="M19 3C19 5.2 17.2 7 15 7C17.2 7 19 8.8 19 11C19 8.8 20.8 7 23 7C20.8 7 19 5.2 19 3Z" fill="url(#ai-sparkle-grad-small)" />
+      <defs>
+        <linearGradient id="ai-sparkle-grad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#6366f1" />
+          <stop offset="50%" stopColor="#8b5cf6" />
+          <stop offset="100%" stopColor="#ec4899" />
+        </linearGradient>
+        <linearGradient id="ai-sparkle-grad-small" x1="15" y1="3" x2="23" y2="11" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#a855f7" />
+          <stop offset="100%" stopColor="#f43f5e" />
+        </linearGradient>
+      </defs>
+    </svg>
+  </div>
+);
+
 // Wrap core logic in a client component to safely use searchParams inside Suspense
 function PropBotContent() {
-  const { userEmail, isReady } = useAuth({ requiredStatus: "ACTIVE" });
+  const { userEmail, userName, isReady } = useAuth({ requiredStatus: "ACTIVE" });
   const searchParams = useSearchParams();
 
   const [messages, setMessages]   = useState<UIMessage[]>([]);
@@ -68,6 +89,14 @@ function PropBotContent() {
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // Auto-resize textarea height based on content
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+      inputRef.current.style.height = `${Math.max(44, Math.min(inputRef.current.scrollHeight, 160))}px`;
+    }
+  }, [input]);
 
   // Focus search input when palette opens
   useEffect(() => {
@@ -354,54 +383,39 @@ function PropBotContent() {
 
 
       {/* ── Chat Content Scroll Area ─────────────────────────────────────── */}
-      <div style={styles.body}>
+      <div style={{ ...styles.body, position: "relative" }} className="overflow-hidden">
+        {/* Ambient background glows */}
+        <div className="absolute top-[-100px] left-[5%] w-[450px] h-[450px] bg-gradient-to-tr from-primary/10 via-blue-500/5 to-transparent blur-[110px] rounded-full pointer-events-none z-0" />
+        <div className="absolute top-[200px] right-[5%] w-[550px] h-[550px] bg-gradient-to-bl from-violet-500/10 via-primary/5 to-transparent blur-[130px] rounded-full pointer-events-none z-0" />
+        {/* Grid overlay for texture */}
+        <div className="absolute inset-0 bg-grid-pattern [mask-image:radial-gradient(ellipse_at_center,black_50%,transparent_100%)] pointer-events-none z-0 opacity-25 dark:opacity-45" />
         {/* EMPTY STATE */}
         {!hasMessages && !loading && (
           <div style={styles.emptyState}>
-            <PropBotOrb size={100} state="idle" />
+            <AISparkleIcon />
             <div style={styles.greetingBlock}>
-              <h1 style={styles.greeting}>Hi! I&apos;m The Pitchly AI.</h1>
-              <p style={styles.greetingSub}>{customGreeting}</p>
+              <h1 style={styles.greeting}>
+                How can I help you, {userName ? userName.split(" ")[0] : "today"}?
+              </h1>
               <p style={styles.greetingHint}>
-                Ask me anything — draft proposals, calculate freelance rates, find gig leads, and track active clients.
+                Ask me anything — draft proposals, calculate freelance rates, or find new leads.
               </p>
               <div style={styles.keyboardTipContainer}>
-                <span>Press</span>
-                <kbd style={styles.keyboardTipBadge}>⌘ K</kbd>
-                <span>or</span>
-                <kbd style={styles.keyboardTipBadge}>Ctrl K</kbd>
-                <span>for Command Palette</span>
-              </div>
-              <div style={styles.shortcutChipsContainer}>
-                <div className="propbot-shortcut-chip" style={styles.shortcutChip} onClick={() => handleSend("Show me my priority inbox with AI-classified emails")}>
-                  <kbd style={styles.shortcutChipKbd}>⌘I</kbd> Inbox
-                </div>
-                <div className="propbot-shortcut-chip" style={styles.shortcutChip} onClick={() => handleSend("Help me draft a personalized cold pitch to a potential client looking for a freelance web developer")}>
-                  <kbd style={styles.shortcutChipKbd}>⌘E</kbd> Pitch
-                </div>
-                <div className="propbot-shortcut-chip" style={styles.shortcutChip} onClick={() => {
-                  const template = "Here is a job description. Please create a new job post and analyze it for me:\n\n";
-                  setInput(template);
-                  setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 50);
-                }}>
-                  <kbd style={styles.shortcutChipKbd}>⌘J</kbd> Job
-                </div>
-                <div className="propbot-shortcut-chip" style={styles.shortcutChip} onClick={() => handleSend("Show me my proposal statistics, active rates, and lead pipeline updates")}>
-                  <kbd style={styles.shortcutChipKbd}>⌘D</kbd> Stats
-                </div>
-                <div className="propbot-shortcut-chip" style={styles.shortcutChip} onClick={() => handleSend("Schedule a client call")}>
-                  <kbd style={styles.shortcutChipKbd}>⌘.</kbd> Meet
-                </div>
+                <span className="text-xs text-muted-foreground/60">Press </span>
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-mono text-muted-foreground">⌘ K</kbd>
+                <span className="text-xs text-muted-foreground/60"> for command palette</span>
               </div>
             </div>
             <QuickActionsGrid onSelect={handleSelectSuggestion} />
           </div>
         )}
 
-        {/* LOADING EMPTY STATE — orb shows thinking */}
+        {/* LOADING EMPTY STATE */}
         {!hasMessages && loading && (
           <div style={{ ...styles.emptyState, gap: 20 }}>
-            <PropBotOrb size={100} state="thinking" />
+            <div className="animate-spin text-indigo-600 dark:text-indigo-400">
+              <Loader2 size={36} />
+            </div>
             <p style={{ fontSize: 14, color: "var(--muted-foreground)", opacity: 0.7 }}>Thinking...</p>
           </div>
         )}
@@ -410,7 +424,15 @@ function PropBotContent() {
         {hasMessages && (
           <div style={styles.chatHistory}>
             {messages.map((msg) => (
-              <div key={msg.id} style={{ animation: "propbot-fadein 0.25s ease" }}>
+              <div 
+                key={msg.id} 
+                style={{ 
+                  animation: "propbot-fadein 0.25s ease",
+                  display: "flex",
+                  width: "100%",
+                  justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+                }}
+              >
                 <MessageBubble msg={msg} userEmail={userEmail ?? undefined} onSendDraft={handleSendDraft} onSelectSuggestion={handleSelectSuggestion} onBookCall={handleBookCall} />
               </div>
             ))}
@@ -534,74 +556,53 @@ function PropBotContent() {
         )}
 
         {/* Premium floating input */}
-        <div id="propbot-input-outer" style={styles.inputOuter}>
-          {/* Top row: textarea */}
+        <div 
+          id="propbot-input-outer" 
+          className="flex items-center gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 shadow-lg max-w-[700px] w-full mx-auto relative transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15"
+        >
+          {/* Sparkles Icon */}
+          <Sparkles className="w-4 h-4 text-primary shrink-0 select-none" />
+          
+          {/* Auto-growing Textarea */}
           <textarea
             ref={inputRef}
             id="propbot-input"
-            style={styles.input}
+            rows={1}
+            className="flex-1 bg-transparent border-0 outline-none text-sm text-foreground placeholder-slate-400 py-0.5 resize-none overflow-y-auto leading-relaxed"
+            style={{ minHeight: "44px", maxHeight: "160px" }}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask anything — draft proposals, track clients, paste a job lead…"
-            rows={2}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            placeholder="Ask Pitchly to analyze a job, draft an email, or check inbox..."
             disabled={loading}
           />
-          {/* Bottom row: hint + send button */}
-          <div style={styles.inputFooterRow}>
-            <div style={styles.inputMeta}>
-              <span style={styles.inputMetaDot} />
-              <span style={styles.inputMetaText}>
-                {loading ? "Pitchly AI is thinking…" : "Press Enter to send · Shift+Enter for new line"}
-              </span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <button
-                onClick={() => setShowHelper((prev) => !prev)}
-                style={{
-                  ...styles.keyboardBtn,
-                  background: showHelper ? "var(--palette-item-hover)" : "transparent",
-                  border: showHelper ? "1px solid #7c3aed" : "1px solid var(--border)",
-                  color: showHelper ? "#7c3aed" : "var(--muted-foreground)",
-                }}
-                title="Keyboard Shortcuts Guide"
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="4" width="20" height="16" rx="2" ry="2"/>
-                  <line x1="6" y1="8" x2="6" y2="8"/>
-                  <line x1="10" y1="8" x2="10" y2="8"/>
-                  <line x1="14" y1="8" x2="14" y2="8"/>
-                  <line x1="18" y1="8" x2="18" y2="8"/>
-                  <line x1="6" y1="12" x2="6" y2="12"/>
-                  <line x1="18" y1="12" x2="18" y2="12"/>
-                  <line x1="7" y1="16" x2="17" y2="16"/>
-                  <line x1="10" y1="12" x2="14" y2="12"/>
-                </svg>
-              </button>
-              <button
-                id="propbot-send-btn"
-                style={{
-                  ...styles.sendBtn,
-                  opacity: !input.trim() || loading ? 0.45 : 1,
-                  cursor: !input.trim() || loading ? "not-allowed" : "pointer",
-                  transition: "all 0.2s ease",
-                }}
-                onClick={() => handleSend()}
-                disabled={!input.trim() || loading}
-              >
-                {loading ? (
-                  <span style={{ fontSize: 16 }}>⏳</span>
-                ) : (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="22" y1="2" x2="11" y2="13" />
-                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                  </svg>
-                )}
-              </button>
-            </div>
-          </div>
+          
+          {/* Send Button */}
+          <button
+            id="propbot-send-btn"
+            className={`w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 cursor-pointer shadow-md transition-all active:scale-95 border-0 ${
+              !input.trim() || loading ? "opacity-45 cursor-not-allowed" : ""
+            }`}
+            onClick={() => handleSend()}
+            disabled={!input.trim() || loading}
+          >
+            {loading ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="translate-x-[0.5px]">
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
+
     </div>
   );
 }
@@ -646,26 +647,26 @@ export default function PropBotPage() {
         #propbot-input-outer {
           position: relative;
           border-radius: 16px;
-          background: linear-gradient(145deg, #ffffff, #f8f7ff);
-          box-shadow: 0 4px 24px rgba(124, 58, 237, 0.08), 0 1px 4px rgba(0,0,0,0.04);
-          border: 1.5px solid #e2d9f3;
+          background: var(--card);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03), 0 1px 3px rgba(0, 0, 0, 0.02);
+          border: 1.5px solid var(--border);
           transition: box-shadow 0.25s ease, border-color 0.25s ease;
         }
         #propbot-input-outer:focus-within {
-          border-color: #7c3aed;
-          box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.08), 0 4px 24px rgba(124, 58, 237, 0.12);
+          border-color: var(--primary);
+          box-shadow: 0 0 0 4px var(--primary-glow), 0 8px 30px var(--primary-glow);
         }
         [data-theme="dark"] #propbot-input-outer {
-          background: linear-gradient(145deg, #09090b, #18181b);
-          border-color: #27272a;
+          background: var(--card);
+          border-color: var(--border);
           box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
         }
         [data-theme="dark"] #propbot-input-outer:focus-within {
-          border-color: #7c3aed;
-          box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.15), 0 4px 24px rgba(0, 0, 0, 0.5);
+          border-color: var(--primary);
+          box-shadow: 0 0 0 4px var(--primary-glow), 0 8px 30px rgba(0, 0, 0, 0.6);
         }
         #propbot-send-btn:hover:not(:disabled) {
-          background: linear-gradient(135deg, #6d28d9, #4f46e5) !important;
+          background: var(--primary-hover) !important;
           transform: scale(1.04);
         }
         #propbot-send-btn:active:not(:disabled) {
@@ -789,6 +790,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 16,
     padding: "20px 24px 20px",
     minHeight: "100%",
+    position: "relative" as const,
+    zIndex: 1,
   },
   greetingBlock: {
     textAlign: "center",
@@ -797,11 +800,12 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 6,
   },
   greeting: {
-    fontSize: 24,
-    fontWeight: 700,
+    fontSize: 32,
+    fontWeight: 800,
     color: "var(--foreground)",
     margin: 0,
-    letterSpacing: "-0.5px",
+    letterSpacing: "-1px",
+    lineHeight: 1.15,
   },
   greetingSub: {
     fontSize: 18,
@@ -824,6 +828,8 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: 860,
     margin: "0 auto",
     width: "100%",
+    position: "relative" as const,
+    zIndex: 1,
   },
   bottom: {
     background: "linear-gradient(180deg, transparent 0%, var(--bottom-gradient-fade) 30%, var(--background) 100%)",

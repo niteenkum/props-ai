@@ -7,9 +7,9 @@
  */
 
 import React, { useState, useRef } from "react";
-import { ThumbsUp, ThumbsDown, Copy, Share2, MoreHorizontal, Sparkles, Video, Calendar, X, Send, Loader2, ChevronLeft, AlertCircle, Paperclip, Maximize2, Minimize2 } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Copy, Share2, MoreHorizontal, Sparkles, Video, Calendar, X, Send, Loader2, ChevronLeft, AlertCircle, Paperclip, Maximize2, Minimize2, Mail, Clock, Plus, DollarSign, Briefcase, ExternalLink, FileText, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import type { ChatResponse, DraftEmail } from "../../actions/chat-actions";
-import { getScheduleContextAction } from "../../actions/chat-actions";
+import { getScheduleContextAction, createJobPostFromAnalysisAction } from "../../actions/chat-actions";
 import {
   fetchGmailThreadAction,
   getEmailThreadAction,
@@ -602,12 +602,12 @@ function JobsPanel({
         onClick={() => setExpanded(true)}
         style={styles.jobSummaryCard}
         onMouseEnter={(e) => {
-          (e.currentTarget as HTMLElement).style.background = "linear-gradient(135deg, #ede9fe, #f5f3ff)";
-          (e.currentTarget as HTMLElement).style.borderColor = "#7c3aed";
+          (e.currentTarget as HTMLElement).style.background = "var(--job-card-hover-bg)";
+          (e.currentTarget as HTMLElement).style.borderColor = "var(--job-card-hover-border)";
         }}
         onMouseLeave={(e) => {
-          (e.currentTarget as HTMLElement).style.background = "linear-gradient(135deg, #f5f3ff, #ede9fe)";
-          (e.currentTarget as HTMLElement).style.borderColor = "#c4b5fd";
+          (e.currentTarget as HTMLElement).style.background = "var(--job-card-bg)";
+          (e.currentTarget as HTMLElement).style.borderColor = "var(--job-card-border)";
         }}
       >
         <div style={styles.jobSummaryLeft}>
@@ -1718,13 +1718,109 @@ export function TypingIndicator() {
   );
 }
 
+// Helper to tokenize and format specific patterns (like emails and tech keywords) inside plain text
+function tokenizeText(text: string, isUser: boolean): React.ReactNode[] {
+  if (!text) return [];
+  
+  // Match email addresses
+  const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
+  const parts = text.split(emailRegex);
+  
+  return parts.map((part, i) => {
+    // If part matches an email, render it as a premium interactive pill
+    if (part.match(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/)) {
+      return (
+        <a 
+          key={`email-${i}`}
+          href={`mailto:${part}`}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            background: isUser ? "var(--user-bubble-pill-bg, rgba(255, 255, 255, 0.15))" : "rgba(99, 102, 241, 0.06)",
+            border: isUser ? "var(--user-bubble-pill-border, 1px solid rgba(255, 255, 255, 0.25))" : "1px solid rgba(99, 102, 241, 0.15)",
+            color: isUser ? "var(--user-bubble-pill-text, #ffffff)" : "#4f46e5",
+            padding: "3px 8px",
+            borderRadius: "6px",
+            fontSize: "12px",
+            fontWeight: 600,
+            textDecoration: "none",
+            transition: "all 0.2s ease",
+            margin: "0 3px",
+            boxShadow: isUser ? "0 2px 6px rgba(0,0,0,0.1)" : "0 2px 6px rgba(99, 102, 241, 0.04)",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Mail size={12} className="shrink-0" />
+          <span style={{ textDecoration: "underline" }}>{part}</span>
+        </a>
+      );
+    }
+    
+    // Check for common technologies and format them as sleek badges
+    const techKeywords = [
+      "React\\.js", "Next\\.js", "React Native", "Flutter", "TypeScript", 
+      "JavaScript", "Node\\.js", "Python", "Go", "Rust", "Vue\\.js", 
+      "TailwindCSS", "Tailwind", "CSS", "HTML", "Figma", "Prisma", "PostgreSQL"
+    ];
+    const techRegex = new RegExp(`\\b(${techKeywords.join("|")})\\b`, "gi");
+    const subParts = part.split(techRegex);
+    
+    return (
+      <React.Fragment key={`sub-${i}`}>
+        {subParts.map((subPart, j) => {
+          const isTech = techKeywords.some(kw => 
+            new RegExp(`^${kw}$`, "i").test(subPart)
+          );
+          if (isTech) {
+            return (
+              <span 
+                key={`tech-${j}`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  background: isUser ? "var(--user-bubble-pill-bg, rgba(255, 255, 255, 0.12))" : "rgba(100, 116, 139, 0.05)",
+                  border: isUser ? "var(--user-bubble-pill-border, 1px solid rgba(255, 255, 255, 0.2))" : "1px solid rgba(100, 116, 139, 0.12)",
+                  color: isUser ? "var(--user-bubble-pill-text, #ffffff)" : "#475569",
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  margin: "0 2px",
+                }}
+              >
+                {subPart}
+              </span>
+            );
+          }
+          
+          // Formatted separators
+          if (subPart === "·" || subPart === "•" || subPart === "|") {
+            return (
+              <span key={`sep-${j}`} style={{ margin: "0 6px", color: isUser ? "var(--user-bubble-text, rgba(255, 255, 255, 0.4))" : "var(--muted-foreground)", opacity: 0.6 }}>
+                {subPart}
+              </span>
+            );
+          }
+          
+          return subPart;
+        })}
+      </React.Fragment>
+    );
+  });
+}
+
 // Helper to render markdown formatting into React elements safely
-function parseMarkdown(text: string): React.ReactNode {
+function parseMarkdown(text: string, isUser: boolean = false): React.ReactNode {
   if (!text) return null;
   const lines = text.split("\n");
   const result: React.ReactNode[] = [];
   
   let currentList: { type: "ul" | "ol"; items: React.ReactNode[] } | null = null;
+
+  const textStyle = {
+    color: isUser ? "var(--user-bubble-text, #ffffff)" : "var(--foreground)",
+  };
 
   const pushListIfOpen = () => {
     if (currentList) {
@@ -1734,7 +1830,7 @@ function parseMarkdown(text: string): React.ReactNode {
       result.push(
         <ListTag key={key} style={ListTag === "ul" ? styles.mdUl : styles.mdOl}>
           {items.map((item, idx) => (
-            <li key={`li-${idx}`} style={styles.mdLi}>{item}</li>
+            <li key={`li-${idx}`} style={{ ...styles.mdLi, ...textStyle }}>{item}</li>
           ))}
         </ListTag>
       );
@@ -1751,11 +1847,11 @@ function parseMarkdown(text: string): React.ReactNode {
             key={index}
             style={{
               fontFamily: "monospace",
-              background: "rgba(0,0,0,0.04)",
+              background: isUser ? "var(--user-bubble-code-bg, rgba(255, 255, 255, 0.15))" : "rgba(0,0,0,0.04)",
               padding: "2px 6px",
               borderRadius: "4px",
               fontSize: "12px",
-              color: "#e11d48",
+              color: isUser ? "var(--user-bubble-code-text, #ffffff)" : "#e11d48",
             }}
           >
             {part}
@@ -1768,7 +1864,7 @@ function parseMarkdown(text: string): React.ReactNode {
         if (subIndex % 2 === 1) {
           return <em key={subIndex} style={{ fontStyle: "italic" }}>{subPart}</em>;
         }
-        return <React.Fragment key={subIndex}>{subPart}</React.Fragment>;
+        return <React.Fragment key={subIndex}>{tokenizeText(subPart, isUser)}</React.Fragment>;
       });
       return <React.Fragment key={index}>{italicFormatted}</React.Fragment>;
     });
@@ -1799,8 +1895,8 @@ function parseMarkdown(text: string): React.ReactNode {
         currentList.items[lastIdx] = (
           <div key={`li-nested-${lastIdx}-${i}`} style={{ display: "flex", flexDirection: "column" }}>
             <div>{lastItem}</div>
-            <div style={{ paddingLeft: "16px", color: "var(--foreground)", fontSize: "13px", marginTop: "4px", display: "flex", gap: "6px", alignItems: "flex-start" }}>
-              {isSubBullet ? <span style={{ color: "var(--muted-foreground)" }}>•</span> : null}
+            <div style={{ paddingLeft: "16px", color: isUser ? "var(--user-bubble-text, rgba(255, 255, 255, 0.9))" : "var(--foreground)", fontSize: "13px", marginTop: "4px", display: "flex", gap: "6px", alignItems: "flex-start" }}>
+              {isSubBullet ? <span style={{ color: isUser ? "var(--user-bubble-text, rgba(255, 255, 255, 0.7))" : "var(--muted-foreground)", opacity: 0.7 }}>•</span> : null}
               <span>{parseInline(content)}</span>
             </div>
           </div>
@@ -1812,17 +1908,17 @@ function parseMarkdown(text: string): React.ReactNode {
     // Headings
     if (trimmed.startsWith("### ")) {
       pushListIfOpen();
-      result.push(<h3 key={`h3-${i}`} style={styles.mdH3}>{parseInline(trimmed.slice(4))}</h3>);
+      result.push(<h3 key={`h3-${i}`} style={{ ...styles.mdH3, ...textStyle }}>{parseInline(trimmed.slice(4))}</h3>);
       continue;
     }
     if (trimmed.startsWith("## ")) {
       pushListIfOpen();
-      result.push(<h2 key={`h2-${i}`} style={styles.mdH2}>{parseInline(trimmed.slice(3))}</h2>);
+      result.push(<h2 key={`h2-${i}`} style={{ ...styles.mdH2, ...textStyle }}>{parseInline(trimmed.slice(3))}</h2>);
       continue;
     }
     if (trimmed.startsWith("# ")) {
       pushListIfOpen();
-      result.push(<h1 key={`h1-${i}`} style={styles.mdH1}>{parseInline(trimmed.slice(2))}</h1>);
+      result.push(<h1 key={`h1-${i}`} style={{ ...styles.mdH1, ...textStyle }}>{parseInline(trimmed.slice(2))}</h1>);
       continue;
     }
 
@@ -1831,8 +1927,8 @@ function parseMarkdown(text: string): React.ReactNode {
     if (startsWithSpace && isBullet) {
       pushListIfOpen();
       result.push(
-        <div key={`sub-fallback-${i}`} style={{ paddingLeft: "20px", color: "var(--foreground)", fontSize: "13.5px", margin: "4px 0", display: "flex", gap: "6px", alignItems: "flex-start" }}>
-          <span style={{ color: "var(--muted-foreground)" }}>•</span>
+        <div key={`sub-fallback-${i}`} style={{ paddingLeft: "20px", color: isUser ? "var(--user-bubble-text, rgba(255, 255, 255, 0.9))" : "var(--foreground)", fontSize: "13.5px", margin: "4px 0", display: "flex", gap: "6px", alignItems: "flex-start" }}>
+          <span style={{ color: isUser ? "var(--user-bubble-text, rgba(255, 255, 255, 0.7))" : "var(--muted-foreground)", opacity: 0.7 }}>•</span>
           <span>{parseInline(trimmed.slice(2))}</span>
         </div>
       );
@@ -1870,7 +1966,7 @@ function parseMarkdown(text: string): React.ReactNode {
 
     // Paragraph text
     pushListIfOpen();
-    result.push(<p key={`p-${i}`} style={styles.mdParagraph}>{parseInline(line)}</p>);
+    result.push(<p key={`p-${i}`} style={{ ...styles.mdParagraph, ...textStyle }}>{parseInline(line)}</p>);
   }
 
   pushListIfOpen();
@@ -1878,13 +1974,13 @@ function parseMarkdown(text: string): React.ReactNode {
 }
 
 // ─── Helper to generate contextual suggestions ───────────────────────────────
-function getSuggestionsForMessage(msg: UIMessage): { label: string; prompt: string }[] {
+function getSuggestionsForMessage(msg: UIMessage): { label: string; prompt: string; icon?: string }[] {
   const defaultSuggestions = [
-    { label: "📬 Check priority inbox", prompt: "Show me my priority inbox with AI-classified emails" },
-    { label: "✉️ Draft an email", prompt: "Help me draft a cold email to a client" },
-    { label: "📅 Schedule a meeting", prompt: "Help me schedule a calendar meeting for a client call" },
-    { label: "🕒 Any pending jobs?", prompt: "Do I have any pending job posts that I haven't applied to yet?" },
-    { label: "📝 Create job from lead", prompt: "Here is a job description. Please create a new job post and analyze it for me:\n\n[Paste job description here]" }
+    { label: "Check priority inbox", prompt: "Show me my priority inbox with AI-classified emails", icon: "inbox" },
+    { label: "Draft an email", prompt: "Help me draft a cold email to a client", icon: "email" },
+    { label: "Schedule a meeting", prompt: "Help me schedule a calendar meeting for a client call", icon: "calendar" },
+    { label: "Any pending jobs?", prompt: "Do I have any pending job posts that I haven't applied to yet?", icon: "clock" },
+    { label: "Create job from lead", prompt: "Here is a job description. Please create a new job post and analyze it for me:\n\n[Paste job description here]", icon: "proposal" }
   ];
 
   if (msg.actionType === "jobs" && Array.isArray(msg.actionData) && msg.actionData.length > 0) {
@@ -1896,10 +1992,10 @@ function getSuggestionsForMessage(msg: UIMessage): { label: string; prompt: stri
       const roleLabel = job.role ? job.role.split(" ").slice(0, 3).join(" ") : "this role";
       const clientLabel = company ?? roleLabel;
       return [
-        { label: `✉️ Draft cold email — ${clientLabel}`, prompt: `Help me draft a cold email for the ${job.role || "freelance"} role${company ? ` at ${company}` : ""}` },
-        { label: `📝 Generate proposal — ${clientLabel}`, prompt: `Help me generate a custom proposal for the ${job.role || "freelance"} role${company ? ` at ${company}` : ""}` },
-        { label: `📅 Book a call — ${clientLabel}`, prompt: `Help me schedule an interview call for the ${job.role || "freelance"} role${company ? ` at ${company}` : ""}` },
-        { label: "🕒 Check pending jobs", prompt: "Do I have any pending job posts that I haven't applied to yet?" }
+        { label: `Draft cold email — ${clientLabel}`, prompt: `Help me draft a cold email for the ${job.role || "freelance"} role${company ? ` at ${company}` : ""}`, icon: "email" },
+        { label: `Generate proposal — ${clientLabel}`, prompt: `Help me generate a custom proposal for the ${job.role || "freelance"} role${company ? ` at ${company}` : ""}`, icon: "proposal" },
+        { label: `Book a call — ${clientLabel}`, prompt: `Help me schedule an interview call for the ${job.role || "freelance"} role${company ? ` at ${company}` : ""}`, icon: "calendar" },
+        { label: "Check pending jobs", prompt: "Do I have any pending job posts that I haven't applied to yet?", icon: "clock" }
       ];
     }
   }
@@ -1909,10 +2005,10 @@ function getSuggestionsForMessage(msg: UIMessage): { label: string; prompt: stri
     if (email) {
       const name = email.fromName || email.company || "client";
       return [
-        { label: `✉️ Draft reply to ${name}`, prompt: `Help me draft a reply to the email from ${name} regarding "${email.subject || "our proposal"}"` },
-        { label: `📅 Schedule meeting with ${name}`, prompt: `Help me schedule a call with ${name} to discuss their email` },
-        { label: "📋 Show interview calls", prompt: "Show me any interview call emails in my inbox" },
-        { label: "🎉 Any offer letters?", prompt: "Do I have any offer letters or positive responses in my inbox?" },
+        { label: `Draft reply to ${name}`, prompt: `Help me draft a reply to the email from ${name} regarding "${email.subject || "our proposal"}"`, icon: "email" },
+        { label: `Schedule meeting with ${name}`, prompt: `Help me schedule a call with ${name} to discuss their email`, icon: "calendar" },
+        { label: "Show interview calls", prompt: "Show me any interview call emails in my inbox", icon: "inbox" },
+        { label: "Any offer letters?", prompt: "Do I have any offer letters or positive responses in my inbox?", icon: "sparkles" },
       ];
     }
   }
@@ -1921,10 +2017,10 @@ function getSuggestionsForMessage(msg: UIMessage): { label: string; prompt: stri
     const draft = msg.actionData as any;
     if (draft && draft.to) {
       return [
-        { label: `📅 Schedule call with recipient`, prompt: `Help me schedule a calendar meeting for a call with ${draft.to}` },
-        { label: "🕒 Check pending jobs", prompt: "Do I have any pending job posts that I haven't applied to yet?" },
-        { label: "💰 Negotiate rate", prompt: "Help me draft a rate negotiation response to a client" },
-        { label: "📝 Create job from lead", prompt: "Here is a job description. Please create a new job post and analyze it for me:\n\n[Paste job description here]" }
+        { label: `Schedule call with recipient`, prompt: `Help me schedule a calendar meeting for a call with ${draft.to}`, icon: "calendar" },
+        { label: "Check pending jobs", prompt: "Do I have any pending job posts that I haven't applied to yet?", icon: "clock" },
+        { label: "Negotiate rate", prompt: "Help me draft a rate negotiation response to a client", icon: "dollar" },
+        { label: "Create job from lead", prompt: "Here is a job description. Please create a new job post and analyze it for me:\n\n[Paste job description here]", icon: "proposal" }
       ];
     }
   }
@@ -1937,14 +2033,353 @@ function getSuggestionsForMessage(msg: UIMessage): { label: string; prompt: stri
         ? `Help me draft a follow-up email to ${emailVal} regarding our scheduled call "${call.title}"`
         : `Help me draft a follow-up email to the client regarding our scheduled call "${call.title}"`;
       return [
-        { label: `✉️ Email client for "${call.title}"`, prompt: promptToUse },
-        { label: "🕒 Check pending jobs", prompt: "Do I have any pending job posts that I haven't applied to yet?" },
-        { label: "📝 Create job from lead", prompt: "Here is a job description. Please create a new job post and analyze it for me:\n\n[Paste job description here]" }
+        { label: `Email client for "${call.title}"`, prompt: promptToUse, icon: "email" },
+        { label: "Check pending jobs", prompt: "Do I have any pending job posts that I haven't applied to yet?", icon: "clock" },
+        { label: "Create job from lead", prompt: "Here is a job description. Please create a new job post and analyze it for me:\n\n[Paste job description here]", icon: "proposal" }
       ];
     }
   }
 
   return defaultSuggestions;
+}
+
+function renderSuggestionIcon(icon?: string) {
+  switch (icon) {
+    case "inbox":
+      return <Mail size={12} className="shrink-0" />;
+    case "email":
+      return <Send size={12} className="shrink-0" />;
+    case "calendar":
+      return <Calendar size={12} className="shrink-0" />;
+    case "clock":
+      return <Clock size={12} className="shrink-0" />;
+    case "proposal":
+      return <Plus size={12} className="shrink-0" />;
+    case "sparkles":
+      return <Sparkles size={12} className="shrink-0" />;
+    case "dollar":
+      return <DollarSign size={12} className="shrink-0" />;
+    default:
+      return null;
+  }
+}
+
+interface CandidacyDecisionCardProps {
+  data: {
+    role: string;
+    company: string;
+    contactEmail: string;
+    matchScore: number;
+    explanation: string;
+    matchedSkills: string[];
+    missingSkills: string[];
+    jobText: string;
+  };
+  userEmail?: string;
+  onSelectSuggestion?: (prompt: string) => void;
+}
+
+function CandidacyDecisionCard({ data, userEmail, onSelectSuggestion }: CandidacyDecisionCardProps) {
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'skipped' | 'error'>('idle');
+  const [errorMsg, setErrorMsg] = useState("");
+  const [savedJobId, setSavedJobId] = useState<string | null>(null);
+  const [savedTemplates, setSavedTemplates] = useState<{ coldEmail?: string; proposal?: string; linkedin?: string; coverLetter?: string } | null>(null);
+  const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
+  const [copiedTemplate, setCopiedTemplate] = useState<string | null>(null);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+
+  const ALL_PLATFORMS = [
+    { key: 'coldEmail', label: 'Cold Email', icon: '✉️' },
+    { key: 'proposal', label: 'Proposal', icon: '📄' },
+    { key: 'coverLetter', label: 'Cover Letter', icon: '📝' },
+    { key: 'linkedin', label: 'LinkedIn', icon: '💼' },
+  ];
+
+  const handleCreate = async () => {
+    if (!userEmail) return;
+    setStatus('loading');
+    try {
+      const res = await createJobPostFromAnalysisAction(userEmail, {
+        role: data.role,
+        company: data.company,
+        jobText: data.jobText,
+        matchScore: data.matchScore,
+        contactEmail: data.contactEmail,
+        tags: [...data.matchedSkills, ...data.missingSkills],
+      });
+      if (res.success && res.jobId) {
+        setSavedJobId(res.jobId);
+        setSavedTemplates(res.templates ?? null);
+        setStatus('success');
+      } else {
+        setErrorMsg(res.error ?? "Failed to save job post.");
+        setStatus('error');
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message ?? "An error occurred.");
+      setStatus('error');
+    }
+  };
+
+  const handleSkip = () => {
+    setStatus('skipped');
+  };
+
+  const handleCopyTemplate = (key: string, content: string) => {
+    navigator.clipboard.writeText(content);
+    setCopiedTemplate(key);
+    setTimeout(() => setCopiedTemplate(null), 2000);
+  };
+
+  const handleTogglePlatform = (key: string) => {
+    setSelectedPlatforms(prev =>
+      prev.includes(key) ? prev.filter(p => p !== key) : [...prev, key]
+    );
+  };
+
+  const handleRegenerateSelected = () => {
+    if (selectedPlatforms.length === 0) return;
+    const labels = selectedPlatforms
+      .map(k => ALL_PLATFORMS.find(p => p.key === k)?.label)
+      .filter(Boolean).join(", ");
+    onSelectSuggestion?.(`Generate ${labels} for the ${data.role} role at ${data.company}`);
+  };
+
+  if (status === 'skipped') {
+    return (
+      <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 text-center w-full">
+        <p className="text-xs text-muted-foreground font-medium">Opportunity dismissed. Let me know if you want to scan another lead!</p>
+      </div>
+    );
+  }
+
+  if (status === 'success') {
+    const templateList = ALL_PLATFORMS.filter(p => savedTemplates?.[p.key as keyof typeof savedTemplates]);
+    const missingList = ALL_PLATFORMS.filter(p => !savedTemplates?.[p.key as keyof typeof savedTemplates]);
+
+    return (
+      <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/4 overflow-hidden shadow-sm w-full">
+        {/* Header */}
+        <div className="px-4 py-3.5 border-b border-emerald-500/15 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-6 h-6 rounded-full bg-emerald-500/15 flex items-center justify-center">
+              <svg className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <div>
+              <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">Job Saved!</span>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{data.role} · {data.company}</p>
+            </div>
+          </div>
+          {savedJobId && (
+            <a
+              href={`/dashboard/jobs/${savedJobId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-foreground hover:bg-slate-50 dark:hover:bg-slate-800 text-[11px] font-semibold transition-all cursor-pointer shrink-0"
+            >
+              <ExternalLink size={10.5} />
+              View Job Post
+            </a>
+          )}
+        </div>
+
+        <div className="p-4 flex flex-col gap-4">
+          {/* Auto-Generated Proposals */}
+          {templateList.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Generated Proposals</span>
+              {templateList.map(({ key, label, icon }) => {
+                const content = savedTemplates?.[key as keyof typeof savedTemplates] ?? '';
+                const isExpanded = expandedTemplate === key;
+                const isCopied = copiedTemplate === key;
+                const isGenFailed = content.startsWith('[Generation failed');
+                return (
+                  <div key={key} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden">
+                    {/* Template Header Row */}
+                    <div
+                      className="flex items-center justify-between gap-2 px-3 py-2.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors"
+                      onClick={() => setExpandedTemplate(isExpanded ? null : key)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">{icon}</span>
+                        <span className="text-[11.5px] font-semibold text-foreground">{label}</span>
+                        {isGenFailed && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-500 font-bold uppercase">Failed</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {!isGenFailed && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleCopyTemplate(key, content); }}
+                            className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-muted-foreground hover:text-foreground transition-colors border-0 bg-transparent cursor-pointer"
+                            title="Copy"
+                          >
+                            {isCopied
+                              ? <span className="text-[9px] text-emerald-500 font-bold">Copied!</span>
+                              : <Copy size={11} />
+                            }
+                          </button>
+                        )}
+                        {isExpanded ? <ChevronUp size={13} className="text-muted-foreground" /> : <ChevronDown size={13} className="text-muted-foreground" />}
+                      </div>
+                    </div>
+                    {/* Expanded Content */}
+                    {isExpanded && (
+                      <div className="px-3 pb-3 border-t border-slate-100 dark:border-slate-800">
+                        <pre className="text-[11px] text-foreground/90 leading-relaxed whitespace-pre-wrap font-sans pt-2.5 max-h-48 overflow-y-auto scrollbar-thin">
+                          {isGenFailed ? 'Generation failed — try regenerating below.' : content}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Regenerate / Select Platforms */}
+          <div className="flex flex-col gap-2.5">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              {missingList.length > 0 ? 'Generate More' : 'Regenerate'}
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {ALL_PLATFORMS.map(({ key, label, icon }) => {
+                const alreadyGenerated = !!savedTemplates?.[key as keyof typeof savedTemplates] && !savedTemplates[key as keyof typeof savedTemplates]?.startsWith('[Generation failed');
+                const isSelected = selectedPlatforms.includes(key);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => handleTogglePlatform(key)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer transition-all border ${
+                      isSelected
+                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-muted-foreground hover:text-foreground hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="text-[12px]">{icon}</span>
+                    {label}
+                    {alreadyGenerated && !isSelected && (
+                      <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {selectedPlatforms.length > 0 && (
+              <button
+                onClick={handleRegenerateSelected}
+                className="flex items-center justify-center gap-2 w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[12px] cursor-pointer transition-all active:scale-98 border-0 shadow-sm"
+              >
+                <RefreshCw size={12} />
+                Generate {selectedPlatforms.length === 1 ? ALL_PLATFORMS.find(p => p.key === selectedPlatforms[0])?.label : `${selectedPlatforms.length} Templates`}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const score = data.matchScore;
+  const isHigh = score >= 75;
+  const isLow = score < 50;
+  
+  const scoreColor = isHigh ? "text-emerald-500 border-emerald-500/20 bg-emerald-500/5"
+    : isLow ? "text-rose-500 border-rose-500/20 bg-rose-500/5"
+    : "text-amber-500 border-amber-500/20 bg-amber-500/5";
+
+  return (
+    <div className="w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden shadow-md flex flex-col">
+      {/* Header with Score */}
+      <div className="p-4 border-b border-slate-100 dark:border-slate-900 flex items-center justify-between gap-4">
+        <div>
+          <h4 className="text-[13.5px] font-bold text-foreground">{data.role}</h4>
+          <p className="text-xs text-muted-foreground mt-0.5">{data.company}</p>
+        </div>
+        <div className={`px-3 py-1.5 rounded-full border ${scoreColor} flex flex-col items-center justify-center min-w-[64px]`}>
+          <span className="text-base font-extrabold leading-none">{score}%</span>
+          <span className="text-[8.5px] font-bold tracking-wider uppercase mt-0.5 opacity-80">Match</span>
+        </div>
+      </div>
+
+      <div className="p-4 flex flex-col gap-4">
+        {/* Explanation */}
+        {data.explanation && (
+          <div>
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">AI Candidacy Summary</span>
+            <p className="text-xs text-foreground mt-1 leading-relaxed">{data.explanation}</p>
+            {isLow && (
+              <div className="mt-2 flex items-center gap-1.5 text-[10.5px] text-rose-500 font-semibold">
+                <AlertCircle size={12} />
+                <span>We don&apos;t recommend applying (match score is low).</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Skills Breakdown */}
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          {/* Matched Skills */}
+          {data.matchedSkills.length > 0 && (
+            <div>
+              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Matched Skills</span>
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {data.matchedSkills.map((s, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 text-[10.5px] px-2 py-0.5 rounded-md bg-emerald-500/5 border border-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-medium">
+                    ✓ {s}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Missing Skills */}
+          {data.missingSkills.length > 0 && (
+            <div>
+              <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Missing Skills</span>
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {data.missingSkills.map((s, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 text-[10.5px] px-2 py-0.5 rounded-md bg-rose-500/5 border border-rose-500/15 text-rose-600 dark:text-rose-400 font-medium">
+                    ✗ {s}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Action Row */}
+        {status === 'loading' ? (
+          <div className="flex items-center justify-center gap-2 py-2 border-t border-slate-100 dark:border-slate-900 mt-2">
+            <Loader2 size={16} className="animate-spin text-indigo-600" />
+            <span className="text-xs text-muted-foreground font-medium">Creating job post and templates...</span>
+          </div>
+        ) : (
+          <div className="flex gap-2.5 border-t border-slate-100 dark:border-slate-900 pt-3 mt-2">
+            <button
+              onClick={handleCreate}
+              className="flex-1 py-2 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[12.5px] cursor-pointer shadow-md transition-all active:scale-98 border-0"
+            >
+              💼 Save & Create Job
+            </button>
+            <button
+              onClick={handleSkip}
+              className="py-2 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-muted-foreground hover:bg-slate-50 dark:hover:bg-slate-850 font-bold text-[12.5px] cursor-pointer transition-all"
+            >
+              Skip
+            </button>
+          </div>
+        )}
+
+        {status === 'error' && (
+          <p className="text-[11px] text-rose-500 font-medium text-center mt-1">{errorMsg}</p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ─── Main Message Bubble (Ciphy White Card Layout) ───────────────────────────
@@ -1971,6 +2406,7 @@ export default function MessageBubble({ msg, userName = "Niteen Kumar", userEmai
     .toUpperCase() || "PA";
 
   const [copied, setCopied] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(msg.content);
@@ -1979,135 +2415,232 @@ export default function MessageBubble({ msg, userName = "Niteen Kumar", userEmai
   };
 
   return (
-    <div style={styles.cardBubble}>
-      {/* Header Block: Avatar + Name + Timestamp + Action Menu */}
-      <div style={styles.cardHeader}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {isUser ? (
-            <div style={styles.userAvatarBadge}>
-              {initials}
+    <div 
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: isUser ? "flex-end" : "flex-start",
+        width: "100%",
+        gap: 5,
+        position: "relative",
+      }}
+    >
+      {/* Sender Header info outside bubble (Avatar + Name & Time) */}
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "0 6px",
+        marginBottom: 1,
+      }}>
+        {!isUser && (
+          <div style={{ width: 20, height: 20, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
+            <PitchlyOrb size={20} state="idle" />
+          </div>
+        )}
+        <span style={{
+          fontSize: 12,
+          fontWeight: 700,
+          color: "var(--foreground)",
+        }}>
+          {isUser ? userName : "Pitchly"}
+        </span>
+        <span style={{
+          fontSize: 10,
+          color: "var(--muted-foreground)",
+          opacity: 0.8,
+        }}>
+          {formatTime(msg.timestamp)}
+        </span>
+        {isUser && (
+          <div style={{
+            width: 20,
+            height: 20,
+            borderRadius: "50%",
+            background: "linear-gradient(135deg, #a78bfa, #7c3aed)",
+            color: "#FFFFFF",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 9,
+            fontWeight: 800,
+          }}>
+            {initials}
+          </div>
+        )}
+      </div>
+
+      {/* Bubble itself */}
+      <div style={{
+        background: isUser ? "var(--user-bubble-bg)" : "var(--card)",
+        border: isUser ? "var(--user-bubble-border)" : "1px solid var(--border)",
+        borderRadius: isUser ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+        padding: "12px 16px",
+        boxShadow: isUser ? "var(--user-bubble-shadow)" : "0 4px 20px rgba(0, 0, 0, 0.02)",
+        maxWidth: "85%",
+        width: "fit-content",
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        position: "relative",
+      }}>
+        {/* Floating Copy Button (appears on hover) */}
+        {isHovered && (
+          <button 
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              background: isUser ? "var(--user-bubble-pill-bg, rgba(255, 255, 255, 0.15))" : "var(--card)",
+              border: isUser ? "var(--user-bubble-pill-border, 1px solid rgba(255, 255, 255, 0.25))" : "1px solid var(--border)",
+              borderRadius: "6px",
+              padding: "4px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: isUser ? "var(--user-bubble-text)" : "var(--muted-foreground)",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+              zIndex: 10,
+              transition: "all 0.15s ease",
+            }} 
+            onClick={handleCopy} 
+            title={copied ? "Copied!" : "Copy message"}
+          >
+            {copied ? (
+              <span style={{ fontSize: 9, color: isUser ? "var(--user-bubble-text)" : "#22c55e", fontWeight: 700, padding: "0 2px" }}>Copied!</span>
+            ) : (
+              <Copy size={11} />
+            )}
+          </button>
+        )}
+
+        {/* Body Content */}
+        <div style={styles.cardBody}>
+          {/* For draft emails: show a short handoff message */}
+          {msg.actionType === "draft" && msg.actionData ? (
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "10px 14px",
+              background: isUser ? "var(--user-bubble-pill-bg, rgba(255,255,255,0.15))" : "linear-gradient(135deg, #f5f3ff, #eff6ff)",
+              borderRadius: 12,
+              border: isUser ? "var(--user-bubble-pill-border, 1px solid rgba(255,255,255,0.2))" : "1px solid rgba(124,58,237,0.12)",
+              marginBottom: 4,
+            }}>
+              <span style={{ fontSize: 18 }}>✉️</span>
+              <span style={{ fontSize: 13, color: isUser ? "var(--user-bubble-text, #ffffff)" : "#4c1d95", fontWeight: 500, lineHeight: 1.5 }}>
+                Hey! I&apos;ve drafted an email for you — review, edit if needed, and hit send whenever you&apos;re ready.
+              </span>
             </div>
           ) : (
-            <div style={{ width: 32, height: 32, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
-              <PitchlyOrb size={32} state="idle" />
+            <div style={{
+              ...styles.textBody,
+              color: isUser ? "var(--user-bubble-text, #ffffff)" : "var(--foreground)",
+            }}>
+              {parseMarkdown(msg.content, isUser)}
             </div>
           )}
-          
-          <div>
-            <span style={styles.senderName}>{isUser ? userName : "Pitchly"}</span>
-            <span style={styles.timestamp}>{formatTime(msg.timestamp)}</span>
-          </div>
-        </div>
 
-      </div>
-
-      {/* Body Content */}
-      <div style={styles.cardBody}>
-        {/* For draft emails: show a short handoff message, not the full verbose AI reply */}
-        {msg.actionType === "draft" && msg.actionData ? (
-          <div style={{
-            display: "flex", alignItems: "center", gap: 10,
-            padding: "10px 14px",
-            background: "linear-gradient(135deg, #f5f3ff, #eff6ff)",
-            borderRadius: 10,
-            border: "1px solid rgba(124,58,237,0.12)",
-            marginBottom: 12,
-          }}>
-            <span style={{ fontSize: 18 }}>✉️</span>
-            <span style={{ fontSize: 13, color: "#4c1d95", fontWeight: 500, lineHeight: 1.5 }}>
-              Hey! I&apos;ve drafted an email for you — review, edit if needed, and hit send whenever you&apos;re ready.
-            </span>
-          </div>
-        ) : (
-          <div style={styles.textBody}>{parseMarkdown(msg.content)}</div>
-        )}
-
-        {/* Embedded Result Cards */}
-        {msg.actionType === "emails" && Array.isArray(msg.actionData) ? (
-          <div style={styles.cardsList}>
-            {(msg.actionData as any[]).map((e, i) =>
-              e.toEmail && !e.fromName && !e.from
-                ? <SentEmailResultCard key={i} email={e} />
-                : <ClickableEmailResultCard key={i} email={e} userEmail={userEmail} />
-            )}
-          </div>
-        ) : null}
-
-        {msg.actionType === "jobs" && Array.isArray(msg.actionData) && msg.actionData.length > 0 ? (
-          <JobsPanel
-            jobs={msg.actionData as any[]}
-            onAction={(prompt) => onSelectSuggestion?.(prompt)}
-          />
-        ) : null}
-
-        {msg.actionType === "schedule_job_select" ? (
-          <ScheduleJobSelectPanel
-            jobs={
-              Array.isArray(msg.actionData)
-                ? msg.actionData
-                : (msg.actionData && typeof msg.actionData === "object")
-                  ? (msg.actionData as any).jobs ?? []
-                  : []
-            }
-            initialEmail={
-              msg.actionData && !Array.isArray(msg.actionData) && typeof msg.actionData === "object"
-                ? (msg.actionData as any).initialEmail ?? ""
-                : ""
-            }
-            onBookCall={onBookCall}
-            userEmail={userEmail}
-          />
-        ) : null}
-
-        {msg.actionType === "stats" && msg.actionData ? (
-          <StatsResultCard stats={msg.actionData as any} />
-        ) : null}
-
-        {msg.actionType === "calls" && Array.isArray(msg.actionData) ? (
-          <div style={styles.cardsList}>
-            {(msg.actionData as any[]).map((c, i) => <CallResultCard key={i} call={c} />)}
-          </div>
-        ) : null}
-
-        {msg.actionType === "draft" && msg.actionData ? (
-          <DraftEmailCard draft={msg.actionData as DraftEmail} onSend={onSendDraft} userEmail={userEmail} />
-        ) : null}
-
-        {/* Contextual Suggestions for Freelancers */}
-        {!isUser && onSelectSuggestion && (
-          <div style={styles.msgSuggestions}>
-            <span style={styles.msgSuggestionsLabel}>Suggested Actions:</span>
-            <div style={styles.msgSuggestionsList}>
-              {getSuggestionsForMessage(msg).map((s, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => onSelectSuggestion(s.prompt)}
-                  style={styles.msgSuggestionPill}
-                  onMouseEnter={(e) => {
-                    const el = e.currentTarget as HTMLElement;
-                    el.style.background = "#eff3fd";
-                    el.style.borderColor = "#7c3aed40";
-                  }}
-                  onMouseLeave={(e) => {
-                    const el = e.currentTarget as HTMLElement;
-                    el.style.background = "#F8FAFF";
-                    el.style.borderColor = "var(--border)";
-                  }}
-                >
-                  {s.label}
-                </button>
-              ))}
+          {/* Embedded Result Cards */}
+          {msg.actionType === "emails" && Array.isArray(msg.actionData) ? (
+            <div style={styles.cardsList}>
+              {(msg.actionData as any[]).map((e, i) =>
+                e.toEmail && !e.fromName && !e.from
+                  ? <SentEmailResultCard key={i} email={e} />
+                  : <ClickableEmailResultCard key={i} email={e} userEmail={userEmail} />
+              )}
             </div>
-          </div>
-        )}
-      </div>
+          ) : null}
 
-      {/* Card Toolbar / Footer Action Icons */}
-      <div style={styles.cardFooter}>
-        <div style={{ display: "flex", gap: 4 }}>
-          <button style={styles.toolbarIconBtn} onClick={handleCopy} title={copied ? "Copied!" : "Copy text"}>
-            {copied ? <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 600 }}>Copied!</span> : <Copy size={13} />}
-          </button>
+          {msg.actionType === "jobs" && Array.isArray(msg.actionData) && msg.actionData.length > 0 ? (
+            <JobsPanel
+              jobs={msg.actionData as any[]}
+              onAction={(prompt) => onSelectSuggestion?.(prompt)}
+            />
+          ) : null}
+
+          {msg.actionType === "job_candidacy_decision" && msg.actionData ? (
+            <CandidacyDecisionCard
+              data={msg.actionData as any}
+              userEmail={userEmail}
+              onSelectSuggestion={onSelectSuggestion}
+            />
+          ) : null}
+
+          {msg.actionType === "schedule_job_select" ? (
+            <ScheduleJobSelectPanel
+              jobs={
+                Array.isArray(msg.actionData)
+                  ? msg.actionData
+                  : (msg.actionData && typeof msg.actionData === "object")
+                    ? (msg.actionData as any).jobs ?? []
+                    : []
+              }
+              initialEmail={
+                msg.actionData && !Array.isArray(msg.actionData) && typeof msg.actionData === "object"
+                  ? (msg.actionData as any).initialEmail ?? ""
+                  : ""
+              }
+              onBookCall={onBookCall}
+              userEmail={userEmail}
+            />
+          ) : null}
+
+          {msg.actionType === "stats" && msg.actionData ? (
+            <StatsResultCard stats={msg.actionData as any} />
+          ) : null}
+
+          {msg.actionType === "calls" && Array.isArray(msg.actionData) ? (
+            <div style={styles.cardsList}>
+              {(msg.actionData as any[]).map((c, i) => <CallResultCard key={i} call={c} />)}
+            </div>
+          ) : null}
+
+          {msg.actionType === "draft" && msg.actionData ? (
+            <DraftEmailCard draft={msg.actionData as DraftEmail} onSend={onSendDraft} userEmail={userEmail} />
+          ) : null}
+
+          {/* Contextual Suggestions for Freelancers */}
+          {!isUser && onSelectSuggestion && (
+            <div style={styles.msgSuggestions}>
+              <span style={styles.msgSuggestionsLabel}>Suggested Actions:</span>
+              <div style={styles.msgSuggestionsList}>
+                {getSuggestionsForMessage(msg).map((s, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => onSelectSuggestion(s.prompt)}
+                    style={{
+                      ...styles.msgSuggestionPill,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                    }}
+                    onMouseEnter={(e) => {
+                      const el = e.currentTarget as HTMLElement;
+                      el.style.background = "var(--sugg-hover-bg)";
+                      el.style.borderColor = "var(--sugg-hover-border)";
+                      el.style.color = "var(--sugg-hover-text)";
+                      el.style.transform = "translateY(-1.5px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      const el = e.currentTarget as HTMLElement;
+                      el.style.background = "var(--sugg-bg)";
+                      el.style.borderColor = "var(--sugg-border)";
+                      el.style.color = "var(--sugg-text)";
+                      el.style.transform = "none";
+                    }}
+                  >
+                    {renderSuggestionIcon(s.icon)}
+                    <span>{s.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -2139,14 +2672,14 @@ const styles: Record<string, React.CSSProperties> = {
   msgSuggestionPill: {
     padding: "6px 12px",
     borderRadius: 20,
-    border: "1px solid var(--border)",
-    background: "var(--muted)",
-    color: "var(--foreground)",
+    border: "1px solid var(--sugg-border)",
+    background: "var(--sugg-bg)",
+    color: "var(--sugg-text)",
     fontSize: 11.5,
     fontWeight: 600,
     cursor: "pointer",
     whiteSpace: "nowrap",
-    transition: "all 0.15s ease",
+    transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
     fontFamily: "inherit",
     boxShadow: "0 1px 2px rgba(0,0,0,0.01)",
     outline: "none",
@@ -2435,15 +2968,15 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "space-between",
     width: "100%",
-    background: "linear-gradient(135deg, #f5f3ff, #ede9fe)",
-    border: "1.5px solid #c4b5fd",
+    background: "var(--job-card-bg)",
+    border: "var(--job-card-border)",
     borderRadius: 14,
     padding: "14px 16px",
     cursor: "pointer",
     transition: "all 0.2s ease",
     textAlign: "left" as const,
     fontFamily: "inherit",
-    boxShadow: "0 2px 12px rgba(124,58,237,0.08)",
+    boxShadow: "0 2px 12px rgba(0,0,0,0.01)",
   },
   jobSummaryLeft: {
     display: "flex",
@@ -2458,12 +2991,12 @@ const styles: Record<string, React.CSSProperties> = {
   jobSummaryTitle: {
     fontSize: 15,
     fontWeight: 700,
-    color: "#4c1d95",
+    color: "var(--job-card-title)",
     lineHeight: 1.2,
   },
   jobSummarySubtitle: {
     fontSize: 11.5,
-    color: "#7c3aed",
+    color: "var(--job-card-subtitle)",
     marginTop: 2,
     fontWeight: 500,
   },
