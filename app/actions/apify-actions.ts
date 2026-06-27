@@ -363,6 +363,7 @@ export async function fetchAndProcessJobsAction(
         // Set threshold to 55 as per the existing WhatsApp sync conventions
         if (score >= 55) {
           const newJob = await addJobPostAction({
+            userEmail,
             role: analysisResult.role || title,
             company: analysisResult.company || company,
             originalText: rawText,

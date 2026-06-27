@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LogOut, Sun, Moon, BookOpen, ChevronRight, 
   Plus, Settings, MessageSquare, Mail, 
-  FilePlus2, CalendarDays, BarChart3, Link2
+  FilePlus2, CalendarDays, BarChart3, Link2, Search
 } from "lucide-react";
 import { useTheme } from "./theme-provider";
 
@@ -14,12 +14,14 @@ interface SidebarProps {
   onLogout: () => void;
   userName?: string;
   userRole?: string;
+  systemRole?: string;
 }
 
 export default function Sidebar({
   onLogout,
   userName = "Your Profile",
   userRole = "IT Freelancer",
+  systemRole = "USER",
 }: SidebarProps) {
   const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
@@ -42,10 +44,14 @@ export default function Sidebar({
 
   const MENU_ITEMS = [
     { label: "Workspace Library", icon: BookOpen, href: "/dashboard/workspace" },
-    { label: "WhatsApp Link", icon: MessageSquare, href: "/dashboard/whatsapp" },
-    { label: "LinkedIn Scraper", icon: Link2, href: "/dashboard/linkedin" },
+    ...(systemRole === "SUPERADMIN" ? [
+      { label: "WhatsApp Link", icon: MessageSquare, href: "/dashboard/whatsapp" },
+      { label: "LinkedIn Scraper", icon: Link2, href: "/dashboard/linkedin" },
+      { label: "New Scan", icon: FilePlus2, href: "/dashboard/new" },
+    ] : [
+      { label: "Admin Scans", icon: Search, href: "/dashboard/admin-jobs" },
+    ]),
     { label: "Smart Inbox", icon: Mail, href: "/dashboard/mail" },
-    { label: "New Scan", icon: FilePlus2, href: "/dashboard/new" },
     { label: "Calls & Followups", icon: CalendarDays, href: "/dashboard/followups" },
     { label: "AI Expense Logs", icon: BarChart3, href: "/dashboard/expense" },
   ];

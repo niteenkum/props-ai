@@ -13,6 +13,7 @@ interface UseAuthOptions {
 interface UseAuthReturn {
   userEmail: string;
   userName: string;
+  userRole: string;
   /** True once auth check is done and user is allowed on this page. */
   isReady: boolean;
   logout: () => void;
@@ -29,6 +30,7 @@ export function useAuth({ requiredStatus }: UseAuthOptions = {}): UseAuthReturn 
   const router = useRouter();
   const [userEmail, setUserEmail] = useState("");
   const [userName, setUserName] = useState("");
+  const [userRole, setUserRole] = useState("");
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -36,6 +38,7 @@ export function useAuth({ requiredStatus }: UseAuthOptions = {}): UseAuthReturn 
     const email = localStorage.getItem("proposalizer_user_email") || "";
     const status = localStorage.getItem("proposalizer_user_status") as AuthStatus | null;
     const name = localStorage.getItem("proposalizer_user_name") || "";
+    const role = localStorage.getItem("proposalizer_user_role") || "Developer";
 
     if (!token) {
       router.replace("/login");
@@ -54,6 +57,7 @@ export function useAuth({ requiredStatus }: UseAuthOptions = {}): UseAuthReturn 
 
     setUserEmail(email);
     setUserName(name);
+    setUserRole(role);
     setIsReady(true);
   }, [router, requiredStatus]);
 
@@ -62,10 +66,11 @@ export function useAuth({ requiredStatus }: UseAuthOptions = {}): UseAuthReturn 
     localStorage.removeItem("proposalizer_user_email");
     localStorage.removeItem("proposalizer_user_status");
     localStorage.removeItem("proposalizer_user_name");
+    localStorage.removeItem("proposalizer_user_role");
     // Clear middleware cookie too
     document.cookie = "thepitchly-session=; path=/; max-age=0; SameSite=Lax";
     router.push("/");
   };
 
-  return { userEmail, userName, isReady, logout };
+  return { userEmail, userName, userRole, isReady, logout };
 }

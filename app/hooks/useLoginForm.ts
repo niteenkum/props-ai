@@ -21,7 +21,7 @@ export function useLoginForm() {
     const res = await loginAction({ email, password });
     setLoading(false);
     if (res.success && res.user) {
-      handleLoginSuccess(res.user.email, res.user.status, res.user.name);
+      handleLoginSuccess(res.user.email, res.user.status, res.user.name, res.user.role);
     } else {
       setError(res.error || "Sign in failed.");
     }

@@ -1166,6 +1166,7 @@ export async function createJobPostFromAnalysisAction(
     const r = analysis.result;
 
     const saved = await addJobPostAction({
+      userEmail,
       role: analysisData.role || r.role || "Unknown",
       company: analysisData.company || r.company || "Not specified",
       originalText: analysisData.jobText,

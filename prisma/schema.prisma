@@ -34,6 +34,7 @@ enum JobStatus {
 
 model JobPost {
   id                 String      @id @default(uuid())
+  userEmail          String?                          // Scopes this lead to a specific user
   role               String
   company            String
   originalText       String      @db.Text
@@ -255,6 +256,9 @@ model WhatsAppMessage {
   jobPostId          String?   @unique
   jobPost            JobPost?  @relation(fields: [jobPostId], references: [id], onDelete: SetNull)
 
+  adminJobId         String?   @unique
+  adminJob           AdminJob? @relation(fields: [adminJobId], references: [id], onDelete: SetNull)
+
   createdAt          DateTime  @default(now())
 
   @@index([userEmail])
@@ -376,3 +380,46 @@ model LinkedInSyncLog {
   @@unique([userEmail, keyword, jobType])  // one row per user+keyword+type combo
   @@index([userEmail])
 }
+
+// New AdminJob for Superadmin scans
+model AdminJob {
+  id                 String      @id @default(uuid())
+  role               String
+  company            String
+  originalText       String      @db.Text
+  parsedSummary      String      @db.Text
+  contactName        String?
+  contactEmail       String?
+  contactPhone       String?
+  postedDate         DateTime    @default(now())
+  tags               String[]
+  linkedin           String?     @db.Text
+  linkedinJobId      String?     @unique
+  createdAt          DateTime    @default(now())
+  
+  userScores         UserAdminJobScore[]
+  whatsappSource     WhatsAppMessage?
+
+  @@index([linkedinJobId])
+}
+
+// New UserAdminJobScore to cache match scores per user
+model UserAdminJobScore {
+  id                  String      @id @default(uuid())
+  userEmail           String
+  adminJobId          String
+  adminJob            AdminJob    @relation(fields: [adminJobId], references: [id], onDelete: Cascade)
+  
+  matchScore          Int
+  matchedSkills       String[]
+  missingSkills       String[]
+  explanation         String?     @db.Text
+  suggestAttachResume Boolean?
+  
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  @@unique([userEmail, adminJobId])
+  @@index([userEmail])
+}
+

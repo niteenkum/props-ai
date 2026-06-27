@@ -424,6 +424,7 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
       }
 
       const newJob = await addJobPostAction({
+        userEmail,
         role:               parsedJobData.role,
         company:            parsedJobData.company,
         originalText:       pasteText,

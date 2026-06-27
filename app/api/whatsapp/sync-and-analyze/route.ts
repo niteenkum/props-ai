@@ -180,6 +180,7 @@ export async function POST(req: NextRequest) {
           // Strong lead — create a JobPost
           try {
             const jobPostId = await createJobPostFromWAAction({
+              userEmail,
               waMessageId: msg.whatsappMessageId,
               role: result.role ?? "Unknown Role",
               company: result.company ?? "Unknown Company",

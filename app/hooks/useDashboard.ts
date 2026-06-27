@@ -15,6 +15,11 @@ export function useDashboard(userEmail: string, pendingJobId?: string) {
   const [jobs, setJobs]               = useState<JobPost[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [totalCount, setTotalCount]   = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+  const [isLoading, setIsLoading]     = useState(true);
+  const [stats, setStats]             = useState({ total: 0, avgMatch: 0, active: 0, generated: 0 });
 
   // ─── Drawer ───────────────────────────────────────────────────────────────
   const [selectedJob, setSelectedJob]               = useState<JobPost | null>(null);
@@ -32,14 +37,28 @@ export function useDashboard(userEmail: string, pendingJobId?: string) {
   const [editingKey, setEditingKey]                 = useState<string | null>(null);
   const [editingText, setEditingText]               = useState("");
 
-  const [isLoading, setIsLoading] = useState(true);
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
 
   // ─── Data loading ──────────────────────────────────────────────────────────
   const loadJobs = async () => {
+    if (!userEmail) return;
     setIsLoading(true);
     try {
-      const dbJobs = await getJobPostsAction();
-      setJobs(dbJobs);
+      const res = await getJobPostsAction({
+        userEmail,
+        page: currentPage,
+        limit: pageSize,
+        search: searchQuery,
+        status: statusFilter,
+      });
+      setJobs(res.jobs);
+      setTotalCount(res.totalCount);
+      if (res.stats) {
+        setStats(res.stats);
+      }
     } catch (err) {
       console.error("Failed to load jobs:", err);
     } finally {
@@ -50,7 +69,7 @@ export function useDashboard(userEmail: string, pendingJobId?: string) {
   useEffect(() => {
     loadJobs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userEmail]);
+  }, [userEmail, currentPage, searchQuery, statusFilter]);
 
   // ─── Auto-open drawer from URL ?job=<id> ──────────────────────────────────
   useEffect(() => {
@@ -67,27 +86,6 @@ export function useDashboard(userEmail: string, pendingJobId?: string) {
       setIsDrawerOpen(true);
     }
   }, [pendingJobId, jobs]);
-
-  // ─── Computed ─────────────────────────────────────────────────────────────
-  const stats = useMemo(() => {
-    const total    = jobs.length;
-    const avgMatch = total > 0 ? Math.round(jobs.reduce((a, j) => a + j.matchScore, 0) / total) : 0;
-    const active   = jobs.filter(j => j.status === "Sent" || j.status === "Interviewing").length;
-    const generated = jobs.filter(j => j.status === "Generated" || j.status === "Sent").length;
-    return { total, avgMatch, active, generated };
-  }, [jobs]);
-
-  const filteredJobs = useMemo(() =>
-    jobs.filter(job => {
-      const q = searchQuery.toLowerCase();
-      const matchesSearch =
-        job.role.toLowerCase().includes(q) ||
-        job.company.toLowerCase().includes(q) ||
-        (job.contactEmail && job.contactEmail.toLowerCase().includes(q)) ||
-        job.tags.some(t => t.toLowerCase().includes(q));
-      const matchesFilter = statusFilter === "all" || job.status.toLowerCase() === statusFilter;
-      return matchesSearch && matchesFilter;
-    }), [jobs, searchQuery, statusFilter]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
   const openJobDrawer = (job: JobPost) => {
@@ -179,6 +177,7 @@ export function useDashboard(userEmail: string, pendingJobId?: string) {
     setIsComposeOpen(true);
   };
 
+
   // ─── Style helpers ────────────────────────────────────────────────────────
   const getScoreColor = (score: number) =>
     score >= 90 ? "#22c55e" : score >= 80 ? "#111" : "#f59e0b";
@@ -195,6 +194,10 @@ export function useDashboard(userEmail: string, pendingJobId?: string) {
       default:             return { background: "#fafafa", color: "#888",    border: "1px solid #eee" };
     }
   };
+
+  // ─── Computed paginated list ──────────────────────────────────────────────
+  const paginatedJobs = jobs;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   return {
     // state
@@ -214,7 +217,7 @@ export function useDashboard(userEmail: string, pendingJobId?: string) {
     editingKey, editingText, setEditingText,
     startEditingTemplate, cancelEditingTemplate, saveEditingTemplate,
     // computed
-    stats, filteredJobs,
+    stats, paginatedJobs, totalPages, currentPage, setCurrentPage, pageSize, totalCount,
     // handlers
     openJobDrawer,
     handleCopyToClipboard,
