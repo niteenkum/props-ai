@@ -445,43 +445,43 @@ function ProfilePageContent() {
         .bento-card {
           background: var(--card);
           border: 1px solid var(--border);
-          border-radius: 20px;
-          padding: 24px;
+          border-radius: 24px;
+          padding: 28px;
           transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
           position: relative;
           overflow: hidden;
         }
         .bento-card:hover {
           transform: translateY(-2px);
-          border-color: ${isDark ? "rgba(99,102,241,0.3)" : "rgba(99,102,241,0.15)"};
-          box-shadow: 0 16px 36px ${isDark ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.03)"};
+          border-color: ${isDark ? "rgba(99,102,241,0.35)" : "rgba(99,102,241,0.18)"};
+          box-shadow: 0 20px 40px ${isDark ? "rgba(0,0,0,0.4)" : "rgba(99,102,241,0.03)"};
         }
 
         /* Input customization */
         .glow-input {
           width: 100%;
-          padding: 10px 14px;
+          padding: 12px 16px;
           background: var(--input);
           border: 1px solid var(--border);
-          border-radius: 10px;
+          border-radius: 12px;
           font-size: 13.5px;
           color: var(--foreground);
           outline: none;
           transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .glow-input:focus {
-          border-color: #818cf8;
-          box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+          border-color: #6366f1;
+          box-shadow: 0 0 0 4px rgba(99,102,241,0.12);
           background: var(--card);
         }
 
         /* Textarea customization */
         .glow-textarea {
           width: 100%;
-          padding: 10px 14px;
+          padding: 12px 16px;
           background: var(--input);
           border: 1px solid var(--border);
-          border-radius: 10px;
+          border-radius: 12px;
           font-size: 13.5px;
           color: var(--foreground);
           outline: none;
@@ -490,25 +490,37 @@ function ProfilePageContent() {
           transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .glow-textarea:focus {
-          border-color: #818cf8;
-          box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+          border-color: #6366f1;
+          box-shadow: 0 0 0 4px rgba(99,102,241,0.12);
           background: var(--card);
         }
 
         /* Action Buttons */
+        .btn-add-action {
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
         .btn-add-action:hover {
-          border-color: #818cf8 !important;
-          color: #818cf8 !important;
-          background: ${isDark ? "rgba(99,102,241,0.04)" : "rgba(99,102,241,0.02)"} !important;
+          border-color: #6366f1 !important;
+          color: #6366f1 !important;
+          background: ${isDark ? "rgba(99,102,241,0.05)" : "rgba(99,102,241,0.02)"} !important;
         }
 
         /* Project Showcase Card Hover Details */
+        .project-showcase-card {
+          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .project-showcase-card:hover {
+          border-color: ${isDark ? "rgba(99,102,241,0.3)" : "rgba(99,102,241,0.15)"} !important;
+          background: ${isDark ? "rgba(255,255,255,0.02)" : "#fcfcfd"} !important;
+        }
         .project-showcase-card .action-overlay {
           opacity: 0;
-          transition: opacity 0.2s ease;
+          transition: opacity 0.2s ease, transform 0.2s ease;
+          transform: translateY(4px);
         }
         .project-showcase-card:hover .action-overlay {
           opacity: 1;
+          transform: translateY(0);
         }
 
         /* Modal Keyframes & Styles */
@@ -517,26 +529,26 @@ function ProfilePageContent() {
           to { opacity: 1; }
         }
         @keyframes modalContentScale {
-          from { opacity: 0; transform: scale(0.95) translateY(10px); }
+          from { opacity: 0; transform: scale(0.96) translateY(8px); }
           to { opacity: 1; transform: scale(1) translateY(0); }
         }
         .modal-overlay {
           position: fixed; inset: 0; z-index: 1000;
           display: flex; align-items: center; justify-content: center;
-          background: ${isDark ? "rgba(0,0,0,0.75)" : "rgba(0,0,0,0.4)"};
-          backdrop-filter: blur(12px);
+          background: ${isDark ? "rgba(0,0,0,0.8)" : "rgba(15,15,25,0.4)"};
+          backdrop-filter: blur(16px);
           padding: 20px;
           animation: modalOverlayFade 0.25s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .modal-content {
           background: var(--card);
           border: 1px solid var(--border);
-          border-radius: 24px;
+          border-radius: 28px;
           width: 580px;
           max-width: 100%;
           max-height: 90vh;
           overflow-y: auto;
-          box-shadow: 0 30px 60px ${isDark ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.12)"};
+          box-shadow: 0 30px 60px ${isDark ? "rgba(0,0,0,0.6)" : "rgba(99,102,241,0.06)"};
           animation: modalContentScale 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
@@ -546,7 +558,7 @@ function ProfilePageContent() {
           to { transform: rotate(360deg); }
         }
         @keyframes fadeSlideIn {
-          from { opacity: 0; transform: translateY(-10px); }
+          from { opacity: 0; transform: translateY(-8px); }
           to { opacity: 1; transform: translateY(0); }
         }
         @keyframes flowGridBg {
@@ -555,8 +567,8 @@ function ProfilePageContent() {
           100% { background-position: 0% 50%; }
         }
         @keyframes pulseGlow {
-          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(99,102,241,0.3); }
-          50% { transform: scale(1.01); box-shadow: 0 0 0 8px rgba(99,102,241,0); }
+          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(99,102,241,0.25); }
+          50% { transform: scale(1.008); box-shadow: 0 0 0 8px rgba(99,102,241,0); }
         }
 
         /* Skill tag animations */
@@ -565,7 +577,7 @@ function ProfilePageContent() {
         }
         .skill-tag-pill:hover {
           transform: translateY(-1.5px);
-          box-shadow: 0 4px 12px ${isDark ? "rgba(0,0,0,0.3)" : "rgba(0,0,0,0.05)"};
+          box-shadow: 0 6px 16px ${isDark ? "rgba(0,0,0,0.3)" : "rgba(99,102,241,0.06)"};
         }
 
         /* Main layout layout query */
@@ -582,9 +594,9 @@ function ProfilePageContent() {
         .settings-bento-card {
           background: var(--card);
           border: 1px solid var(--border);
-          border-radius: 16px;
-          padding: 20px;
-          box-shadow: ${isDark ? "0 4px 30px rgba(0,0,0,0.25)" : "0 4px 20px rgba(0,0,0,0.03)"};
+          border-radius: 20px;
+          padding: 24px;
+          box-shadow: ${isDark ? "0 4px 30px rgba(0,0,0,0.25)" : "0 4px 20px rgba(99,102,241,0.02)"};
           transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .settings-bento-card:hover {
@@ -592,63 +604,91 @@ function ProfilePageContent() {
         }
         .settings-input {
           width: 100%;
-          padding: 10px 14px;
+          padding: 12px 16px;
           background: var(--input);
           border: 1px solid var(--border);
-          border-radius: 10px;
+          border-radius: 12px;
           font-size: 13.5px;
           color: var(--foreground);
           outline: none;
           transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .settings-input:focus {
-          border-color: #818cf8;
-          box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+          border-color: #6366f1;
+          box-shadow: 0 0 0 4px rgba(99,102,241,0.12);
           background: var(--card);
         }
         .tab-bar-btn {
           display: flex;
           align-items: center;
           gap: 8px;
-          padding: 9px 18px;
-          border-radius: 10px;
+          padding: 10px 20px;
+          border-radius: 12px;
           border: none;
           background: transparent;
-          font-size: 13px;
+          font-size: 13.5px;
           font-weight: 600;
           cursor: pointer;
-          transition: all 0.2s cubic-bezier(0.16,1,0.3,1);
+          transition: all 0.25s cubic-bezier(0.16,1,0.3,1);
           white-space: nowrap;
           color: var(--muted-foreground);
         }
         .tab-bar-btn.active {
-          background: ${isDark ? "rgba(99,102,241,0.12)" : "rgba(99,102,241,0.08)"};
-          color: #818cf8;
+          background: #6366f1;
+          color: #ffffff;
+          box-shadow: 0 4px 14px rgba(99,102,241,0.35);
         }
         .tab-bar-btn:hover:not(.active) {
-          background: ${isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"};
+          background: ${isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)"};
           color: var(--foreground);
         }
         .theme-select-card {
-          border: 2px solid var(--border);
+          border: 2.5px solid var(--border);
           cursor: pointer;
-          transition: all 0.2s ease;
+          transition: all 0.25s ease;
         }
         .theme-select-card.active {
-          border-color: #818cf8;
-          background: ${isDark ? "rgba(99,102,241,0.06)" : "rgba(99,102,241,0.03)"};
+          border-color: #6366f1;
+          background: ${isDark ? "rgba(99,102,241,0.08)" : "rgba(99,102,241,0.03)"};
         }
-        .theme-select-card:hover {
-          border-color: #818cf8aa;
+        .theme-select-card:hover:not(.active) {
+          border-color: ${isDark ? "rgba(99,102,241,0.3)" : "rgba(99,102,241,0.2)"};
         }
         @keyframes tabFadeIn {
-          from { opacity: 0; transform: translateY(8px); }
+          from { opacity: 0; transform: translateY(12px); }
           to   { opacity: 1; transform: translateY(0); }
-        }
       `}</style>
 
-      {/* ═══ Page-level Tab Bar ═══ */}
-      <div style={{
+      <div style={{ position: "relative", width: "100%", overflow: "hidden" }}>
+        {/* Ambient background glows */}
+        <div style={{
+          position: "absolute",
+          top: -150,
+          left: "20%",
+          width: 400,
+          height: 400,
+          background: "radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%)",
+          filter: "blur(70px)",
+          pointerEvents: "none",
+          zIndex: 0
+        }} />
+        <div style={{
+          position: "absolute",
+          top: 100,
+          right: "10%",
+          width: 350,
+          height: 350,
+          background: "radial-gradient(circle, rgba(236,72,153,0.04) 0%, transparent 70%)",
+          filter: "blur(60px)",
+          pointerEvents: "none",
+          zIndex: 0
+        }} />
+        
+        {/* Content container */}
+        <div style={{ position: "relative", zIndex: 1 }}>
+
+          {/* ═══ Page-level Tab Bar ═══ */}
+          <div style={{
         display: "flex",
         alignItems: "center",
         gap: 4,
@@ -779,176 +819,152 @@ function ProfilePageContent() {
       {/* ═══ CANDIDATE PROFILE TAB ═══ */}
       {activeTab === "profile" && (<>
 
-      {/* ═══ Majestic Profile Banner (Hero Card) ═══ */}
-      <div className="bento-card" style={{ padding: 0, marginBottom: 24, borderRadius: 24 }}>
-        {/* Banner Graphic mesh background */}
+      {/* ═══ Sleek SaaS Profile Header Card ═══ */}
+      <div className="bento-card" style={{ padding: "24px 28px", marginBottom: 24, borderRadius: 24 }}>
         <div style={{
-          height: 150,
-          position: "relative",
-          background: "linear-gradient(135deg, #4f46e5, #ec4899, #f97316)",
-          backgroundSize: "200% 200%",
-          animation: "flowGridBg 8s infinite ease-in-out",
-          overflow: "hidden",
-        }}>
-          {/* Subtle grid pattern overlay */}
-          <div style={{
-            position: "absolute", inset: 0,
-            backgroundImage: "radial-gradient(rgba(255,255,255,0.15) 1px, transparent 0)",
-            backgroundSize: "20px 20px",
-            opacity: 0.4,
-          }} />
-        </div>
-
-        {/* Profile overview information details */}
-        <div style={{
-          padding: "0 28px 28px",
-          marginTop: -40,
           display: "flex",
-          flexWrap: "wrap",
           justifyContent: "space-between",
-          alignItems: "flex-end",
-          gap: 20,
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 24,
         }}>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 20, flexWrap: "wrap" }}>
-            {/* Hologram Avatar Frame */}
+          {/* Left section: Avatar + Info + Socials */}
+          <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+            {/* Avatar Frame */}
             <div style={{
-              width: 88, height: 88, borderRadius: 24,
-              background: "var(--card)", padding: 4,
-              border: "1px solid var(--border)",
-              boxShadow: "0 10px 25px rgba(0, 0, 0, 0.15)",
+              width: 76, height: 76, borderRadius: 20,
+              background: "linear-gradient(135deg, #6366f1, #a855f7)",
               display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 28, fontWeight: 900, color: "#fff",
+              boxShadow: "0 8px 24px rgba(99, 102, 241, 0.2)",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.2)"}`,
               flexShrink: 0,
             }}>
-              <div style={{
-                width: "100%", height: "100%", borderRadius: 20,
-                background: "linear-gradient(135deg, rgba(99,102,241,0.15), rgba(244,114,182,0.15))",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 28, fontWeight: 900, color: "#818cf8",
-                border: `1.5px dashed ${isDark ? "rgba(99,102,241,0.4)" : "rgba(99,102,241,0.2)"}`,
-              }}>
-                {p.profile.name ? p.profile.name.charAt(0).toUpperCase() : "?"}
-              </div>
+              {p.profile.name ? p.profile.name.charAt(0).toUpperCase() : "?"}
             </div>
 
-            {/* User credentials summary */}
-            <div style={{ paddingBottom: 6 }}>
-              <h2 style={{ fontSize: 24, fontWeight: 900, color: "var(--foreground)", margin: "0 0 4px", letterSpacing: -0.5 }}>
+            {/* Credentials Summary */}
+            <div>
+              <h2 style={{ fontSize: 22, fontWeight: 800, color: "var(--foreground)", margin: "0 0 4px", letterSpacing: -0.5 }}>
                 {p.profile.name || "Configure Name"}
               </h2>
-              <p style={{ fontSize: 13, fontWeight: 600, color: "var(--muted-foreground)", margin: "0 0 10px" }}>
+              <p style={{ fontSize: 13, fontWeight: 550, color: "var(--muted-foreground)", margin: "0 0 10px" }}>
                 {p.profile.role || "Professional Role"}
               </p>
               
               {/* Quick links pill deck */}
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {p.profile.portfolioUrl && (
                   <a href={p.profile.portfolioUrl} target="_blank" rel="noopener noreferrer" style={{
-                    display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "none",
-                    padding: "4px 10px", borderRadius: 50, background: isDark ? "rgba(16,185,129,0.06)" : "#ecfdf5",
+                    display: "inline-flex", alignItems: "center", gap: 4, textDecoration: "none",
+                    padding: "4px 10px", borderRadius: 8, background: isDark ? "rgba(16,185,129,0.06)" : "#f0fdf4",
                     border: `1px solid ${isDark ? "rgba(16,185,129,0.2)" : "#d1fae5"}`,
-                    color: isDark ? "#34d399" : "#059669", fontSize: 11, fontWeight: 700
-                  }}>
-                    <Globe style={{ width: 12, height: 12 }} /> Portfolio <ArrowUpRight style={{ width: 10, height: 10 }} />
+                    color: isDark ? "#34d399" : "#059669", fontSize: 11, fontWeight: 700,
+                    transition: "all 0.15s"
+                  }}
+                  className="skill-tag-pill">
+                    <Globe style={{ width: 11, height: 11 }} /> Portfolio <ArrowUpRight style={{ width: 9, height: 9 }} />
                   </a>
                 )}
                 {p.profile.githubUrl && (
                   <a href={p.profile.githubUrl} target="_blank" rel="noopener noreferrer" style={{
-                    display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "none",
-                    padding: "4px 10px", borderRadius: 50, background: isDark ? "rgba(156,163,175,0.06)" : "#f3f4f6",
-                    border: `1px solid ${isDark ? "rgba(156,163,175,0.2)" : "#e5e7eb"}`,
-                    color: "var(--foreground)", fontSize: 11, fontWeight: 700
-                  }}>
-                    <GitBranch style={{ width: 12, height: 12 }} /> GitHub <ArrowUpRight style={{ width: 10, height: 10 }} />
+                    display: "inline-flex", alignItems: "center", gap: 4, textDecoration: "none",
+                    padding: "4px 10px", borderRadius: 50, background: isDark ? "rgba(255,255,255,0.03)" : "#f3f4f6",
+                    border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#e5e7eb"}`,
+                    color: "var(--foreground)", fontSize: 11, fontWeight: 700,
+                    transition: "all 0.15s"
+                  }}
+                  className="skill-tag-pill">
+                    <GitBranch style={{ width: 11, height: 11 }} /> GitHub <ArrowUpRight style={{ width: 9, height: 9 }} />
                   </a>
                 )}
                 {p.profile.linkedinUrl && (
                   <a href={p.profile.linkedinUrl} target="_blank" rel="noopener noreferrer" style={{
-                    display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "none",
+                    display: "inline-flex", alignItems: "center", gap: 4, textDecoration: "none",
                     padding: "4px 10px", borderRadius: 50, background: isDark ? "rgba(59,130,246,0.06)" : "#eff6ff",
                     border: `1px solid ${isDark ? "rgba(59,130,246,0.2)" : "#dbeafe"}`,
-                    color: isDark ? "#60a5fa" : "#2563eb", fontSize: 11, fontWeight: 700
-                  }}>
-                    <Link2 style={{ width: 12, height: 12 }} /> LinkedIn <ArrowUpRight style={{ width: 10, height: 10 }} />
+                    color: isDark ? "#60a5fa" : "#2563eb", fontSize: 11, fontWeight: 700,
+                    transition: "all 0.15s"
+                  }}
+                  className="skill-tag-pill">
+                    <Link2 style={{ width: 11, height: 11 }} /> LinkedIn <ArrowUpRight style={{ width: 9, height: 9 }} />
                   </a>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Majestic save buttons */}
-          <div style={{ paddingBottom: 6 }}>
-            {p.hasChanges ? (
-              <button
-                onClick={() => p.handleSaveProfile()}
-                disabled={p.profileSaving}
-                style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  padding: "12px 26px", borderRadius: 12, border: "none",
-                  background: "linear-gradient(135deg, #818cf8, #6366f1)",
-                  color: "#fff", fontSize: 14, fontWeight: 800,
-                  cursor: p.profileSaving ? "not-allowed" : "pointer",
-                  opacity: p.profileSaving ? 0.75 : 1,
-                  animation: p.profileSaving ? "none" : "pulseGlow 2.5s infinite ease-in-out",
-                  transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
-                  boxShadow: "0 8px 24px rgba(99,102,241,0.3)",
-                }}
-              >
-                {p.profileSaving
-                  ? <Loader2 style={{ width: 16, height: 16, animation: "spin 1s linear infinite" }} />
-                  : <Save style={{ width: 16, height: 16 }} />
-                }
-                <span>{p.profileSaving ? "Saving..." : "Save Profile Details"}</span>
-              </button>
-            ) : (
-              <div style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "10px 20px", borderRadius: 12,
-                background: isDark ? "rgba(34,197,94,0.06)" : "#f0fdf4",
-                border: `1px solid ${isDark ? "rgba(34,197,94,0.2)" : "#bbf7d0"}`,
-                color: isDark ? "#4ade80" : "#16a34a",
-                fontSize: 13, fontWeight: 700,
-                boxShadow: isDark ? "0 4px 12px rgba(34,197,94,0.05)" : "none",
-              }}>
-                <Check style={{ width: 16, height: 16 }} />
-                <span>Synchronized</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Minimal metrics shelf */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          borderTop: "1px solid var(--border)",
-          textAlign: "center",
-          background: isDark ? "rgba(255,255,255,0.01)" : "#fafafa",
-          borderBottomLeftRadius: 24,
-          borderBottomRightRadius: 24,
-        }}>
-          {[
-            { value: String(skillCount), label: "Linked Skills", icon: <Award style={{ width: 14, height: 14 }} /> },
-            { value: String(projectCount), label: "Featured Projects", icon: <Terminal style={{ width: 14, height: 14 }} /> },
-            { value: String(educationCount), label: "Education Entries", icon: <GraduationCap style={{ width: 14, height: 14 }} /> },
-          ].map((metric, idx) => (
-            <div key={idx} style={{
-              padding: "16px 20px",
-              borderRight: idx < 2 ? "1px solid var(--border)" : "none",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 4
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#818cf8" }}>
-                {metric.icon}
-                <span style={{ fontSize: 18, fontWeight: 900, color: "var(--foreground)", letterSpacing: -0.5 }}>{metric.value}</span>
-              </div>
-              <span style={{ fontSize: 10, textTransform: "uppercase", fontWeight: 700, letterSpacing: 1.2, color: "var(--muted-foreground)", opacity: 0.8 }}>
-                {metric.label}
-              </span>
+          {/* Right section: Stats Shelf + Save Button */}
+          <div style={{ display: "flex", alignItems: "center", gap: 32, flexWrap: "wrap" }}>
+            {/* Stats Metrics */}
+            <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+              {[
+                { value: String(skillCount), label: "Skills", icon: <Award style={{ width: 13, height: 13 }} /> },
+                { value: String(projectCount), label: "Projects", icon: <Terminal style={{ width: 13, height: 13 }} /> },
+                { value: String(educationCount), label: "Education", icon: <GraduationCap style={{ width: 13, height: 13 }} /> },
+              ].map((metric, idx) => (
+                <div key={idx} style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 2,
+                  minWidth: 70,
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#6366f1" }}>
+                    {metric.icon}
+                    <span style={{ fontSize: 16, fontWeight: 900, color: "var(--foreground)", letterSpacing: -0.5 }}>{metric.value}</span>
+                  </div>
+                  <span style={{ fontSize: 9.5, textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.8, color: "var(--muted-foreground)", opacity: 0.75 }}>
+                    {metric.label}
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
+
+            {/* Divider line */}
+            <div style={{ width: 1, height: 40, background: isDark ? "rgba(255,255,255,0.08)" : "var(--border)", display: "inline-block" }} />
+
+            {/* Synchronized state or save button */}
+            <div>
+              {p.hasChanges ? (
+                <button
+                  onClick={() => p.handleSaveProfile()}
+                  disabled={p.profileSaving}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "10px 20px", borderRadius: 12, border: "none",
+                    background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                    color: "#fff", fontSize: 13, fontWeight: 800,
+                    cursor: p.profileSaving ? "not-allowed" : "pointer",
+                    opacity: p.profileSaving ? 0.75 : 1,
+                    animation: p.profileSaving ? "none" : "pulseGlow 2.5s infinite ease-in-out",
+                    transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                    boxShadow: "0 8px 24px rgba(99,102,241,0.3)",
+                  }}
+                >
+                  {p.profileSaving
+                    ? <Loader2 style={{ width: 15, height: 15, animation: "spin 1s linear infinite" }} />
+                    : <Save style={{ width: 15, height: 15 }} />
+                  }
+                  <span>{p.profileSaving ? "Saving..." : "Save Details"}</span>
+                </button>
+              ) : (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "8px 16px", borderRadius: 10,
+                  background: isDark ? "rgba(16,185,129,0.06)" : "#f0fdf4",
+                  border: `1px solid ${isDark ? "rgba(16,185,129,0.25)" : "#bbf7d0"}`,
+                  color: isDark ? "#34d399" : "#16a34a",
+                  fontSize: 12.5, fontWeight: 700,
+                  boxShadow: isDark ? "0 4px 12px rgba(16,185,129,0.05)" : "none",
+                }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: isDark ? "#34d399" : "#16a34a", animation: "spin 2s linear infinite" }} />
+                  <span>Synchronized</span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2345,6 +2361,8 @@ function ProfilePageContent() {
           </div>
         </div>
       )}
+        </div>
+      </div>
     </>
   );
 }
