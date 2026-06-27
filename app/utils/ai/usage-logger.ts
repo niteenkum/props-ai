@@ -112,6 +112,36 @@ export async function logAiUsage(params: LogAiUsageParams): Promise<void> {
         errorMessage: params.errorMessage || null,
       },
     });
+
+    // Deduct token from user balance if it was a successful usage
+    if (params.userEmail && params.success !== false) {
+      const user = await db.user.findUnique({
+        where: { email: params.userEmail },
+        select: { tokenBalance: true, role: true }
+      });
+
+      // Superadmins don't get debited tokens!
+      if (user && user.role !== "SUPERADMIN") {
+        const inrCost = totalCostUsd * 85; // convert USD to INR
+        const anyDb = db as any;
+
+        await anyDb.$transaction([
+          anyDb.user.update({
+            where: { email: params.userEmail },
+            data: { tokenBalance: { decrement: 1 } }
+          }),
+          anyDb.tokenTransaction.create({
+            data: {
+              userEmail: params.userEmail,
+              type: "USAGE",
+              amount: -1,
+              description: `AI ${params.apiType.replace(/_/g, " ")}`,
+              costUsd: inrCost
+            }
+          })
+        ]);
+      }
+    }
   } catch (err) {
     // Never let logging failures break the main flow
     console.error("[AI Usage Logger] Failed to log usage:", err);

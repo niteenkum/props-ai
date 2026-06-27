@@ -6,8 +6,22 @@
 import { isAIAvailable, generateAllTemplates, generateTemplate, analyzeJobWithAI, getActiveProviderName, generateForProvider, getAvailableProviders } from "../utils/ai/service";
 import { analyzeJobPost } from "../utils/ai-engine";
 import { getUserProfileAction } from "./db-actions";
+import { prisma } from "../utils/prisma";
 import type { TemplateType, AIAnalysisResult } from "../utils/ai/types";
 import type { UserProfile } from "../utils/db";
+
+async function verifyTokenBalance(userEmail: string) {
+  const user = await prisma.user.findUnique({
+    where: { email: userEmail },
+    select: { tokenBalance: true, role: true, status: true }
+  });
+  if (user && user.status === "INACTIVE") {
+    throw new Error("ACCOUNT_DEACTIVATED");
+  }
+  if (user && user.role !== "SUPERADMIN" && user.tokenBalance <= 0) {
+    throw new Error("OUT_OF_TOKENS");
+  }
+}
 
 // ─── Analyze job post + generate all templates ─────────────────────────────
 
@@ -23,6 +37,7 @@ export async function analyzeAndGenerateAction(
   console.log("═".repeat(60));
 
   try {
+    await verifyTokenBalance(userEmail);
     // Step 1: Load profile
     console.log("\n🔹 Step 1: Loading user profile...");
     const profile = await getUserProfileAction(userEmail);
@@ -153,6 +168,7 @@ export async function regenerateTemplateAction(
   }
 ): Promise<{ success: boolean; content?: string; error?: string }> {
   try {
+    await verifyTokenBalance(userEmail);
     const profile = await getUserProfileAction(userEmail);
     if (!profile) {
       return { success: false, error: "User profile not found." };
@@ -244,6 +260,7 @@ export async function generateProposalsAction(
   console.log(`\n[generateProposalsAction] platforms=${platforms.join(",")} provider=${providerName} user=${userEmail}`);
 
   try {
+    await verifyTokenBalance(userEmail);
     const profile = await getUserProfileAction(userEmail);
     if (!profile) {
       return { success: false, error: "User profile not found. Please complete your profile first." };
@@ -386,6 +403,7 @@ export async function analyzeJobCandidacyAction(
   }
 
   try {
+    await verifyTokenBalance(userEmail);
     const profile = await getUserProfileAction(userEmail);
     if (!profile) return { success: false, error: "Profile not found" };
 

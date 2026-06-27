@@ -11,7 +11,7 @@ export interface AuthResult {
     name: string;
     email: string;
     role: string;
-    status: "PENDING" | "ACTIVE";
+    status: "PENDING" | "ACTIVE" | "INACTIVE";
   };
 }
 
@@ -142,7 +142,7 @@ export async function verifyOtpAndSignUpAction(data: {
         name: user.name,
         email: user.email,
         role: user.role,
-        status: user.status as "PENDING" | "ACTIVE",
+        status: user.status as "PENDING" | "ACTIVE" | "INACTIVE",
       },
     };
   } catch (error) {
@@ -169,13 +169,17 @@ export async function loginAction(credentials: {
       return { success: false, error: "Incorrect password. Please try again." };
     }
 
+    if (user.status === "INACTIVE") {
+      return { success: false, error: "Your account is deactivated. Please contact the administrator." };
+    }
+
     return {
       success: true,
       user: {
         name: user.name,
         email: user.email,
         role: user.role,
-        status: user.status as "PENDING" | "ACTIVE",
+        status: user.status as "PENDING" | "ACTIVE" | "INACTIVE",
       },
     };
   } catch (error) {
@@ -185,7 +189,7 @@ export async function loginAction(credentials: {
 }
 
 // ─── 4. Check account status ─────────────────────────────────────────────────
-export async function checkAccountStatusAction(email: string): Promise<{ status: "PENDING" | "ACTIVE" | null }> {
+export async function checkAccountStatusAction(email: string): Promise<{ status: "PENDING" | "ACTIVE" | "INACTIVE" | null }> {
   try {
     const user = await prisma.user.findUnique({
       where: { email },
@@ -193,7 +197,7 @@ export async function checkAccountStatusAction(email: string): Promise<{ status:
     });
 
     if (!user) return { status: null };
-    return { status: user.status as "PENDING" | "ACTIVE" };
+    return { status: user.status as "PENDING" | "ACTIVE" | "INACTIVE" };
   } catch (error) {
     console.error("Error in checkAccountStatusAction:", error);
     return { status: null };

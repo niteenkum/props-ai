@@ -6,6 +6,131 @@ import Sidebar from "../components/sidebar";
 import { useAuth } from "../hooks/useAuth";
 import { getUserProfileAction } from "../actions/db-actions";
 
+function MockDashboardBackground() {
+  return (
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: 24,
+      width: "100%",
+      filter: "blur(18px)",
+      opacity: 0.8,
+      pointerEvents: "none",
+      userSelect: "none",
+    }}>
+      {/* Mock Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: "bold", margin: 0 }}>Workspace Library</h1>
+          <p style={{ fontSize: 13, color: "var(--muted-foreground)", margin: "4px 0 0" }}>Manage your freelance pipelines and outreach</p>
+        </div>
+        <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ background: "var(--card)", border: "2.5px solid var(--foreground)", borderRadius: 10, padding: "8px 16px", boxShadow: "2px 2px 0px 0px var(--foreground)" }}>
+            <span style={{ fontSize: 10, textTransform: "uppercase", fontWeight: 700, color: "var(--muted-foreground)" }}>Total Leads Scanned</span>
+            <div style={{ fontSize: 18, fontWeight: 900 }}>142</div>
+          </div>
+          <div style={{ background: "var(--card)", border: "2.5px solid var(--foreground)", borderRadius: 10, padding: "8px 16px", boxShadow: "2px 2px 0px 0px var(--foreground)" }}>
+            <span style={{ fontSize: 10, textTransform: "uppercase", fontWeight: 700, color: "var(--muted-foreground)" }}>Match Rate Avg</span>
+            <div style={{ fontSize: 18, fontWeight: 900, color: "#22c55e" }}>84.5%</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Mock Grid */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+        gap: 20,
+      }}>
+        {/* Lead pipeline card */}
+        <div style={{
+          background: "var(--card)",
+          border: "2.5px solid var(--foreground)",
+          borderRadius: 12,
+          boxShadow: "6px 6px 0px 0px var(--foreground)",
+          padding: 20,
+        }}>
+          <h3 style={{ fontSize: 14, fontWeight: "bold", margin: "0 0 12px", borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
+            Recent Matches 📩
+          </h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[
+              { role: "React Architect", company: "Stripe, Inc.", score: "96%" },
+              { role: "Backend Developer (Go)", company: "Vercel", score: "88%" },
+              { role: "Full Stack Contractor", company: "Linear App", score: "82%" },
+            ].map((item, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1.5px solid var(--foreground)", borderRadius: 8, background: "var(--input)" }}>
+                <div>
+                  <div style={{ fontSize: 12.5, fontWeight: "bold" }}>{item.role}</div>
+                  <div style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{item.company}</div>
+                </div>
+                <div style={{ padding: "4px 8px", borderRadius: 6, background: "#6366f1", color: "#fff", fontSize: 10.5, fontWeight: "bold" }}>
+                  {item.score} Match
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Campaign conversion card */}
+        <div style={{
+          background: "var(--card)",
+          border: "2.5px solid var(--foreground)",
+          borderRadius: 12,
+          boxShadow: "6px 6px 0px 0px var(--foreground)",
+          padding: 20,
+        }}>
+          <h3 style={{ fontSize: 14, fontWeight: "bold", margin: "0 0 12px", borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
+            Campaign Conversions 📈
+          </h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {[
+              { label: "Emails Sent", count: 86, color: "#6366f1", percent: 80 },
+              { label: "Replies Received", count: 34, color: "#10b981", percent: 45 },
+              { label: "Interviews Booked", count: 12, color: "#f59e0b", percent: 20 },
+            ].map((item, i) => (
+              <div key={i}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 4, fontWeight: "bold" }}>
+                  <span>{item.label}</span>
+                  <span>{item.count}</span>
+                </div>
+                <div style={{ height: 12, background: "var(--input)", borderRadius: 6, border: "1.5px solid var(--foreground)", overflow: "hidden" }}>
+                  <div style={{ width: `${item.percent}%`, height: "100%", background: item.color }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Outreach status card */}
+        <div style={{
+          background: "var(--card)",
+          border: "2.5px solid var(--foreground)",
+          borderRadius: 12,
+          boxShadow: "6px 6px 0px 0px var(--foreground)",
+          padding: 20,
+        }}>
+          <h3 style={{ fontSize: 14, fontWeight: "bold", margin: "0 0 12px", borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
+            Outbox Sync Logs 🔄
+          </h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[
+              { to: "hr@stripe.com", status: "Sent", color: "#10b981" },
+              { to: "talent@vercel.com", status: "Bounced", color: "#ef4444" },
+              { to: "jobs@linear.app", status: "Pending", color: "#f59e0b" },
+            ].map((item, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", border: "1.5px solid var(--foreground)", borderRadius: 8, background: "var(--input)" }}>
+                <span style={{ fontSize: 12, fontWeight: 700 }}>{item.to}</span>
+                <span style={{ fontSize: 11, color: item.color, fontWeight: "bold" }}>{item.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { userEmail, userName, userRole, isReady, logout } = useAuth({ requiredStatus: "ACTIVE" });
   const pathname = usePathname();
@@ -110,6 +235,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         .animate-fade-in {
           animation: fade-in-slide 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
+        .setup-blocker-overlay {
+          background: rgba(248, 250, 255, 0.35) !important;
+          backdrop-filter: blur(14px) !important;
+          -webkit-backdrop-filter: blur(14px) !important;
+        }
+        [data-theme="dark"] .setup-blocker-overlay {
+          background: rgba(9, 9, 11, 0.55) !important;
+          backdrop-filter: blur(18px) !important;
+          -webkit-backdrop-filter: blur(18px) !important;
+        }
       `}</style>
 
       <div
@@ -128,6 +263,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           userName={profileName || userName || "Your Profile"}
           userRole={profileRole}
           systemRole={userRole}
+          userEmail={userEmail}
         />
 
         {/* Main scroll container — must be a plain block (not flex) so overflowY works */}
@@ -153,130 +289,136 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             }}
           >
             {showBlocker ? (
-              <div
-                className="animate-fade-in"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minHeight: "75vh",
-                  padding: 40,
-                  textAlign: "center",
-                }}
-              >
+              <div style={{ position: "relative", width: "100%", minHeight: "75vh" }}>
+                {/* Mock dashboard background preview */}
+                <MockDashboardBackground />
+
+                {/* Absolute overlay blocker modal */}
                 <div
+                  className="animate-fade-in setup-blocker-overlay"
                   style={{
-                    background: "var(--card)",
-                    border: "2.5px solid var(--foreground)",
-                    borderRadius: 12,
-                    boxShadow: "6px 6px 0px 0px var(--foreground)",
-                    padding: "48px 32px",
-                    maxWidth: 520,
-                    width: "100%",
+                    position: "absolute",
+                    inset: 0,
+                    zIndex: 40,
                     display: "flex",
-                    flexDirection: "column",
                     alignItems: "center",
-                    gap: 20,
+                    justifyContent: "center",
+                    padding: 24,
                   }}
                 >
                   <div
                     style={{
-                      width: 64,
-                      height: 64,
+                      background: "var(--card)",
+                      border: "2.5px solid var(--foreground)",
                       borderRadius: 12,
-                      background: "rgba(99, 102, 241, 0.1)",
-                      border: "2px dashed #6366f1",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 32,
-                    }}
-                  >
-                    🚀
-                  </div>
-
-                  <h2
-                    style={{
-                      fontSize: 26,
-                      fontWeight: "bold",
-                      color: "var(--foreground)",
-                      margin: 0,
-                      fontFamily: "var(--handwriting-font)",
-                    }}
-                  >
-                    Complete Your Profile Setup
-                  </h2>
-
-                  <p
-                    style={{
-                      fontSize: 16,
-                      color: "var(--muted-foreground)",
-                      lineHeight: 1.6,
-                      margin: 0,
-                      fontFamily: "var(--handwriting-font)",
-                      fontWeight: 500,
-                    }}
-                  >
-                    Before accessing AI proposal tools, inbox match scores, and outreach integrations, please complete your profile checklist:
-                  </p>
-
-                  <div
-                    style={{
+                      boxShadow: "10px 10px 0px 0px var(--foreground)",
+                      padding: "48px 32px",
+                      maxWidth: 520,
+                      width: "100%",
                       display: "flex",
                       flexDirection: "column",
-                      alignItems: "flex-start",
-                      gap: 12,
-                      width: "100%",
-                      padding: "16px 20px",
-                      background: "var(--input)",
-                      border: "2px solid var(--foreground)",
-                      borderRadius: 8,
-                      boxShadow: "3px 3px 0px 0px var(--foreground)",
-                      boxSizing: "border-box",
+                      alignItems: "center",
+                      gap: 20,
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 16, fontWeight: "bold", fontFamily: "var(--handwriting-font)", color: "var(--foreground)" }}>
-                      <span style={{ fontSize: 18 }}>{hasSkills ? "✅" : "⭕"}</span>
-                      <span style={{ textDecoration: hasSkills ? "line-through" : "none", opacity: hasSkills ? 0.6 : 1 }}>
-                        Add at least one technical skill
-                      </span>
+                    <div
+                      style={{
+                        width: 64,
+                        height: 64,
+                        borderRadius: 12,
+                        background: "rgba(99, 102, 241, 0.1)",
+                        border: "2px dashed #6366f1",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 32,
+                      }}
+                    >
+                      🚀
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 16, fontWeight: "bold", fontFamily: "var(--handwriting-font)", color: "var(--foreground)" }}>
-                      <span style={{ fontSize: 18 }}>{hasProjects ? "✅" : "⭕"}</span>
-                      <span style={{ textDecoration: hasProjects ? "line-through" : "none", opacity: hasProjects ? 0.6 : 1 }}>
-                        Add at least two featured projects
-                      </span>
-                    </div>
-                  </div>
 
-                  <button
-                    onClick={() => router.push("/dashboard/profile")}
-                    style={{
-                      padding: "12px 28px",
-                      borderRadius: 6,
-                      border: "2.5px solid var(--foreground)",
-                      background: "#6366f1",
-                      color: "#fff",
-                      fontSize: 16,
-                      fontWeight: "bold",
-                      cursor: "pointer",
-                      boxShadow: "3px 3px 0px 0px var(--foreground)",
-                      transition: "all 0.15s ease",
-                      fontFamily: "var(--handwriting-font)",
-                      marginTop: 8,
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.transform = "translate(-1.5px, -1.5px)";
-                      e.currentTarget.style.boxShadow = "4.5px 4.5px 0px 0px var(--foreground)";
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.transform = "none";
-                      e.currentTarget.style.boxShadow = "3px 3px 0px 0px var(--foreground)";
-                    }}
-                  >
-                    Go to Profile 🚀
-                  </button>
+                    <h2
+                      style={{
+                        fontSize: 26,
+                        fontWeight: "bold",
+                        color: "var(--foreground)",
+                        margin: 0,
+                        fontFamily: "var(--handwriting-font)",
+                      }}
+                    >
+                      Complete Your Profile Setup
+                    </h2>
+
+                    <p
+                      style={{
+                        fontSize: 16,
+                        color: "var(--muted-foreground)",
+                        lineHeight: 1.6,
+                        margin: 0,
+                        fontFamily: "var(--handwriting-font)",
+                        fontWeight: 500,
+                      }}
+                    >
+                      Before accessing AI proposal tools, inbox match scores, and outreach integrations, please complete your profile checklist:
+                    </p>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-start",
+                        gap: 12,
+                        width: "100%",
+                        padding: "16px 20px",
+                        background: "var(--input)",
+                        border: "2px solid var(--foreground)",
+                        borderRadius: 8,
+                        boxShadow: "3px 3px 0px 0px var(--foreground)",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 16, fontWeight: "bold", fontFamily: "var(--handwriting-font)", color: "var(--foreground)" }}>
+                        <span style={{ fontSize: 18 }}>{hasSkills ? "✅" : "⭕"}</span>
+                        <span style={{ textDecoration: hasSkills ? "line-through" : "none", opacity: hasSkills ? 0.6 : 1 }}>
+                          Add at least one technical skill
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 16, fontWeight: "bold", fontFamily: "var(--handwriting-font)", color: "var(--foreground)" }}>
+                        <span style={{ fontSize: 18 }}>{hasProjects ? "✅" : "⭕"}</span>
+                        <span style={{ textDecoration: hasProjects ? "line-through" : "none", opacity: hasProjects ? 0.6 : 1 }}>
+                          Add at least two featured projects
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => router.push("/dashboard/profile")}
+                      style={{
+                        padding: "12px 28px",
+                        borderRadius: 6,
+                        border: "2.5px solid var(--foreground)",
+                        background: "#6366f1",
+                        color: "#fff",
+                        fontSize: 16,
+                        fontWeight: "bold",
+                        cursor: "pointer",
+                        boxShadow: "3px 3px 0px 0px var(--foreground)",
+                        transition: "all 0.15s ease",
+                        fontFamily: "var(--handwriting-font)",
+                        marginTop: 8,
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.transform = "translate(-1.5px, -1.5px)";
+                        e.currentTarget.style.boxShadow = "4.5px 4.5px 0px 0px var(--foreground)";
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.transform = "none";
+                        e.currentTarget.style.boxShadow = "3px 3px 0px 0px var(--foreground)";
+                      }}
+                    >
+                      Go to Profile 🚀
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (

@@ -390,7 +390,8 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
       );
 
       if (!result.success || !result.results) {
-        setGenerationError(result.error || "Generation failed. Please try again.");
+        const isOutOfTokens = result.error?.includes("OUT_OF_TOKENS") || result.error?.includes("Out of tokens");
+        setGenerationError(isOutOfTokens ? "⚠️ Out of tokens! Please visit the AI Credit Portal in the sidebar to buy credits." : (result.error || "Generation failed. Please try again."));
         setDrawerStep("platforms");
         return;
       }
@@ -401,7 +402,8 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
       setActiveResultTab(platformsArray[0]);
       setDrawerStep("results");
     } catch (err: any) {
-      setGenerationError(err?.message || "Unexpected error during generation.");
+      const isOutOfTokens = err?.message?.includes("OUT_OF_TOKENS") || err?.message?.includes("Out of tokens");
+      setGenerationError(isOutOfTokens ? "⚠️ Out of tokens! Please visit the AI Credit Portal in the sidebar to buy credits." : (err?.message || "Unexpected error during generation."));
       setDrawerStep("platforms");
     }
   };

@@ -138,9 +138,13 @@ export function useDashboard(userEmail: string, pendingJobId?: string) {
         setSelectedJob(updated);
         await updateJobPostAction(updated);
         await loadJobs();
+      } else {
+        const isOutOfTokens = result.error?.includes("OUT_OF_TOKENS") || result.error?.includes("Out of tokens");
+        alert(isOutOfTokens ? "⚠️ Out of tokens! Please visit the AI Credit Portal in the sidebar to buy credits." : (result.error || "Regeneration failed"));
       }
-    } catch (err) {
-      console.error("Regeneration failed:", err);
+    } catch (err: any) {
+      const isOutOfTokens = err?.message?.includes("OUT_OF_TOKENS") || err?.message?.includes("Out of tokens");
+      alert(isOutOfTokens ? "⚠️ Out of tokens! Please visit the AI Credit Portal in the sidebar to buy credits." : "Regeneration failed");
     }
   };
 

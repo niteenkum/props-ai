@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LogOut, Sun, Moon, BookOpen, ChevronRight, 
   Plus, Settings, MessageSquare, Mail, 
-  FilePlus2, CalendarDays, BarChart3, Link2, Search
+  FilePlus2, CalendarDays, BarChart3, Link2, Search, Coins, Users
 } from "lucide-react";
 import { useTheme } from "./theme-provider";
 
@@ -15,6 +15,7 @@ interface SidebarProps {
   userName?: string;
   userRole?: string;
   systemRole?: string;
+  userEmail?: string;
 }
 
 export default function Sidebar({
@@ -22,11 +23,26 @@ export default function Sidebar({
   userName = "Your Profile",
   userRole = "IT Freelancer",
   systemRole = "USER",
+  userEmail,
 }: SidebarProps) {
   const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const [credits, setCredits] = useState<number | null>(null);
+
+  React.useEffect(() => {
+    if (userEmail) {
+      // Fetch credits on load and periodically
+      import("../actions/token-actions").then(({ getUserTokensAction }) => {
+        getUserTokensAction(userEmail).then(res => {
+          if (res.success) {
+            setCredits(res.tokenBalance);
+          }
+        });
+      });
+    }
+  }, [userEmail, pathname]);
 
   const initials = userName
     .split(" ")
@@ -48,12 +64,13 @@ export default function Sidebar({
       { label: "WhatsApp Link", icon: MessageSquare, href: "/dashboard/whatsapp" },
       { label: "LinkedIn Scraper", icon: Link2, href: "/dashboard/linkedin" },
       { label: "New Scan", icon: FilePlus2, href: "/dashboard/new" },
+      { label: "User Management", icon: Users, href: "/dashboard/users" },
     ] : [
       { label: "Admin Scans", icon: Search, href: "/dashboard/admin-jobs" },
     ]),
     { label: "Smart Inbox", icon: Mail, href: "/dashboard/mail" },
     { label: "Calls & Followups", icon: CalendarDays, href: "/dashboard/followups" },
-    { label: "AI Expense Logs", icon: BarChart3, href: "/dashboard/expense" },
+    { label: systemRole === "SUPERADMIN" ? "Billing & Costs" : "AI Credit Portal", icon: Coins, href: "/dashboard/expense" },
   ];
 
   const renderSidebarItem = (
@@ -78,15 +95,32 @@ export default function Sidebar({
         />
         
         {!collapsed && (
-          <span 
-            className={`text-[11.5px] font-medium tracking-wide truncate transition-colors duration-150 ${
-              active 
-                ? "font-bold text-current" 
-                : "text-muted-foreground/80 group-hover:text-foreground"
-            }`}
-          >
-            {label}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", minWidth: 0 }}>
+            <span 
+              className={`text-[11.5px] font-medium tracking-wide truncate transition-colors duration-150 ${
+                active 
+                  ? "font-bold text-current" 
+                  : "text-muted-foreground/80 group-hover:text-foreground"
+              }`}
+            >
+              {label}
+            </span>
+            {(label === "AI Credit Portal" || label === "Billing & Costs") && credits !== null && (
+              <span style={{
+                background: credits > 0 ? "rgba(99, 102, 241, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                color: credits > 0 ? "#6366f1" : "#ef4444",
+                border: `1.5px solid ${credits > 0 ? "#6366f1" : "#ef4444"}`,
+                fontSize: 9,
+                fontWeight: 900,
+                padding: "1px 5px",
+                borderRadius: 6,
+                marginLeft: 6,
+                flexShrink: 0
+              }}>
+                {credits}
+              </span>
+            )}
+          </div>
         )}
       </>
     );

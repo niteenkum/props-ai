@@ -12,7 +12,7 @@ function AuthCallbackContent() {
   useEffect(() => {
     const email = searchParams.get("email");
     const name = searchParams.get("name");
-    const status = searchParams.get("status") as "ACTIVE" | "PENDING";
+    const status = searchParams.get("status") as "ACTIVE" | "PENDING" | "INACTIVE";
     const role = searchParams.get("role") || "Developer";
 
     if (email && name && status) {

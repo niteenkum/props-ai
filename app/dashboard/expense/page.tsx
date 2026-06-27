@@ -4,14 +4,28 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   Zap, DollarSign, BarChart3, CheckCircle2, XCircle, Clock,
   RefreshCw, ChevronUp, ChevronDown, Search, Filter, TrendingUp,
-  FileText, Brain, PenTool, Briefcase,
+  FileText, Brain, PenTool, Briefcase, Coins, Plus, ShieldAlert,
+  CreditCard, Sparkles, Check, Loader2, Users, Receipt
 } from "lucide-react";
+import { useAuth } from "../../hooks/useAuth";
 import { getAiExpenseLogsAction, getAiExpenseSummaryAction } from "../../actions/expense-actions";
+import {
+  getUserTokensAction,
+  purchaseTokenPlanAction,
+  grantTokensAction,
+  configureTokenPricingAction,
+  getTokenPricingSettingsAction,
+  getUserWiseStatsAction,
+  TokenTxRow,
+  TokenStats,
+  UserStatsRow
+} from "../../actions/token-actions";
 import type { AiExpenseRow, AiExpenseSummary } from "../../actions/expense-actions";
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Formatting Helpers ──────────────────────────────────────────────────────
 
 const fmt = {
+  inr:   (v: number) => `₹${v.toFixed(2)}`,
   usd:   (v: number) => v < 0.00001 ? "<$0.00001" : `$${v.toFixed(5)}`,
   usdK:  (v: number) => v >= 1 ? `$${v.toFixed(4)}` : fmt.usd(v),
   tokens:(v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v),
@@ -48,59 +62,55 @@ function getCategoryColor(cat: string) {
 
 type SortKey = keyof Pick<AiExpenseRow, "createdAt" | "totalTokens" | "totalCostUsd" | "durationMs">;
 
-// ─── Stat Card ───────────────────────────────────────────────────────────────
+// ─── Stat Card Component ────────────────────────────────────────────────────
 function StatCard({
   icon: Icon, label, value, sub, color,
 }: { icon: React.ElementType; label: string; value: string; sub?: string; color: string }) {
   return (
     <div style={{
-      background: "var(--card)", borderRadius: 16, padding: "20px 22px",
-      border: "1px solid var(--border)", boxShadow: "var(--card-shadow)",
-      display: "flex", gap: 16, alignItems: "center", position: "relative", overflow: "hidden",
+      background: "var(--card)", borderRadius: 12, padding: "20px 22px",
+      border: "2.5px solid var(--foreground)", boxShadow: "3px 3px 0px 0px var(--foreground)",
+      display: "flex", gap: 16, alignItems: "center", position: "relative",
     }}>
-      {/* Glow orb */}
       <div style={{
-        position: "absolute", top: -20, right: -20, width: 100, height: 100,
-        borderRadius: "50%", background: color, opacity: 0.06, filter: "blur(20px)",
-      }} />
-      <div style={{
-        width: 48, height: 48, borderRadius: 12, flexShrink: 0,
+        width: 44, height: 44, borderRadius: 10, flexShrink: 0,
         background: `${color}18`, display: "flex", alignItems: "center", justifyContent: "center",
+        border: `1.5px solid ${color}`
       }}>
         <Icon size={20} style={{ color }} />
       </div>
       <div>
-        <p style={{ fontSize: 11, color: "var(--muted-foreground)", fontWeight: 600,
+        <p style={{ fontSize: 10, color: "var(--muted-foreground)", fontWeight: 800,
           textTransform: "uppercase", letterSpacing: 1, margin: 0 }}>{label}</p>
-        <p style={{ fontSize: 24, fontWeight: 800, color: "var(--foreground)", margin: "2px 0 0" }}>{value}</p>
+        <p style={{ fontSize: 24, fontWeight: 900, color: "var(--foreground)", margin: "2px 0 0", fontFamily: "var(--handwriting-font)" }}>{value}</p>
         {sub && <p style={{ fontSize: 11, color: "var(--muted-foreground)", margin: "2px 0 0" }}>{sub}</p>}
       </div>
     </div>
   );
 }
 
-// ─── Category Bar ────────────────────────────────────────────────────────────
+// ─── Category Breakdown Component ───────────────────────────────────────────
 function CategoryBreakdown({ rows }: { rows: AiExpenseSummary["byCategory"] }) {
   const maxCost = Math.max(...rows.map(r => r.costUsd), 0.000001);
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {rows.map((r) => {
         const meta = CATEGORY_META[r.category] ?? { label: r.category, color: "#6b7280" };
         const pct  = (r.costUsd / maxCost) * 100;
         return (
           <div key={r.category}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--foreground)" }}>{meta.label}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--foreground)" }}>{meta.label}</span>
               <div style={{ display: "flex", gap: 12 }}>
                 <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{r.calls} calls</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: meta.color }}>{fmt.usdK(r.costUsd)}</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: meta.color }}>{fmt.usdK(r.costUsd)}</span>
               </div>
             </div>
-            <div style={{ height: 6, borderRadius: 99, background: "var(--border)", overflow: "hidden" }}>
+            <div style={{ height: 10, borderRadius: 6, background: "var(--border)", border: "1.5px solid var(--foreground)", overflow: "hidden" }}>
               <div style={{
-                height: "100%", borderRadius: 99, width: `${pct}%`,
-                background: `linear-gradient(90deg, ${meta.color}aa, ${meta.color})`,
-                transition: "width 0.6s cubic-bezier(0.4,0,0.2,1)",
+                height: "100%", width: `${pct}%`,
+                background: meta.color,
+                transition: "width 0.6s ease",
               }} />
             </div>
           </div>
@@ -110,35 +120,157 @@ function CategoryBreakdown({ rows }: { rows: AiExpenseSummary["byCategory"] }) {
   );
 }
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
+// ─── Main Expense Portal Page ──────────────────────────────────────────────
 export default function ExpensePage() {
-  const [logs,    setLogs]    = useState<AiExpenseRow[]>([]);
+  const { userEmail, userRole, isReady } = useAuth({ requiredStatus: "ACTIVE" });
+
+  const [logs, setLogs] = useState<AiExpenseRow[]>([]);
   const [summary, setSummary] = useState<AiExpenseSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search,  setSearch]  = useState("");
+
+  // Token pricing system states
+  const [tokenBalance, setTokenBalance] = useState<number>(0);
+  const [tokenTransactions, setTokenTransactions] = useState<TokenTxRow[]>([]);
+  const [tokenPricingSettings, setTokenPricingSettings] = useState<TokenStats | null>(null);
+  const [userWiseStats, setUserWiseStats] = useState<UserStatsRow[]>([]);
+
+  // Superadmin Action States
+  const [grantTargetEmail, setGrantTargetEmail] = useState("");
+  const [grantAmount, setGrantAmount] = useState(50);
+  const [grantDesc, setGrantDesc] = useState("Marketing balance credit");
+  const [isGranting, setIsGranting] = useState(false);
+  const [grantSuccess, setGrantSuccess] = useState<string | null>(null);
+
+  const [actualCostRate, setActualCostRate] = useState(0.015);
+  const [retailPriceRate, setRetailPriceRate] = useState(1.0);
+  const [isSavingPricing, setIsSavingPricing] = useState(false);
+  const [pricingSuccess, setPricingSuccess] = useState(false);
+
+  // User Purchase Mocking States
+  const [buyingPlan, setBuyingPlan] = useState<string | null>(null);
+  const [purchaseSuccess, setPurchaseSuccess] = useState<string | null>(null);
+
+  // Log filter states
+  const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
-  const [filterApiType,  setFilterApiType]  = useState<string>("all");
-  const [filterStatus,   setFilterStatus]   = useState<"all" | "success" | "failed">("all");
-  const [sortKey,  setSortKey]  = useState<SortKey>("createdAt");
-  const [sortAsc,  setSortAsc]  = useState(false);
-  const [page,     setPage]     = useState(1);
-  const PAGE_SIZE = 20;
+  const [filterApiType, setFilterApiType] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "success" | "failed">("all");
+  const [sortKey, setSortKey] = useState<SortKey>("createdAt");
+  const [sortAsc, setSortAsc] = useState(false);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 15;
 
-  const load = useCallback(async () => {
+  const isSuperadmin = userRole === "SUPERADMIN";
+
+  const loadData = useCallback(async () => {
+    if (!userEmail) return;
     setLoading(true);
-    const [logsData, sumData] = await Promise.all([
-      getAiExpenseLogsAction(),
-      getAiExpenseSummaryAction(),
+
+    // Load common token data for the logged-in user
+    const [tokenRes, pricingRes] = await Promise.all([
+      getUserTokensAction(userEmail),
+      getTokenPricingSettingsAction(),
     ]);
-    setLogs(logsData);
-    setSummary(sumData);
+
+    if (tokenRes.success) {
+      setTokenBalance(tokenRes.tokenBalance);
+      setTokenTransactions(tokenRes.transactions);
+    }
+
+    if (pricingRes.success && pricingRes.settings) {
+      setTokenPricingSettings(pricingRes.settings);
+      setRetailPriceRate(pricingRes.settings.retailPricePerToken);
+    }
+
+    if (userRole === "SUPERADMIN") {
+      // Load Superadmin configurations, raw logs & user stats
+      const [logsData, sumData, userWiseStatsRes] = await Promise.all([
+        getAiExpenseLogsAction(),
+        getAiExpenseSummaryAction(),
+        getUserWiseStatsAction(userEmail),
+      ]);
+      setLogs(logsData);
+      setSummary(sumData);
+      if (pricingRes.success && pricingRes.settings) {
+        setActualCostRate(pricingRes.settings.actualCostPerToken);
+      }
+      if (userWiseStatsRes.success && userWiseStatsRes.stats) {
+        setUserWiseStats(userWiseStatsRes.stats);
+      }
+    }
     setLoading(false);
-  }, []);
+  }, [userEmail, userRole]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (isReady && userEmail) {
+      loadData();
+    }
+  }, [isReady, userEmail, loadData]);
 
-  // Derived: filtered + sorted rows
-  const filtered = logs.filter(r => {
+  // Handle manual token granting by Superadmin
+  const handleGrantTokens = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!grantTargetEmail.trim() || grantAmount <= 0) return;
+    setIsGranting(true);
+    setGrantSuccess(null);
+    const res = await grantTokensAction(userEmail!, grantTargetEmail, grantAmount, grantDesc);
+    if (res.success) {
+      setGrantSuccess(`Successfully granted ${grantAmount} tokens to ${grantTargetEmail}!`);
+      setGrantTargetEmail("");
+      setGrantAmount(50);
+      setGrantDesc("Campaign balance reload");
+      await loadData();
+      setTimeout(() => setGrantSuccess(null), 4000);
+    } else {
+      alert("Failed to grant tokens: " + res.error);
+    }
+    setIsGranting(false);
+  };
+
+  // Handle pricing rate modifications by Superadmin
+  const handleSavePricingConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingPricing(true);
+    setPricingSuccess(false);
+    const res = await configureTokenPricingAction(userEmail!, actualCostRate, retailPriceRate);
+    if (res.success) {
+      setPricingSuccess(true);
+      await loadData();
+      setTimeout(() => setPricingSuccess(false), 3000);
+    } else {
+      alert("Failed to save pricing configuration: " + res.error);
+    }
+    setIsSavingPricing(false);
+  };
+
+  // Handle user buying mock credits
+  const handleBuyTokens = async (planName: string, tokens: number, priceInr: number) => {
+    setBuyingPlan(planName);
+    setPurchaseSuccess(null);
+    await new Promise((resolve) => setTimeout(resolve, 1200)); // mock gateway latency
+
+    const res = await purchaseTokenPlanAction(userEmail!, planName, tokens, priceInr);
+    if (res.success) {
+      setPurchaseSuccess(`Successfully purchased ${tokens} tokens! Balance updated.`);
+      setTokenBalance(res.newBalance ?? (tokenBalance + tokens));
+      await loadData();
+      setTimeout(() => setPurchaseSuccess(null), 4000);
+    } else {
+      alert("Purchase failed: " + res.error);
+    }
+    setBuyingPlan(null);
+  };
+
+  const dynamicPlans = [
+    { name: "Starter Pack", tokens: 50, price: Math.round(50 * retailPriceRate), color: "#818cf8" },
+    { name: "Pro Pack", tokens: 100, price: Math.round(100 * retailPriceRate * 0.9), color: "#6366f1", popular: true },
+    { name: "Agency Bulk", tokens: 300, price: Math.round(300 * retailPriceRate * 0.67), color: "#4f46e5" }
+  ];
+
+  if (!isReady) return null;
+
+  // Derived: filtered + sorted rows for Superadmin Raw Log Table
+  const filteredLogs = logs.filter(r => {
     if (filterCategory !== "all" && r.category !== filterCategory) return false;
     if (filterApiType  !== "all" && r.apiType  !== filterApiType)  return false;
     if (filterStatus === "success" && !r.success) return false;
@@ -154,8 +286,8 @@ export default function ExpensePage() {
     return sortAsc ? (av as number) - (bv as number) : (bv as number) - (av as number);
   });
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageRows   = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / PAGE_SIZE));
+  const pageRows   = filteredLogs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(s => !s);
@@ -164,368 +296,697 @@ export default function ExpensePage() {
   };
 
   const SortIcon = ({ k }: { k: SortKey }) =>
-    sortKey === k
-      ? (sortAsc ? <ChevronUp size={12} /> : <ChevronDown size={12} />)
-      : null;
+    sortKey === k ? (sortAsc ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : null;
 
   const allCategories = [...new Set(logs.map(l => l.category))];
   const allApiTypes   = [...new Set(logs.map(l => l.apiType))];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-
       {/* ── Header ─────────────────────────────────────────────────── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 800, color: "var(--foreground)", margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: "linear-gradient(135deg,#8b5cf6,#3b82f6)",
-              display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <BarChart3 size={18} color="#fff" />
+            <div style={{
+              width: 34, height: 34, borderRadius: 10, background: "linear-gradient(135deg,#6366f1,#4f46e5)",
+              display: "flex", alignItems: "center", justifyContent: "center"
+            }}>
+              <Coins size={18} color="#fff" />
             </div>
-            AI Expense Center
+            {isSuperadmin ? "Admin Billing & Cost margins" : "AI Proposal Credit Center"}
           </h1>
           <p style={{ fontSize: 13, color: "var(--muted-foreground)", margin: "4px 0 0 44px" }}>
-            Track every Gemini &amp; Claude API call — tokens, cost, latency &amp; more
+            {isSuperadmin 
+              ? "Track API input/output expenses, adjust token prices, and grant credits manually."
+              : "Refill AI credits, view transaction ledgers, and manage your token balance."}
           </p>
         </div>
         <button
-          onClick={load}
+          onClick={loadData}
           disabled={loading}
           style={{
             display: "flex", alignItems: "center", gap: 8, padding: "10px 18px",
-            borderRadius: 10, border: "1px solid var(--border)", background: "var(--card)",
-            color: "var(--foreground)", fontSize: 13, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer",
-            opacity: loading ? 0.6 : 1,
+            borderRadius: 10, border: "2.5px solid var(--foreground)", background: "var(--card)",
+            color: "var(--foreground)", fontSize: 13, fontWeight: 800, cursor: loading ? "not-allowed" : "pointer",
+            boxShadow: "3px 3px 0px 0px var(--foreground)",
+            transition: "all 0.1s"
           }}
+          onMouseEnter={e => { if(!loading) e.currentTarget.style.transform = "translate(-1px,-1px)"; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = "none"; }}
         >
           <RefreshCw size={14} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
-          Refresh
+          <span>Sync State</span>
         </button>
       </div>
 
-      {/* ── Stat Cards ─────────────────────────────────────────────── */}
-      {summary && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14 }}>
-          <StatCard icon={Zap}          label="Total API Calls"   color="#8b5cf6"
-            value={String(summary.totalCalls)}
-            sub={`${summary.successCalls} success · ${summary.failedCalls} failed`} />
-          <StatCard icon={DollarSign}   label="Total Cost"        color="#10b981"
-            value={fmt.usdK(summary.totalCostUsd)}
-            sub="Accurate per-model pricing" />
-          <StatCard icon={TrendingUp}   label="Total Tokens"      color="#3b82f6"
-            value={fmt.tokens(summary.totalTokens)}
-            sub={`In: ${fmt.tokens(summary.totalInputTokens)} · Out: ${fmt.tokens(summary.totalOutputTokens)}`} />
-          <StatCard icon={Clock}        label="Avg Latency"       color="#f59e0b"
-            value={fmt.ms(summary.avgLatencyMs)}
-            sub="per API call" />
-        </div>
-      )}
-
-      {/* ── Mid Row: Category Breakdown + API Type pills ────────────── */}
-      {summary && summary.totalCalls > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          {/* By Category */}
-          <div style={{ background: "var(--card)", borderRadius: 16, padding: 20,
-            border: "1px solid var(--border)", boxShadow: "var(--card-shadow)" }}>
-            <h3 style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)", margin: "0 0 16px",
-              display: "flex", alignItems: "center", gap: 8 }}>
-              <BarChart3 size={14} style={{ color: "var(--primary)" }} />
-              Cost by Category
-            </h3>
-            <CategoryBreakdown rows={summary.byCategory} />
-          </div>
-
-          {/* By API Type */}
-          <div style={{ background: "var(--card)", borderRadius: 16, padding: 20,
-            border: "1px solid var(--border)", boxShadow: "var(--card-shadow)" }}>
-            <h3 style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)", margin: "0 0 16px",
-              display: "flex", alignItems: "center", gap: 8 }}>
-              <Zap size={14} style={{ color: "var(--primary)" }} />
-              Calls by API Type
-            </h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {summary.byApiType.map(r => {
-                const meta = getApiMeta(r.apiType);
-                const Icon = meta.icon;
-                return (
-                  <div key={r.apiType} style={{
-                    display: "flex", alignItems: "center", gap: 10, padding: "8px 12px",
-                    borderRadius: 10, background: meta.bg,
-                  }}>
-                    <Icon size={14} style={{ color: meta.color, flexShrink: 0 }} />
-                    <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "var(--foreground)" }}>{meta.label}</span>
-                    <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{r.calls}×</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: meta.color }}>{fmt.tokens(r.tokens)} tok</span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: meta.color }}>{fmt.usdK(r.costUsd)}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Table Section ─────────────────────────────────────────────── */}
-      <div style={{ background: "var(--card)", borderRadius: 20, border: "1px solid var(--border)",
-        boxShadow: "var(--card-shadow)", overflow: "hidden" }}>
-
-        {/* Table Header */}
-        <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid var(--border)" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--foreground)", margin: 0,
-              display: "flex", alignItems: "center", gap: 8 }}>
-              <Filter size={14} style={{ color: "var(--primary)" }} />
-              Usage Log
-              <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 99,
-                background: "var(--accent)", color: "var(--muted-foreground)", marginLeft: 4 }}>
-                {filtered.length} records
+      {/* ── USER PANEL ── */}
+      {!isSuperadmin ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* User balance cards & pricing Refills */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 20, alignItems: "stretch", flexWrap: "wrap" }}>
+            
+            {/* Balance Card */}
+            <div className="bento-card" style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, color: "var(--muted-foreground)" }}>
+                Your Token Balance
               </span>
-            </h2>
-
-            {/* Filters row */}
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              {/* Search */}
-              <div style={{ position: "relative" }}>
-                <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
-                  color: "var(--muted-foreground)", pointerEvents: "none" }} />
-                <input
-                  value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-                  placeholder="Search..."
-                  style={{ paddingLeft: 30, paddingRight: 10, height: 34, borderRadius: 8, fontSize: 12,
-                    border: "1px solid var(--border)", background: "var(--input)", color: "var(--foreground)",
-                    width: 160, outline: "none" }}
-                />
+              <div style={{ fontSize: 36, fontWeight: 900, color: "var(--foreground)", fontFamily: "var(--handwriting-font)" }}>
+                {tokenBalance} Tokens
               </div>
-
-              {/* Category filter */}
-              <select value={filterCategory} onChange={e => { setFilterCategory(e.target.value); setPage(1); }}
-                style={{ height: 34, borderRadius: 8, fontSize: 12, padding: "0 10px",
-                  border: "1px solid var(--border)", background: "var(--input)", color: "var(--foreground)", cursor: "pointer" }}>
-                <option value="all">All Categories</option>
-                {allCategories.map(c => <option key={c} value={c}>{CATEGORY_META[c]?.label ?? c}</option>)}
-              </select>
-
-              {/* API Type filter */}
-              <select value={filterApiType} onChange={e => { setFilterApiType(e.target.value); setPage(1); }}
-                style={{ height: 34, borderRadius: 8, fontSize: 12, padding: "0 10px",
-                  border: "1px solid var(--border)", background: "var(--input)", color: "var(--foreground)", cursor: "pointer" }}>
-                <option value="all">All Types</option>
-                {allApiTypes.map(t => <option key={t} value={t}>{getApiMeta(t).label}</option>)}
-              </select>
-
-              {/* Status filter */}
-              <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: "1px solid var(--border)" }}>
-                {(["all", "success", "failed"] as const).map(s => (
-                  <button key={s} onClick={() => { setFilterStatus(s); setPage(1); }}
-                    style={{
-                      padding: "0 12px", height: 34, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600,
-                      background: filterStatus === s ? "var(--primary)" : "var(--input)",
-                      color: filterStatus === s ? "var(--primary-foreground)" : "var(--muted-foreground)",
-                      transition: "all 0.15s",
-                    }}>
-                    {s.charAt(0).toUpperCase() + s.slice(1)}
-                  </button>
-                ))}
-              </div>
+              <p style={{ fontSize: 12, color: "var(--muted-foreground)", margin: 0, lineHeight: 1.5 }}>
+                Each AI action (Resume scan, match score parsing, or template generation) consumes exactly 1 token.
+              </p>
             </div>
-          </div>
-        </div>
 
-        {/* Table */}
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-            <thead>
-              <tr style={{ background: "var(--accent)" }}>
-                {[
-                  { label: "API Type",     key: null },
-                  { label: "Category",     key: null },
-                  { label: "Model",        key: null },
-                  { label: "In Tokens",    key: null },
-                  { label: "Out Tokens",   key: null },
-                  { label: "Total Tokens", key: "totalTokens" as SortKey },
-                  { label: "Input Cost",   key: null },
-                  { label: "Output Cost",  key: null },
-                  { label: "Total Cost",   key: "totalCostUsd" as SortKey },
-                  { label: "Latency",      key: "durationMs" as SortKey },
-                  { label: "Status",       key: null },
-                  { label: "Triggered",    key: "createdAt" as SortKey },
-                ].map(({ label, key }) => (
-                  <th
-                    key={label}
-                    onClick={key ? () => handleSort(key) : undefined}
-                    style={{
-                      padding: "10px 14px", textAlign: "left", fontWeight: 700,
-                      color: "var(--muted-foreground)", fontSize: 10, textTransform: "uppercase",
-                      letterSpacing: 1, whiteSpace: "nowrap",
-                      cursor: key ? "pointer" : "default",
-                      userSelect: "none",
-                    }}
-                  >
-                    <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      {label} {key && <SortIcon k={key} />}
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={12} style={{ padding: 48, textAlign: "center", color: "var(--muted-foreground)" }}>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-                      <RefreshCw size={24} style={{ animation: "spin 1s linear infinite", color: "var(--primary)" }} />
-                      <span>Loading expense data…</span>
-                    </div>
-                  </td>
-                </tr>
+            {/* Rupee plans Refills */}
+            <div className="bento-card">
+              <h3 style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, color: "var(--muted-foreground)", margin: "0 0 16px" }}>
+                Refill Credits (Indian Rupees ₹)
+              </h3>
+              {purchaseSuccess && (
+                <div style={{
+                  background: "rgba(34, 197, 94, 0.08)", border: "2px solid #22c55e",
+                  borderRadius: 10, padding: 12, display: "flex", gap: 8, alignItems: "center", color: "#22c55e",
+                  fontSize: 13, fontWeight: 700, marginBottom: 16, boxShadow: "2px 2px 0px 0px #22c55e"
+                }}>
+                  <Check size={16} />
+                  <span>{purchaseSuccess}</span>
+                </div>
               )}
-              {!loading && pageRows.length === 0 && (
-                <tr>
-                  <td colSpan={12} style={{ padding: 48, textAlign: "center", color: "var(--muted-foreground)" }}>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-                      <BarChart3 size={32} style={{ opacity: 0.3 }} />
-                      <p style={{ margin: 0, fontWeight: 600 }}>No records yet</p>
-                      <p style={{ margin: 0, fontSize: 12 }}>AI usage logs will appear here after API calls</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-              {!loading && pageRows.map((row, i) => {
-                const meta = getApiMeta(row.apiType);
-                const Icon = meta.icon;
-                const catColor = getCategoryColor(row.category);
-                const isEven = i % 2 === 0;
 
-                return (
-                  <tr
-                    key={row.id}
-                    style={{
-                      background: isEven ? "transparent" : "var(--accent)",
-                      borderBottom: "1px solid var(--border)",
-                      transition: "background 0.12s",
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "var(--input)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = isEven ? "transparent" : "var(--accent)")}
-                  >
-                    {/* API Type */}
-                    <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                        <div style={{ width: 26, height: 26, borderRadius: 7, background: meta.bg,
-                          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          <Icon size={13} style={{ color: meta.color }} />
-                        </div>
-                        <span style={{ fontWeight: 600, color: "var(--foreground)" }}>{meta.label}</span>
-                      </div>
-                    </td>
-
-                    {/* Category */}
-                    <td style={{ padding: "10px 14px" }}>
-                      <span style={{
-                        display: "inline-block", padding: "2px 8px", borderRadius: 99, fontSize: 10,
-                        fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8,
-                        background: `${catColor}18`, color: catColor,
-                      }}>
-                        {CATEGORY_META[row.category]?.label ?? row.category}
-                      </span>
-                    </td>
-
-                    {/* Model */}
-                    <td style={{ padding: "10px 14px", color: "var(--muted-foreground)", fontFamily: "monospace", fontSize: 11 }}>
-                      {row.model}
-                    </td>
-
-                    {/* In Tokens */}
-                    <td style={{ padding: "10px 14px", textAlign: "right", color: "var(--muted-foreground)" }}>
-                      {fmt.tokens(row.inputTokens)}
-                    </td>
-
-                    {/* Out Tokens */}
-                    <td style={{ padding: "10px 14px", textAlign: "right", color: "var(--muted-foreground)" }}>
-                      {fmt.tokens(row.outputTokens)}
-                    </td>
-
-                    {/* Total Tokens */}
-                    <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "var(--foreground)" }}>
-                      {fmt.tokens(row.totalTokens)}
-                    </td>
-
-                    {/* Input Cost */}
-                    <td style={{ padding: "10px 14px", textAlign: "right", color: "var(--muted-foreground)", fontFamily: "monospace", fontSize: 11 }}>
-                      {fmt.usd(row.inputCostUsd)}
-                    </td>
-
-                    {/* Output Cost */}
-                    <td style={{ padding: "10px 14px", textAlign: "right", color: "var(--muted-foreground)", fontFamily: "monospace", fontSize: 11 }}>
-                      {fmt.usd(row.outputCostUsd)}
-                    </td>
-
-                    {/* Total Cost */}
-                    <td style={{ padding: "10px 14px", textAlign: "right" }}>
-                      <span style={{ fontWeight: 700, color: "#10b981", fontFamily: "monospace" }}>
-                        {fmt.usd(row.totalCostUsd)}
-                      </span>
-                    </td>
-
-                    {/* Latency */}
-                    <td style={{ padding: "10px 14px", textAlign: "right" }}>
-                      <span style={{
-                        fontWeight: 600, fontSize: 11,
-                        color: row.durationMs > 5000 ? "#ef4444" : row.durationMs > 2000 ? "#f59e0b" : "#10b981",
-                      }}>
-                        {fmt.ms(row.durationMs)}
-                      </span>
-                    </td>
-
-                    {/* Status */}
-                    <td style={{ padding: "10px 14px" }}>
-                      {row.success
-                        ? <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#10b981" }}>
-                            <CheckCircle2 size={13} /><span style={{ fontWeight: 600 }}>OK</span>
-                          </div>
-                        : <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#ef4444" }}
-                            title={row.errorMessage || ""}>
-                            <XCircle size={13} /><span style={{ fontWeight: 600 }}>Error</span>
-                          </div>
-                      }
-                    </td>
-
-                    {/* Date */}
-                    <td style={{ padding: "10px 14px", whiteSpace: "nowrap", color: "var(--muted-foreground)" }}>
-                      {fmt.date(row.createdAt)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)",
-            display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
-              Page {page} of {totalPages} · {filtered.length} records
-            </span>
-            <div style={{ display: "flex", gap: 6 }}>
-              {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => i + 1).map(p => (
-                <button key={p} onClick={() => setPage(p)}
-                  style={{
-                    width: 32, height: 32, borderRadius: 8, border: "1px solid var(--border)",
-                    background: page === p ? "var(--primary)" : "var(--input)",
-                    color: page === p ? "var(--primary-foreground)" : "var(--foreground)",
-                    fontWeight: 600, fontSize: 12, cursor: "pointer",
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
+                {dynamicPlans.map(pack => (
+                  <div key={pack.name} style={{
+                    background: "var(--input)",
+                    border: pack.popular ? "3px solid #6366f1" : "2px solid var(--foreground)",
+                    borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 8,
+                    boxShadow: pack.popular ? "3px 3px 0px 0px #6366f1" : "2px 2px 0px 0px var(--foreground)"
                   }}>
-                  {p}
-                </button>
-              ))}
+                    <div style={{ fontSize: 14, fontWeight: 800 }}>{pack.name}</div>
+                    <div style={{ fontSize: 24, fontWeight: 900, fontFamily: "var(--handwriting-font)" }}>₹{pack.price}</div>
+                    <div style={{ fontSize: 11, color: "var(--muted-foreground)", fontWeight: 700 }}>{pack.tokens} AI Tokens</div>
+                    <button
+                      disabled={buyingPlan !== null}
+                      onClick={() => handleBuyTokens(pack.name, pack.tokens, pack.price)}
+                      style={{
+                        marginTop: 4, width: "100%", padding: "8px 12px", border: "2.5px solid var(--foreground)",
+                        background: pack.popular ? "#6366f1" : "var(--card)",
+                        color: pack.popular ? "#fff" : "var(--foreground)",
+                        fontSize: 11.5, fontWeight: 800, borderRadius: 8, cursor: "pointer",
+                        boxShadow: "2px 2px 0px 0px var(--foreground)", display: "flex", alignItems: "center", justifyContent: "center", gap: 4
+                      }}
+                    >
+                      {buyingPlan === pack.name ? <Loader2 size={12} className="animate-spin" /> : <CreditCard size={12} />}
+                      <span>{buyingPlan === pack.name ? "Paying..." : "Buy Pack"}</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        )}
-      </div>
+
+          {/* User Transaction Log ledger */}
+          <div className="bento-card">
+            <h3 style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, color: "var(--muted-foreground)", margin: "0 0 16px" }}>
+              Token Transactions Ledger
+            </h3>
+            <div style={{ border: "2.5px solid var(--foreground)", borderRadius: 12, overflow: "hidden", boxShadow: "3px 3px 0px 0px var(--foreground)" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+                <thead>
+                  <tr style={{ background: "var(--input)", borderBottom: "2px solid var(--foreground)" }}>
+                    <th style={{ padding: "10px 14px", fontWeight: 800 }}>Date</th>
+                    <th style={{ padding: "10px 14px", fontWeight: 800 }}>Type</th>
+                    <th style={{ padding: "10px 14px", fontWeight: 800 }}>Description</th>
+                    <th style={{ padding: "10px 14px", fontWeight: 800, textAlign: "right" }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tokenTransactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} style={{ padding: 24, textAlign: "center", color: "var(--muted-foreground)" }}>
+                        No transactions registered yet. Acquire credits above to start.
+                      </td>
+                    </tr>
+                  ) : (
+                    tokenTransactions.map((tx) => (
+                      <tr key={tx.id} style={{ borderBottom: "1px solid var(--border)", background: "var(--card)" }}>
+                        <td style={{ padding: "10px 14px", color: "var(--muted-foreground)" }}>
+                          {new Date(tx.createdAt).toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </td>
+                        <td style={{ padding: "10px 14px" }}>
+                          <span style={{
+                            padding: "2px 6px", borderRadius: 4, fontSize: 9.5, fontWeight: 800, textTransform: "uppercase",
+                            background: tx.type === "PURCHASE" ? "rgba(34,197,94,0.08)" : tx.type === "GRANT" ? "rgba(99,102,241,0.08)" : "rgba(245,158,11,0.08)",
+                            color: tx.type === "PURCHASE" ? "#22c55e" : tx.type === "GRANT" ? "#6366f1" : "#f59e0b",
+                            border: `1.5px solid ${tx.type === "PURCHASE" ? "#22c55e" : tx.type === "GRANT" ? "#6366f1" : "#f59e0b"}`
+                          }}>
+                            {tx.type}
+                          </span>
+                        </td>
+                        <td style={{ padding: "10px 14px", fontWeight: 700 }}>{tx.description}</td>
+                        <td style={{ padding: "10px 14px", fontWeight: 900, textAlign: "right", color: tx.amount > 0 ? "#22c55e" : "var(--foreground)" }}>
+                          {tx.amount > 0 ? `+${tx.amount}` : tx.amount}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* ── SUPERADMIN PANEL ── */
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* Admin Stats Margin Summary Row */}
+          {tokenPricingSettings && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+              <StatCard icon={Coins} label="Tokens Consumed" value={fmt.tokens(tokenPricingSettings.totalTokensConsumed)} color="#8b5cf6" />
+              <StatCard icon={DollarSign} label="Actual API cost (INR)" value={fmt.inr(tokenPricingSettings.totalApiCostInr)} color="#ef4444" />
+              <StatCard icon={Receipt} label="Total Retail Revenue" value={fmt.inr(tokenPricingSettings.totalRevenueInr)} color="#10b981" />
+              <StatCard
+                icon={TrendingUp}
+                label="COS Margins"
+                value={`${tokenPricingSettings.marginPercent}%`}
+                sub={`Profit: ${fmt.inr(tokenPricingSettings.marginInr)}`}
+                color="#6366f1"
+              />
+            </div>
+          )}
+
+          {/* Pricing settings & Grants forms double grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, flexWrap: "wrap" }}>
+            
+            {/* Token Pricing configurations */}
+            <div className="bento-card">
+              <h3 style={{ fontSize: 14, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, color: "var(--muted-foreground)", margin: "0 0 16px" }}>
+                Token Price Tuning (₹)
+              </h3>
+              
+              <form onSubmit={handleSavePricingConfig} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label style={{ fontSize: 12, fontWeight: 800 }}>Actual API Cost Price (per token, in ₹)</label>
+                  <input
+                    type="number" step="0.0001"
+                    value={actualCostRate}
+                    onChange={e => setActualCostRate(parseFloat(e.target.value))}
+                    className="glow-input"
+                    style={{ fontSize: 13 }}
+                  />
+                  <span style={{ fontSize: 10, color: "var(--muted-foreground)" }}>
+                    Official LLM cost estimation per parsed token + generation response. Default: ₹0.0150
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label style={{ fontSize: 12, fontWeight: 800 }}>Retail Sale Price (per token, in ₹)</label>
+                  <input
+                    type="number" step="0.01"
+                    value={retailPriceRate}
+                    onChange={e => setRetailPriceRate(parseFloat(e.target.value))}
+                    className="glow-input"
+                    style={{ fontSize: 13 }}
+                  />
+                  <span style={{ fontSize: 10, color: "var(--muted-foreground)" }}>
+                    Value charged to normal users per token on purchase plans. Default: ₹1.00
+                  </span>
+                </div>
+
+                {pricingSuccess && (
+                  <span style={{ fontSize: 12, color: "#22c55e", fontWeight: 700 }}>
+                    ✓ Configuration saved successfully!
+                  </span>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isSavingPricing}
+                  style={{
+                    padding: "10px 16px", borderRadius: 8, border: "2.5px solid var(--foreground)",
+                    background: "#6366f1", color: "#fff", fontWeight: 800, fontSize: 13,
+                    cursor: "pointer", boxShadow: "2px 2px 0px 0px var(--foreground)", alignSelf: "flex-start"
+                  }}
+                >
+                  {isSavingPricing ? "Saving..." : "Save Pricing Config"}
+                </button>
+              </form>
+            </div>
+
+            {/* Manual Token Grant allocation tool */}
+            <div className="bento-card">
+              <h3 style={{ fontSize: 14, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, color: "var(--muted-foreground)", margin: "0 0 16px" }}>
+                Manual Credit Grant Allocation
+              </h3>
+              
+              {grantSuccess && (
+                <div style={{
+                  background: "rgba(34, 197, 94, 0.08)", border: "2px solid #22c55e",
+                  borderRadius: 10, padding: 10, color: "#22c55e", fontSize: 12, fontWeight: 700, marginBottom: 12
+                }}>
+                  {grantSuccess}
+                </div>
+              )}
+
+              <form onSubmit={handleGrantTokens} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", gap: 12 }}>
+                  <div style={{ flex: 2, display: "flex", flexDirection: "column", gap: 4 }}>
+                    <label style={{ fontSize: 12, fontWeight: 800 }}>User Email Address</label>
+                    <input
+                      type="email" required
+                      value={grantTargetEmail}
+                      onChange={e => setGrantTargetEmail(e.target.value)}
+                      placeholder="user@example.com"
+                      className="glow-input"
+                      style={{ fontSize: 13 }}
+                    />
+                  </div>
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                    <label style={{ fontSize: 12, fontWeight: 800 }}>Tokens</label>
+                    <input
+                      type="number" required min="1"
+                      value={grantAmount}
+                      onChange={e => setGrantAmount(parseInt(e.target.value))}
+                      className="glow-input"
+                      style={{ fontSize: 13 }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label style={{ fontSize: 12, fontWeight: 800 }}>Grant Reason / Notes</label>
+                  <input
+                    type="text" required
+                    value={grantDesc}
+                    onChange={e => setGrantDesc(e.target.value)}
+                    placeholder="Adhoc campaign promo"
+                    className="glow-input"
+                    style={{ fontSize: 13 }}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isGranting}
+                  style={{
+                    padding: "10px 16px", borderRadius: 8, border: "2.5px solid var(--foreground)",
+                    background: "#10b981", color: "#fff", fontWeight: 800, fontSize: 13,
+                    cursor: "pointer", boxShadow: "2px 2px 0px 0px var(--foreground)", alignSelf: "flex-start",
+                    display: "flex", alignItems: "center", gap: 6
+                  }}
+                >
+                  <Plus style={{ width: 14, height: 14 }} />
+                  <span>{isGranting ? "Crediting..." : "Grant Tokens"}</span>
+                </button>
+              </form>
+            </div>
+
+          </div>
+
+          {/* User Credit & AI Usage Analytics */}
+          <div className="bento-card" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Users size={16} />
+              <h3 style={{ fontSize: 14, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, color: "var(--muted-foreground)", margin: 0 }}>
+                User Wise Credit & AI Usage Analytics
+              </h3>
+            </div>
+
+            <div style={{ border: "2.5px solid var(--foreground)", borderRadius: 12, overflow: "hidden", boxShadow: "3px 3px 0px 0px var(--foreground)" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, textAlign: "left" }}>
+                <thead>
+                  <tr style={{ background: "var(--input)", borderBottom: "2px solid var(--foreground)" }}>
+                    <th style={{ padding: "10px 14px", fontWeight: 800 }}>User name / Email</th>
+                    <th style={{ padding: "10px 14px", fontWeight: 800, textAlign: "right" }}>Token Balance</th>
+                    <th style={{ padding: "10px 14px", fontWeight: 800, textAlign: "right" }}>AI Calls Run</th>
+                    <th style={{ padding: "10px 14px", fontWeight: 800, textAlign: "right" }}>Tokens Consumed</th>
+                    <th style={{ padding: "10px 14px", fontWeight: 800, textAlign: "right" }}>Actual API cost</th>
+                    <th style={{ padding: "10px 14px", fontWeight: 800, textAlign: "right" }}>Total Purchases</th>
+                    <th style={{ padding: "10px 14px", fontWeight: 800, textAlign: "right" }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {userWiseStats.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ padding: 24, textAlign: "center", color: "var(--muted-foreground)" }}>
+                        No user statistics available.
+                      </td>
+                    </tr>
+                  ) : (
+                    userWiseStats.map((u) => {
+                      const initials = u.name
+                        .split(" ")
+                        .map(n => n[0])
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase() || "US";
+
+                      return (
+                        <tr key={u.email} style={{ borderBottom: "1px solid var(--border)", background: "var(--card)" }}>
+                          <td style={{ padding: "10px 14px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                              <div style={{
+                                width: 28, height: 28, borderRadius: "50%",
+                                background: "linear-gradient(135deg, #6366f1, #a855f7)",
+                                color: "#fff", display: "flex", alignItems: "center",
+                                justifyContent: "center", fontSize: 10, fontWeight: "bold"
+                              }}>
+                                {initials}
+                              </div>
+                              <div style={{ display: "flex", flexDirection: "column" }}>
+                                <span style={{ fontWeight: 700 }}>{u.name}</span>
+                                <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{u.email}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ padding: "10px 14px", fontWeight: 800, textAlign: "right" }}>
+                            <span style={{
+                              padding: "2px 6px", borderRadius: 6,
+                              background: u.tokenBalance > 0 ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
+                              color: u.tokenBalance > 0 ? "#22c55e" : "#ef4444",
+                              border: `1.5px solid ${u.tokenBalance > 0 ? "#22c55e" : "#ef4444"}`
+                            }}>
+                              {u.tokenBalance} tok
+                            </span>
+                          </td>
+                          <td style={{ padding: "10px 14px", fontWeight: 700, textAlign: "right" }}>{u.totalCalls} calls</td>
+                          <td style={{ padding: "10px 14px", fontWeight: 700, textAlign: "right", color: "var(--muted-foreground)" }}>
+                            {fmt.tokens(u.tokensConsumed)}
+                          </td>
+                          <td style={{ padding: "10px 14px", fontWeight: 800, textAlign: "right", color: "#ef4444" }}>
+                            {fmt.inr(u.actualCostInr)}
+                          </td>
+                          <td style={{ padding: "10px 14px", fontWeight: 800, textAlign: "right", color: "#22c55e" }}>
+                            {fmt.inr(u.revenueInr)}
+                          </td>
+                          <td style={{ padding: "10px 14px", textAlign: "right" }}>
+                            <button
+                              onClick={() => {
+                                setGrantTargetEmail(u.email);
+                                window.scrollTo({ top: 0, behavior: "smooth" });
+                              }}
+                              style={{
+                                padding: "4px 10px", fontSize: 11, fontWeight: 800,
+                                borderRadius: 6, border: "1.5px solid var(--foreground)",
+                                background: "var(--input)", cursor: "pointer",
+                                boxShadow: "1.5px 1.5px 0px 0px var(--foreground)"
+                              }}
+                            >
+                              Grant Credits
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Superadmin Raw API logs & summaries */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 24, borderTop: "2px dashed var(--border)", paddingTop: 24 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8, color: "var(--muted-foreground)", margin: 0 }}>
+              Raw LLM Expense Audit & Logs
+            </h3>
+            
+            {/* Stat Cards */}
+            {summary && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14 }}>
+                <StatCard icon={Zap}          label="Total API Calls"   color="#8b5cf6"
+                  value={String(summary.totalCalls)}
+                  sub={`${summary.successCalls} success · ${summary.failedCalls} failed`} />
+                <StatCard icon={DollarSign}   label="Total Cost (USD)"  color="#10b981"
+                  value={fmt.usdK(summary.totalCostUsd)}
+                  sub="Official provider rates" />
+                <StatCard icon={TrendingUp}   label="Total Tokens"      color="#3b82f6"
+                  value={fmt.tokens(summary.totalTokens)}
+                  sub={`In: ${fmt.tokens(summary.totalInputTokens)} · Out: ${fmt.tokens(summary.totalOutputTokens)}`} />
+                <StatCard icon={Clock}        label="Avg Latency"       color="#f59e0b"
+                  value={fmt.ms(summary.avgLatencyMs)}
+                  sub="per API call" />
+              </div>
+            )}
+
+            {/* Breakdown Grid */}
+            {summary && summary.totalCalls > 0 && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                {/* By Category */}
+                <div style={{ background: "var(--card)", borderRadius: 16, padding: 20,
+                  border: "2.5px solid var(--foreground)", boxShadow: "3px 3px 0px 0px var(--foreground)" }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 800, color: "var(--foreground)", margin: "0 0 16px",
+                    display: "flex", alignItems: "center", gap: 8 }}>
+                    <BarChart3 size={14} />
+                    Cost by Category
+                  </h3>
+                  <CategoryBreakdown rows={summary.byCategory} />
+                </div>
+
+                {/* By API Type */}
+                <div style={{ background: "var(--card)", borderRadius: 16, padding: 20,
+                  border: "2.5px solid var(--foreground)", boxShadow: "3px 3px 0px 0px var(--foreground)" }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 800, color: "var(--foreground)", margin: "0 0 16px",
+                    display: "flex", alignItems: "center", gap: 8 }}>
+                    <Zap size={14} />
+                    Calls by API Type
+                  </h3>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {summary.byApiType.map(r => {
+                      const meta = getApiMeta(r.apiType);
+                      const Icon = meta.icon;
+                      return (
+                        <div key={r.apiType} style={{
+                          display: "flex", alignItems: "center", gap: 10, padding: "8px 12px",
+                          borderRadius: 10, background: meta.bg, border: "1.5px solid var(--foreground)"
+                        }}>
+                          <Icon size={14} style={{ color: meta.color, flexShrink: 0 }} />
+                          <span style={{ flex: 1, fontSize: 12, fontWeight: 800, color: "var(--foreground)" }}>{meta.label}</span>
+                          <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{r.calls}×</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: meta.color }}>{fmt.tokens(r.tokens)} tok</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: meta.color }}>{fmt.usdK(r.costUsd)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Raw Log Table */}
+            <div style={{ background: "var(--card)", borderRadius: 20, border: "2.5px solid var(--foreground)",
+              boxShadow: "3px 3px 0px 0px var(--foreground)", overflow: "hidden" }}>
+
+              {/* Table Header Controls */}
+              <div style={{ padding: "18px 20px 14px", borderBottom: "2px solid var(--foreground)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+                  <h2 style={{ fontSize: 15, fontWeight: 800, color: "var(--foreground)", margin: 0,
+                    display: "flex", alignItems: "center", gap: 8 }}>
+                    <Filter size={14} />
+                    Usage Log
+                    <span style={{ fontSize: 11, fontWeight: 800, padding: "2px 8px", borderRadius: 99,
+                      background: "var(--accent)", color: "var(--muted-foreground)", border: "1.5px solid var(--foreground)", marginLeft: 4 }}>
+                      {filteredLogs.length} records
+                    </span>
+                  </h2>
+
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    {/* Search */}
+                    <div style={{ position: "relative" }}>
+                      <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+                        color: "var(--muted-foreground)", pointerEvents: "none" }} />
+                      <input
+                        value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+                        placeholder="Search..."
+                        style={{ paddingLeft: 30, paddingRight: 10, height: 34, borderRadius: 8, fontSize: 12,
+                          border: "1.5px solid var(--foreground)", background: "var(--input)", color: "var(--foreground)",
+                          width: 160, outline: "none" }}
+                      />
+                    </div>
+
+                    {/* Category filter */}
+                    <select value={filterCategory} onChange={e => { setFilterCategory(e.target.value); setPage(1); }}
+                      style={{ height: 34, borderRadius: 8, fontSize: 12, padding: "0 10px",
+                        border: "1.5px solid var(--foreground)", background: "var(--input)", color: "var(--foreground)", cursor: "pointer", outline: "none" }}>
+                      <option value="all">All Categories</option>
+                      {allCategories.map(c => <option key={c} value={c}>{CATEGORY_META[c]?.label ?? c}</option>)}
+                    </select>
+
+                    {/* API Type filter */}
+                    <select value={filterApiType} onChange={e => { setFilterApiType(e.target.value); setPage(1); }}
+                      style={{ height: 34, borderRadius: 8, fontSize: 12, padding: "0 10px",
+                        border: "1.5px solid var(--foreground)", background: "var(--input)", color: "var(--foreground)", cursor: "pointer", outline: "none" }}>
+                      <option value="all">All Types</option>
+                      {allApiTypes.map(t => <option key={t} value={t}>{getApiMeta(t).label}</option>)}
+                    </select>
+
+                    {/* Status selection */}
+                    <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: "1.5px solid var(--foreground)" }}>
+                      {(["all", "success", "failed"] as const).map(s => (
+                        <button key={s} onClick={() => { setFilterStatus(s); setPage(1); }}
+                          style={{
+                            padding: "0 12px", height: 32, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 800,
+                            background: filterStatus === s ? "var(--primary)" : "var(--input)",
+                            color: filterStatus === s ? "var(--primary-foreground)" : "var(--muted-foreground)",
+                            transition: "all 0.15s",
+                          }}>
+                          {s.charAt(0).toUpperCase() + s.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Table */}
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: "var(--accent)" }}>
+                      {[
+                        { label: "API Type",     key: null },
+                        { label: "Category",     key: null },
+                        { label: "Model",        key: null },
+                        { label: "User Email",   key: null },
+                        { label: "Total Tokens", key: "totalTokens" as SortKey },
+                        { label: "Total Cost",   key: "totalCostUsd" as SortKey },
+                        { label: "Latency",      key: "durationMs" as SortKey },
+                        { label: "Status",       key: null },
+                        { label: "Triggered",    key: "createdAt" as SortKey },
+                      ].map(({ label, key }) => (
+                        <th
+                          key={label}
+                          onClick={key ? () => handleSort(key) : undefined}
+                          style={{
+                            padding: "10px 14px", textAlign: "left", fontWeight: 800,
+                            color: "var(--muted-foreground)", fontSize: 10, textTransform: "uppercase",
+                            letterSpacing: 1, whiteSpace: "nowrap",
+                            cursor: key ? "pointer" : "default",
+                            userSelect: "none",
+                          }}
+                        >
+                          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            {label} {key && <SortIcon k={key} />}
+                          </span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading && (
+                      <tr>
+                        <td colSpan={9} style={{ padding: 48, textAlign: "center", color: "var(--muted-foreground)" }}>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                            <RefreshCw size={24} style={{ animation: "spin 1s linear infinite", color: "var(--primary)" }} />
+                            <span>Loading expense database…</span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {!loading && pageRows.length === 0 && (
+                      <tr>
+                        <td colSpan={9} style={{ padding: 48, textAlign: "center", color: "var(--muted-foreground)" }}>
+                          No records found match filters.
+                        </td>
+                      </tr>
+                    )}
+                    {!loading && pageRows.map((row, i) => {
+                      const meta = getApiMeta(row.apiType);
+                      const Icon = meta.icon;
+                      const catColor = getCategoryColor(row.category);
+                      const isEven = i % 2 === 0;
+
+                      return (
+                        <tr
+                          key={row.id}
+                          style={{
+                            background: isEven ? "transparent" : "var(--accent)",
+                            borderBottom: "1px solid var(--border)",
+                          }}
+                        >
+                          <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                              <div style={{ width: 26, height: 26, borderRadius: 7, background: meta.bg,
+                                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                <Icon size={13} style={{ color: meta.color }} />
+                              </div>
+                              <span style={{ fontWeight: 700, color: "var(--foreground)" }}>{meta.label}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: "10px 14px" }}>
+                            <span style={{
+                              display: "inline-block", padding: "2px 8px", borderRadius: 99, fontSize: 10,
+                              fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.8,
+                              background: `${catColor}18`, color: catColor,
+                            }}>
+                              {CATEGORY_META[row.category]?.label ?? row.category}
+                            </span>
+                          </td>
+                          <td style={{ padding: "10px 14px", color: "var(--muted-foreground)", fontFamily: "monospace", fontSize: 11 }}>
+                            {row.model}
+                          </td>
+                          <td style={{ padding: "10px 14px", fontWeight: 600 }}>
+                            {row.userEmail || "anonymous"}
+                          </td>
+                          <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700 }}>
+                            {fmt.tokens(row.totalTokens)}
+                          </td>
+                          <td style={{ padding: "10px 14px", textAlign: "right", fontFamily: "monospace", color: "#10b981", fontWeight: 700 }}>
+                            {fmt.usd(row.totalCostUsd)}
+                          </td>
+                          <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 600, color: row.durationMs > 3000 ? "#f59e0b" : "#10b981" }}>
+                            {fmt.ms(row.durationMs)}
+                          </td>
+                          <td style={{ padding: "10px 14px" }}>
+                            {row.success
+                              ? <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#10b981", fontWeight: 700 }}>
+                                  <CheckCircle2 size={13} /><span>OK</span>
+                                </div>
+                              : <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#ef4444", fontWeight: 700 }}>
+                                  <XCircle size={13} /><span>Error</span>
+                                </div>
+                            }
+                          </td>
+                          <td style={{ padding: "10px 14px", whiteSpace: "nowrap", color: "var(--muted-foreground)" }}>
+                            {fmt.date(row.createdAt)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Table Pagination */}
+              {totalPages > 1 && (
+                <div style={{ padding: "12px 20px", borderTop: "2px solid var(--foreground)",
+                  display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--input)" }}>
+                  <span style={{ fontSize: 12, color: "var(--muted-foreground)", fontWeight: 700 }}>
+                    Page {page} of {totalPages} · {filteredLogs.length} audit logs
+                  </span>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map(p => (
+                      <button key={p} onClick={() => setPage(p)}
+                        style={{
+                          width: 32, height: 32, borderRadius: 8, border: "2px solid var(--foreground)",
+                          background: page === p ? "var(--primary)" : "var(--card)",
+                          color: page === p ? "var(--primary-foreground)" : "var(--foreground)",
+                          fontWeight: 800, fontSize: 12, cursor: "pointer",
+                          boxShadow: page === p ? "none" : "1.5px 1.5px 0px 0px var(--foreground)"
+                        }}>
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
       `}</style>
     </div>
   );

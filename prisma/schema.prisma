@@ -9,19 +9,21 @@ generator client {
 enum UserStatus {
   PENDING
   ACTIVE
+  INACTIVE
 }
 
 model User {
-  id        String       @id @default(uuid())
-  email     String       @unique
-  password  String
-  name      String
-  role      String       @default("Developer")
-  status    UserStatus   @default(PENDING)
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-  profile   UserProfile?
-  projects  Project[]
+  id           String       @id @default(uuid())
+  email        String       @unique
+  password     String
+  name         String
+  role         String       @default("Developer")
+  status       UserStatus   @default(PENDING)
+  tokenBalance Int          @default(20) // default free token allocation on signup
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  profile      UserProfile?
+  projects     Project[]
 }
 
 enum JobStatus {
@@ -420,6 +422,27 @@ model UserAdminJobScore {
   updatedAt           DateTime    @updatedAt
 
   @@unique([userEmail, adminJobId])
+  @@index([userEmail])
+}
+
+// New Singleton Token Pricing model
+model TokenPricing {
+  id                  String   @id @default(uuid())
+  actualCostPerToken  Float    @default(0.015)   // official backend API cost per token in INR (e.g. ₹0.015)
+  retailPricePerToken Float    @default(1.0)     // retail price per token in INR (e.g. ₹1.00)
+  updatedAt           DateTime @updatedAt
+}
+
+// New Token Transaction ledger
+model TokenTransaction {
+  id          String   @id @default(uuid())
+  userEmail   String
+  type        String   // "GRANT" | "PURCHASE" | "USAGE"
+  amount      Int      // e.g. +50, +100, -1
+  description String   // "Manual grant", "Starter Plan Purchase", "Proposal Generation"
+  costUsd     Float    @default(0) // actual API cost if USAGE, retail cost in INR if PURCHASE/GRANT
+  createdAt   DateTime @default(now())
+
   @@index([userEmail])
 }
 

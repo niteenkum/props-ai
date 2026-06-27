@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 
-type AuthStatus = "PENDING" | "ACTIVE";
+type AuthStatus = "PENDING" | "ACTIVE" | "INACTIVE";
 
 export function useLoginSuccess() {
   const router = useRouter();
@@ -22,9 +22,9 @@ export function useLoginSuccess() {
 
     // ── 3. Navigate ─────────────────────────────────────────────────────────
     if (redirectTo) {
-      router.push(redirectTo);
+      window.location.href = redirectTo;
     } else {
-      router.push(status === "ACTIVE" ? "/dashboard" : "/pending");
+      window.location.href = status === "ACTIVE" ? "/dashboard" : "/pending";
     }
   };
 
