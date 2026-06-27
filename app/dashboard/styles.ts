@@ -2,20 +2,24 @@ import type React from "react";
 
 export const cardStyle: React.CSSProperties = {
   background: "var(--card)",
-  border: "1px solid var(--border)",
-  borderRadius: 14,
+  border: "2.5px solid var(--foreground)",
+  borderRadius: 12,
+  boxShadow: "6px 6px 0px 0px var(--foreground)",
   padding: 20,
+  transition: "all 0.2s ease",
 };
 
 export const inputStyle: React.CSSProperties = {
   width: "100%",
-  padding: "8px 12px",
+  padding: "10px 14px",
   background: "var(--input)",
-  border: "1px solid var(--border)",
+  border: "2.5px solid var(--foreground)",
   borderRadius: 8,
   fontSize: 13,
   color: "var(--foreground)",
   outline: "none",
+  boxShadow: "3px 3px 0px 0px var(--foreground)",
+  transition: "all 0.2s ease",
 };
 
 export const labelStyle: React.CSSProperties = {

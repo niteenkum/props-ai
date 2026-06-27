@@ -12,17 +12,18 @@
   },
   "dependencies": {
     "@corsair-dev/gmail": "^0.1.4",
+    "@corsair-dev/googlecalendar": "^0.1.4",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@radix-ui/react-dialog": "^1.1.15",
     "clsx": "^2.1.1",
     "corsair": "^0.1.76",
+    "driver.js": "^1.6.0",
     "lucide-react": "^1.16.0",
     "next": "16.2.6",
     "pg": "^8.21.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "@corsair-dev/googlecalendar": "^0.1.4",
     "zod": "^4.1.13"
   },
   "devDependencies": {

@@ -60,7 +60,8 @@ export default function Sidebar({
     label: string, 
     Icon: React.ComponentType<any>, 
     active: boolean, 
-    href: string
+    href: string,
+    id?: string
   ) => {
     const content = (
       <>
@@ -101,6 +102,7 @@ export default function Sidebar({
         key={href} 
         href={href} 
         className={classes} 
+        id={id}
         title={collapsed ? label : undefined}
       >
         {content}
@@ -380,11 +382,19 @@ export default function Sidebar({
             
             {MENU_ITEMS.map((item) => {
               const active = isActive(item.href);
+              const tourId = item.label === "Workspace Library" ? "tour-sidebar-workspace" : 
+                             item.label === "WhatsApp Link" ? "tour-sidebar-whatsapp" :
+                             item.label === "LinkedIn Scraper" ? "tour-sidebar-linkedin" :
+                             item.label === "New Scan" ? "tour-sidebar-newscan" :
+                             item.label === "Smart Inbox" ? "tour-sidebar-inbox" :
+                             item.label === "Calls & Followups" ? "tour-sidebar-followups" :
+                             item.label === "AI Expense Logs" ? "tour-sidebar-expenses" : undefined;
               return renderSidebarItem(
                 item.label,
                 item.icon,
                 active,
-                item.href
+                item.href,
+                tourId
               );
             })}
           </div>
@@ -426,6 +436,7 @@ export default function Sidebar({
             {/* Profile Pill */}
             <div
               onClick={() => router.push("/dashboard/profile")}
+              id="tour-sidebar-profile"
               className="sidebar-profile-pill flex items-center justify-between gap-2.5 px-3 py-1.5 rounded-xl cursor-pointer transition-all duration-200"
             >
               <div className="flex items-center gap-2 min-w-0">
