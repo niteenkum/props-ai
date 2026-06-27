@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LogOut, Sun, Moon, BookOpen, ChevronRight, 
   Plus, Settings, MessageSquare, Mail, 
-  FilePlus2, CalendarDays, BarChart3
+  FilePlus2, CalendarDays, BarChart3, Link2
 } from "lucide-react";
 import { useTheme } from "./theme-provider";
 
@@ -43,6 +43,7 @@ export default function Sidebar({
   const MENU_ITEMS = [
     { label: "Workspace Library", icon: BookOpen, href: "/dashboard/workspace" },
     { label: "WhatsApp Link", icon: MessageSquare, href: "/dashboard/whatsapp" },
+    { label: "LinkedIn Scraper", icon: Link2, href: "/dashboard/linkedin" },
     { label: "Smart Inbox", icon: Mail, href: "/dashboard/mail" },
     { label: "New Scan", icon: FilePlus2, href: "/dashboard/new" },
     { label: "Calls & Followups", icon: CalendarDays, href: "/dashboard/followups" },

@@ -32,13 +32,18 @@ export function useDashboard(userEmail: string, pendingJobId?: string) {
   const [editingKey, setEditingKey]                 = useState<string | null>(null);
   const [editingText, setEditingText]               = useState("");
 
+  const [isLoading, setIsLoading] = useState(true);
+
   // ─── Data loading ──────────────────────────────────────────────────────────
   const loadJobs = async () => {
+    setIsLoading(true);
     try {
       const dbJobs = await getJobPostsAction();
       setJobs(dbJobs);
     } catch (err) {
       console.error("Failed to load jobs:", err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -194,6 +199,7 @@ export function useDashboard(userEmail: string, pendingJobId?: string) {
   return {
     // state
     jobs,
+    isLoading,
     searchQuery, setSearchQuery,
     statusFilter, setStatusFilter,
     selectedJob, setSelectedJob,

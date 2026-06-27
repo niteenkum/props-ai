@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import {
   Briefcase, Sparkles, Mail, Calendar, Plus, Search,
   TrendingUp, Users, Trash2, CheckSquare, Square, ArrowUpRight,
-  AlertTriangle, X,
+  AlertTriangle, X, Loader2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../hooks/useAuth";
@@ -237,7 +237,19 @@ function OverviewContent() {
     }
   };
 
-  if (!isReady) return null;
+  if (!isReady || db.isLoading) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 12 }}>
+        <Loader2 style={{ width: 32, height: 32, color: "var(--primary)", animation: "spin 1s linear infinite" }} />
+        <p style={{ fontSize: 13, color: "var(--muted-foreground)" }}>Loading your workspace...</p>
+        <style>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   const hasSelection = selected.size > 0;
 
@@ -435,6 +447,31 @@ function OverviewContent() {
                     <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 50, background: db.getScoreBg(job.matchScore), color: db.getScoreColor(job.matchScore), border: `1px solid ${db.getScoreColor(job.matchScore)}33`, flexShrink: 0 }}>
                       {job.matchScore}%
                     </span>
+
+                    {/* Source Type Badge */}
+                    {(() => {
+                      const isLinkedIn = job.tags.some(t => t.toLowerCase() === "linkedin" || t.toLowerCase() === "scraped") || job.generatedTemplates?.linkedin || job.notes?.toLowerCase().includes("linkedin");
+                      const sourceText = isLinkedIn ? "LinkedIn Job" : "Normal Post";
+                      const sourceColor = isLinkedIn ? "#0a66c2" : "#22c55e";
+                      const sourceBg = isLinkedIn ? "rgba(10,102,194,0.12)" : "rgba(34,197,94,0.12)";
+                      
+                      return (
+                        <span style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: "2px 8px",
+                          borderRadius: 6,
+                          background: sourceBg,
+                          color: sourceColor,
+                          border: `1px solid ${sourceColor}33`,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 3,
+                        }}>
+                          {isLinkedIn ? "💼" : "💬"} {sourceText}
+                        </span>
+                      );
+                    })()}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
                     {job.contactEmail && (

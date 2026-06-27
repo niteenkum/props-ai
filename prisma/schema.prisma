@@ -48,7 +48,8 @@ model JobPost {
   notes              String?     @db.Text
   coldEmail          String?     @db.Text
   proposal           String?     @db.Text
-  linkedin           String?     @db.Text
+  linkedin           String?     @db.Text             // original LinkedIn job URL
+  linkedinJobId      String?     @unique              // LinkedIn's own numeric job ID — for dedup
   coverLetter        String?     @db.Text
   generatedTemplates Json?                            // flexible map of platformKey → text
   suggestAttachResume Boolean?                        // AI hint: should resume be attached?
@@ -58,6 +59,8 @@ model JobPost {
   sentEmails         SentEmail[]
   followUps          FollowUp[]                       // scheduled calls and reminders
   whatsappSource     WhatsAppMessage?                 // reverse link from WA message
+
+  @@index([linkedinJobId])
 }
 
 model UserProfile {
@@ -358,3 +361,18 @@ model EmailSyncCursor {
   @@unique([userEmail, provider])
 }
 
+// Tracks last LinkedIn scrape per keyword — used to skip already-seen jobs
+model LinkedInSyncLog {
+  id              String   @id @default(uuid())
+  userEmail       String
+  keyword         String                   // e.g. "React Developer"
+  jobType         String   @default("contract")
+  lastSyncAt      DateTime                 // when last successful sync ran
+  jobsImported    Int      @default(0)     // total ever imported for this keyword
+  totalScanned    Int      @default(0)     // total ever scanned for this keyword
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userEmail, keyword, jobType])  // one row per user+keyword+type combo
+  @@index([userEmail])
+}

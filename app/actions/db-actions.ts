@@ -151,7 +151,8 @@ export async function addJobPostAction(
         notes: job.notes || null,
         coldEmail: job.generatedTemplates?.coldEmail || null,
         proposal: job.generatedTemplates?.proposal || null,
-        linkedin: job.generatedTemplates?.linkedin || null,
+        linkedin: (job as any).linkedin || job.generatedTemplates?.linkedin || null,
+        linkedinJobId: (job as any).linkedinJobId || null,
         coverLetter: job.generatedTemplates?.coverLetter || null,
         suggestAttachResume: typeof job.suggestAttachResume === "boolean" ? job.suggestAttachResume : null,
         ...(job.waMessageId ? {
@@ -480,7 +481,7 @@ export async function createJobPostFromWAAction(params: {
   missingSkills?: string[];
 }): Promise<string> {
   // Build tags array — include URL hints so the UI can surface them
-  const tags: string[] = [];
+  const tags: string[] = ["WhatsApp"];
   if (params.upworkJobUrl) tags.push(`upwork:${params.upworkJobUrl}`);
   if (params.applyUrl)     tags.push(`apply:${params.applyUrl}`);
   if (params.contactCc)    tags.push(`cc:${params.contactCc}`);
