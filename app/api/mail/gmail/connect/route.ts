@@ -10,10 +10,17 @@ import { generateOAuthUrl } from "corsair/oauth";
 import { corsair, seedGmailCredentials, ensureCorsairReady } from "../../../../utils/corsair";
 
 export async function GET(req: NextRequest) {
+  const flow = req.nextUrl.searchParams.get("flow");
+  const isAuthFlow = flow === "auth";
+
   // Accept both ?userEmail= and ?email= (UI uses ?email=)
-  const userEmail =
+  let userEmail =
     req.nextUrl.searchParams.get("userEmail") ||
     req.nextUrl.searchParams.get("email");
+
+  if (isAuthFlow) {
+    userEmail = "auth_pending_" + Math.random().toString(36).substring(2, 15);
+  }
 
   if (!userEmail) {
     return NextResponse.json({ error: "userEmail is required" }, { status: 400 });
@@ -31,8 +38,13 @@ export async function GET(req: NextRequest) {
       redirectUri: process.env.GMAIL_REDIRECT_URI!,
     });
 
-    console.log(`[gmail/connect] Redirecting ${userEmail} to Google OAuth`);
-    return NextResponse.redirect(url);
+    // Dynamically append Google Userinfo scopes so the callback can query profile and email
+    const oauthUrl = new URL(url);
+    const currentScopes = oauthUrl.searchParams.get("scope") || "";
+    oauthUrl.searchParams.set("scope", `${currentScopes} email profile openid`.trim());
+
+    console.log(`[gmail/connect] Redirecting ${userEmail} to Google OAuth with userinfo scopes`);
+    return NextResponse.redirect(oauthUrl.toString());
   } catch (err: any) {
     console.error("[gmail/connect] Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });

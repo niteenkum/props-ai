@@ -7,6 +7,7 @@ import {
   ArrowRight, ArrowLeft, Search, X, ChevronDown, ShieldCheck, RotateCcw, Check, Sun, Moon,
 } from "lucide-react";
 import { useSignupForm } from "../../hooks/useSignupForm";
+import { useLoginForm } from "../../hooks/useLoginForm";
 import { useTheme } from "../../components/theme-provider";
 
 const GithubIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -53,421 +54,677 @@ const getCatColor = (category: string, isDark: boolean) => {
   return darkVariants[category] || darkVariants.General;
 };
 
+const RoughRect = ({ x, y, width, height, stroke = "currentColor", fill = "none", className = "" }: any) => {
+  const offset = 1.5;
+  const p1 = `M ${x - offset} ${y + offset} L ${x + width + offset} ${y - offset/2}`;
+  const p2 = `M ${x + width - offset/2} ${y - offset} L ${x + width + offset} ${y + height + offset}`;
+  const p3 = `M ${x + width + offset} ${y + height - offset/2} L ${x - offset} ${y + height + offset/2}`;
+  const p4 = `M ${x - offset/2} ${y + height + offset} L ${x + offset/2} ${y - offset}`;
+  
+  return (
+    <g className={className}>
+      <path d={p1} stroke={stroke} strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.8" />
+      <path d={p2} stroke={stroke} strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.8" />
+      <path d={p3} stroke={stroke} strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.8" />
+      <path d={p4} stroke={stroke} strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.8" />
+      {fill !== "none" && (
+        <rect x={x} y={y} width={width} height={height} fill={fill} rx={2} stroke="none" />
+      )}
+    </g>
+  );
+};
+
+const RoughArrow = ({ x1, y1, x2, y2, stroke = "var(--muted-foreground)", label = "", className = "" }: any) => {
+  const mx = (x1 + x2) / 2;
+  const my = (y1 + y2) / 2 - 10;
+  const pathData = `M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`;
+  
+  const angle = Math.atan2(y2 - my, x2 - mx);
+  const headLength = 10;
+  const arrowHead1X = x2 - headLength * Math.cos(angle - Math.PI / 6);
+  const arrowHead1Y = y2 - headLength * Math.sin(angle - Math.PI / 6);
+  const arrowHead2X = x2 - headLength * Math.cos(angle + Math.PI / 6);
+  const arrowHead2Y = y2 - headLength * Math.sin(angle + Math.PI / 6);
+  
+  return (
+    <g className={className}>
+      <path d={pathData} stroke={stroke} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeDasharray="3 3" opacity="0.75" />
+      <path d={`M ${arrowHead1X} ${arrowHead1Y} L ${x2} ${y2} L ${arrowHead2X} ${arrowHead2Y}`} stroke={stroke} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
+      {label && (
+        <text x={mx} y={my - 6} fill="var(--muted-foreground)" fontSize="11" fontFamily="var(--handwriting-font)" textAnchor="middle" style={{ letterSpacing: "0.5px" }}>
+          {label}
+        </text>
+      )}
+    </g>
+  );
+};
+
+const SparkleStar = ({ x, y, size, color, className = "" }: any) => {
+  const path = `M ${x} ${y - size} Q ${x} ${y} ${x + size} ${y} Q ${x} ${y} ${x} ${y + size} Q ${x} ${y} ${x - size} ${y} Q ${x} ${y} ${x} ${y - size} Z`;
+  return (
+    <path d={path} fill={color} stroke="none" className={className} />
+  );
+};
+
+function ExcalidrawDiagram() {
+  const [hoveredNode, setHoveredNode] = React.useState<string | null>(null);
+
+  return (
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", position: "relative" }}>
+      <svg
+        viewBox="0 0 600 700"
+        style={{
+          width: "100%",
+          maxHeight: "85vh",
+          color: "var(--foreground)",
+          overflow: "visible",
+        }}
+      >
+        {/* Header */}
+        <text
+          x="300"
+          y="45"
+          textAnchor="middle"
+          style={{
+            fontFamily: "var(--handwriting-font)",
+            fontSize: "26px",
+            fontWeight: "bold",
+            fill: "var(--foreground)",
+          }}
+        >
+          How PropAI Automates Outreach
+        </text>
+        {/* Double underline under header */}
+        <path
+          d="M 120 60 Q 300 68 480 60"
+          stroke="var(--foreground)"
+          strokeWidth="2.5"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <path
+          d="M 140 68 Q 300 74 460 68"
+          stroke="var(--foreground)"
+          strokeWidth="1.5"
+          fill="none"
+          strokeLinecap="round"
+          opacity="0.7"
+        />
+
+        {/* 1. Job Card (Top Left) */}
+        <g
+          style={{ cursor: "pointer" }}
+          onMouseEnter={() => setHoveredNode("job")}
+          onMouseLeave={() => setHoveredNode(null)}
+          transform="translate(50, 110)"
+        >
+          <g className={hoveredNode === "job" ? "wiggle" : "float-slow"}>
+            <RoughRect
+              x={0}
+              y={0}
+              width={220}
+              height={130}
+              fill="var(--blue-fill)"
+              stroke={hoveredNode === "job" ? "#3b82f6" : "var(--foreground)"}
+            />
+            <g transform="translate(15, 20)" style={{ fontFamily: "var(--handwriting-font)", fontSize: "13px" }}>
+              <text x="0" y="10" fontWeight="bold" fontSize="15" fill="#3b82f6">💼 Scraped Job</text>
+              <text x="0" y="32">Role: React Dev</text>
+              <text x="0" y="52">Company: Stripe</text>
+              <text x="0" y="72">Match: Calculating...</text>
+              <rect x="110" y="60" width="30" height="15" rx="4" fill="rgba(59, 130, 246, 0.2)" stroke="#3b82f6" strokeWidth="1" />
+              <text x="125" y="71" fontSize="9" textAnchor="middle" fontWeight="bold" fill="#3b82f6">HOT</text>
+            </g>
+          </g>
+        </g>
+
+        {/* Arrow 1: Job to AI */}
+        <RoughArrow
+          x1={250}
+          y1={245}
+          x2={340}
+          y2={270}
+          label="Analyze Fit"
+          className="float-medium"
+        />
+
+        {/* 2. AI Analyzer (Center Right) */}
+        <g
+          style={{ cursor: "pointer" }}
+          onMouseEnter={() => setHoveredNode("ai")}
+          onMouseLeave={() => setHoveredNode(null)}
+          transform="translate(330, 260)"
+        >
+          <g className={hoveredNode === "ai" ? "wiggle" : "float-medium"}>
+            <RoughRect
+              x={0}
+              y={0}
+              width={220}
+              height={140}
+              fill="var(--purple-fill)"
+              stroke={hoveredNode === "ai" ? "#a855f7" : "var(--foreground)"}
+            />
+            <g transform="translate(15, 20)" style={{ fontFamily: "var(--handwriting-font)", fontSize: "13px" }}>
+              <text x="0" y="12" fontWeight="bold" fontSize="15" fill="#a855f7">🧠 PropAI Gemini</text>
+              <text x="0" y="34">✔ Role Match: 95%</text>
+              <text x="0" y="54">✔ Found Skills: 8/9</text>
+              <text x="0" y="74" fill="#ef4444" fontWeight="bold">⚠ Missing: Framer Motion</text>
+              <text x="0" y="94" fontWeight="bold" fill="#22c55e">Candidacy Fit: 96%! 🚀</text>
+            </g>
+          </g>
+          <SparkleStar x={-15} y={-10} size={10} color="#fbbf24" className="spin-slow" />
+          <SparkleStar x={235} y={130} size={12} color="#a855f7" className="float-slow" />
+        </g>
+
+        {/* Arrow 2: AI to Outreach */}
+        <RoughArrow
+          x1={400}
+          y1={410}
+          x2={280}
+          y2={470}
+          label="Personalize"
+          className="float-slow"
+        />
+
+        {/* 3. Outreach Card (Bottom Left) */}
+        <g
+          style={{ cursor: "pointer" }}
+          onMouseEnter={() => setHoveredNode("outreach")}
+          onMouseLeave={() => setHoveredNode(null)}
+          transform="translate(50, 430)"
+        >
+          <g className={hoveredNode === "outreach" ? "wiggle" : "float-slow"}>
+            <RoughRect
+              x={0}
+              y={0}
+              width={220}
+              height={140}
+              fill="var(--green-fill)"
+              stroke={hoveredNode === "outreach" ? "#22c55e" : "var(--foreground)"}
+            />
+            <g transform="translate(15, 20)" style={{ fontFamily: "var(--handwriting-font)", fontSize: "13px" }}>
+              <text x="0" y="12" fontWeight="bold" fontSize="15" fill="#22c55e">✉ Outreach Template</text>
+              <text x="0" y="34">Subject: scaling stripe...</text>
+              <text x="0" y="54">"Since I recently built</text>
+              <text x="0" y="72">Pitchly with Next.js..."</text>
+              <rect x="0" y="85" width="95" height="24" rx="6" fill="#22c55e" stroke="none" />
+              <text x="47.5" y="101" fill="#fff" fontWeight="bold" fontSize="11" textAnchor="middle">Send with Gmail</text>
+            </g>
+          </g>
+        </g>
+
+        {/* 4. Sticky note (Bottom Right) */}
+        <g transform="translate(330, 480)">
+          <g className="float-medium">
+            <RoughRect
+              x={0}
+              y={0}
+              width={200}
+              height={110}
+              fill="var(--yellow-fill)"
+              stroke="var(--foreground)"
+            />
+            <circle cx="100" cy="0" r="6" fill="#ef4444" stroke="var(--foreground)" strokeWidth="1.5" />
+            <g transform="translate(15, 25)" style={{ fontFamily: "var(--handwriting-font)", fontSize: "13px", fill: "var(--foreground)" }}>
+              <text x="0" y="10" fontWeight="bold">💡 Why use PropAI?</text>
+              <text x="0" y="30">• 95% Match rating</text>
+              <text x="0" y="50">• Zero manual typing</text>
+              <text x="0" y="70">• Saves 10+ hours/week</text>
+            </g>
+          </g>
+        </g>
+
+        {/* Small decorations */}
+        <path
+          d="M 500 130 C 530 110, 560 140, 520 160 C 500 170, 480 150, 510 130"
+          stroke="var(--muted-foreground)"
+          strokeWidth="1.5"
+          fill="none"
+          opacity="0.5"
+        />
+        <text
+          x="535"
+          y="180"
+          textAnchor="middle"
+          style={{
+            fontFamily: "var(--handwriting-font)",
+            fontSize: "11px",
+            fill: "var(--muted-foreground)",
+            opacity: 0.7,
+          }}
+        >
+          Fully Automated
+        </text>
+      </svg>
+    </div>
+  );
+}
+
 export default function SignupPage() {
+  return <UnifiedAuthPage initialMode="signup" />;
+}
+
+export function UnifiedAuthPage({ initialMode = "signup" }: { initialMode?: "signup" | "signin" }) {
   const router = useRouter();
-  const f = useSignupForm();
+  const signupForm = useSignupForm();
+  const loginForm = useLoginForm();
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
 
-  const isOtp = f.step === "otp";
+  const [authMode, setAuthMode] = React.useState<"signup" | "signin">(initialMode);
+
+  const isOtp = authMode === "signup" && signupForm.step === "otp";
+
+  const handleSwitchMode = (mode: "signup" | "signin") => {
+    setAuthMode(mode);
+    signupForm.setError("");
+    loginForm.setError("");
+    window.history.pushState(null, "", mode === "signup" ? "/signup" : "/login");
+  };
+
+  const activeError = authMode === "signup" ? signupForm.error : loginForm.error;
+  const activeLoading = authMode === "signup" ? signupForm.loading : loginForm.loading;
 
   return (
     <>
+      {/* Import Hand-drawn / Sketch Fonts */}
+      <link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Caveat:wght@400;700&display=swap" rel="stylesheet" />
+
       <style>{`
-        .sp-page {
-          min-height: 100vh; display: flex; align-items: flex-start; justify-content: center;
-          background: var(--background); padding: 48px 16px 32px;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        :root {
+          --handwriting-font: 'Caveat', 'Architects Daughter', cursive;
+          --blue-fill: rgba(59, 130, 246, 0.04);
+          --purple-fill: rgba(168, 85, 247, 0.04);
+          --green-fill: rgba(34, 197, 94, 0.04);
+          --yellow-fill: rgba(234, 179, 8, 0.04);
+        }
+        .sp-container {
+          display: flex; min-height: 100vh; background: var(--background);
           transition: background 0.3s ease, color 0.3s ease;
         }
-        @media (min-width: 640px) { .sp-page { align-items: center; padding: 40px 24px; } }
-        .sp-back {
-          position: fixed; top: 20px; left: 20px; display: flex; align-items: center; gap: 5px;
-          color: var(--muted-foreground); font-size: 13px; font-weight: 500; background: none; border: none;
-          cursor: pointer; z-index: 50; transition: color 0.2s;
+        .sp-left {
+          flex: 1; display: flex; align-items: center; justify-content: center;
+          border-right: 2.5px dashed var(--foreground); padding: 40px; position: relative;
+          background-image: radial-gradient(var(--border) 1.5px, transparent 1.5px);
+          background-size: 24px 24px;
         }
-        .sp-back:hover { color: var(--foreground); }
+        .sp-right {
+          flex: 1; display: flex; align-items: center; justify-content: center;
+          padding: 40px; position: relative;
+        }
+        @media (max-width: 968px) {
+          .sp-container { flex-direction: column; }
+          .sp-left { display: none; }
+          .sp-right { width: 100%; min-height: 100vh; padding: 24px 16px; }
+        }
+        .sp-back {
+          position: absolute; top: 24px; left: 24px; display: flex; align-items: center; gap: 6px;
+          color: var(--foreground); font-size: 14px; font-weight: bold; background: var(--card);
+          border: 2px solid var(--foreground); border-radius: 6px; padding: 6px 12px;
+          cursor: pointer; transition: all 0.15s ease; box-shadow: 2px 2px 0px 0px var(--foreground);
+          font-family: var(--handwriting-font);
+        }
+        .sp-back:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0px 0px var(--foreground); }
+        .sp-back-mobile {
+          display: none;
+        }
+        @media (max-width: 968px) {
+          .sp-back-mobile {
+            position: absolute; top: 20px; left: 20px; display: flex; align-items: center; gap: 6px;
+            color: var(--foreground); font-size: 14px; font-weight: bold; background: var(--card);
+            border: 2px solid var(--foreground); border-radius: 6px; padding: 6px 12px;
+            cursor: pointer; transition: all 0.15s ease; box-shadow: 2px 2px 0px 0px var(--foreground);
+            font-family: var(--handwriting-font);
+          }
+        }
         .sp-card {
-          width: 100%; background: var(--card); border-radius: 20px;
-          border: 1px solid var(--border); box-shadow: var(--card-shadow);
+          width: 100%; background: var(--card); border-radius: 8px;
+          border: 2.5px solid var(--foreground); box-shadow: 6px 6px 0px 0px var(--foreground);
           padding: 32px 24px; max-width: 440px; transition: all 0.3s ease;
         }
-        @media (min-width: 640px) { .sp-card { padding: 36px 32px; } }
-        .sp-card.wide { max-width: 440px; }
-        @media (min-width: 768px) { .sp-card.wide { max-width: 720px; } }
         .sp-brand { text-align: center; margin-bottom: 24px; }
         .sp-logo {
-          width: 44px; height: 44px; border-radius: 12px; background: var(--primary);
+          width: 44px; height: 44px; border-radius: 8px; background: var(--primary);
           display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;
+          border: 2px solid var(--foreground); box-shadow: 3px 3px 0px 0px var(--foreground);
         }
-        .sp-brand h1 { font-size: 22px; font-weight: 700; color: var(--foreground); margin: 0; }
-        .sp-brand p  { font-size: 13px; color: var(--muted-foreground); margin: 4px 0 0; }
         .sp-error {
-          margin-bottom: 16px; padding: 10px 14px; border-radius: 10px;
-          background: #fef2f2; border: 1px solid #fecaca; color: #dc2626;
-          font-size: 12px; text-align: center; font-weight: 500;
+          margin-bottom: 16px; padding: 10px 14px; border-radius: 6px;
+          background: #fef2f2; border: 2px solid #dc2626; color: #dc2626;
+          font-size: 13px; text-align: center; font-weight: 600; font-family: var(--handwriting-font);
         }
         .sp-field { display: flex; flex-direction: column; gap: 5px; }
-        .sp-field label { font-size: 12px; font-weight: 600; color: var(--muted-foreground); }
+        .sp-field label { font-size: 14px; font-weight: bold; color: var(--foreground); font-family: var(--handwriting-font); }
         .sp-fw { position: relative; }
         .sp-fi {
-          position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-          width: 15px; height: 15px; color: var(--muted-foreground); opacity: 0.6; pointer-events: none;
+          position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+          width: 16px; height: 16px; color: var(--foreground); opacity: 0.55; pointer-events: none;
         }
         .sp-input {
-          width: 100%; box-sizing: border-box; padding: 12px 12px 12px 38px;
-          border-radius: 10px; border: 1.5px solid var(--border); background: var(--input);
-          color: var(--foreground); font-size: 14px; outline: none; transition: all 0.2s;
+          width: 100%; box-sizing: border-box; padding: 13px 14px 13px 40px;
+          border-radius: 6px; border: 2px solid var(--foreground); background: var(--input);
+          color: var(--foreground); font-size: 14px; outline: none;
           font-family: inherit; -webkit-appearance: none;
+          box-shadow: 3px 3px 0px 0px var(--foreground);
         }
-        .sp-input:focus { border-color: var(--foreground); background: var(--card); box-shadow: 0 0 0 3px var(--border); }
-        .sp-input::placeholder { color: var(--muted-foreground); opacity: 0.5; }
-        .sp-input.pr { padding-right: 40px; }
+        .sp-input:focus { border-color: var(--primary); }
+        .sp-input.pr { padding-right: 42px; }
         .sp-pwtoggle {
           position: absolute; right: 11px; top: 50%; transform: translateY(-50%);
-          background: none; border: none; cursor: pointer; color: var(--muted-foreground); opacity: 0.6; padding: 4px; display: flex;
+          background: none; border: none; cursor: pointer; color: var(--foreground); opacity: 0.8; padding: 4px; display: flex;
         }
-        .sp-pwtoggle:hover { opacity: 1; color: var(--foreground); }
+        .sp-pwtoggle:hover { color: var(--primary); }
         .sp-btn {
-          width: 100%; padding: 13px 0; border-radius: 11px; border: none;
-          background: var(--primary); color: var(--primary-foreground); font-size: 14px; font-weight: 600;
+          width: 100%; padding: 13px 0; border-radius: 6px; border: 2.5px solid var(--foreground);
+          background: var(--foreground); color: var(--background); font-size: 14px; font-weight: bold;
           cursor: pointer; display: flex; align-items: center; justify-content: center;
-          gap: 7px; transition: all 0.2s; font-family: inherit; -webkit-appearance: none;
+          gap: 8px; transition: all 0.15s ease; font-family: var(--handwriting-font); -webkit-appearance: none;
+          box-shadow: 3px 3px 0px 0px var(--border);
         }
-        .sp-btn:hover:not(:disabled) { opacity: 0.85; }
-        .sp-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .sp-cols {
-          display: flex; flex-direction: column; gap: 14px;
+        .sp-btn:hover:not(:disabled) { transform: translate(-1.5px, -1.5px); box-shadow: 4.5px 4.5px 0px 0px var(--border); }
+        .sp-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .sp-google-btn {
+          width: 100%; padding: 12px 0; border-radius: 6px; border: 2.5px solid var(--foreground);
+          background: var(--card); color: var(--foreground); font-size: 14px; font-weight: bold;
+          cursor: pointer; display: flex; align-items: center; justify-content: center;
+          gap: 10px; transition: all 0.15s ease; font-family: var(--handwriting-font); -webkit-appearance: none;
+          box-shadow: 3px 3px 0px 0px var(--foreground);
         }
-        @media (min-width: 640px) { .sp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; } }
-        .sp-col { display: flex; flex-direction: column; gap: 14px; }
-        /* Skills */
+        .sp-google-btn:hover { transform: translate(-1.5px, -1.5px); box-shadow: 4.5px 4.5px 0px 0px var(--foreground); background: var(--input); }
+        .sp-switch { text-align: center; margin-top: 18px; font-size: 13px; color: var(--muted-foreground); font-family: var(--handwriting-font); font-weight: 500; }
+        .sp-switch button {
+          background: none; border: none; color: var(--foreground); font-weight: bold;
+          cursor: pointer; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; font-family: var(--handwriting-font);
+        }
+        .sp-chip {
+          display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px;
+          border-radius: 20px; font-size: 11px; font-weight: 700; border: 1.5px solid var(--border);
+          text-transform: uppercase; letter-spacing: 0.3px;
+        }
         .sp-skills-trigger {
           display: flex; align-items: center; justify-content: space-between;
-          padding: 12px 14px; border-radius: 10px; border: 1.5px solid var(--border);
-          background: var(--input); cursor: pointer; transition: all 0.2s; user-select: none;
+          padding: 12px 14px; border-radius: 6px; border: 2px solid var(--foreground);
+          background: var(--card); cursor: pointer; transition: all 0.2s;
+          box-shadow: 2px 2px 0px 0px var(--border);
         }
-        .sp-skills-trigger:hover { border-color: var(--muted-foreground); background: var(--accent); }
-        .sp-skills-trigger.open { border-color: var(--foreground); background: var(--card); box-shadow: 0 0 0 3px var(--border); }
-        .sp-chip {
-          display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px;
-          border-radius: 8px; font-size: 12px; font-weight: 500; border: 1.5px solid;
-        }
-        /* OTP */
-        .sp-otp-grid { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; }
-        @media (min-width: 400px) { .sp-otp-grid { gap: 10px; } }
+        .sp-skills-trigger:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0px 0px var(--border); }
+        .sp-skills-trigger.open { border-color: var(--primary); }
+        .sp-otp-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 22px; }
         .sp-otp-box {
-          width: 44px; height: 54px; text-align: center; font-size: 22px; font-weight: 800;
-          border-radius: 12px; border: 2px solid var(--border); background: var(--input);
-          color: var(--foreground); outline: none; transition: all 0.15s; -webkit-appearance: none;
-          font-family: inherit;
+          width: 100%; height: 50px; text-align: center; font-size: 20px; font-weight: bold;
+          border: 2px solid var(--foreground); border-radius: 6px; background: var(--card);
+          color: var(--foreground); outline: none; transition: all 0.2s;
+          box-shadow: 2.5px 2.5px 0px 0px var(--foreground);
         }
-        .sp-otp-box:focus { border-color: var(--foreground); background: var(--card); box-shadow: 0 0 0 3px var(--border); }
-        @media (min-width: 400px) { .sp-otp-box { width: 52px; height: 60px; font-size: 24px; } }
-        .sp-switch { text-align: center; margin-top: 20px; font-size: 13px; color: var(--muted-foreground); }
-        .sp-switch button {
-          background: none; border: none; color: var(--foreground); font-weight: 700;
-          cursor: pointer; font-size: 13px; text-decoration: underline; text-underline-offset: 3px;
-        }
+        .sp-otp-box:focus { border-color: var(--primary); box-shadow: 4px 4px 0px 0px var(--primary); transform: translate(-1px, -1px); }
         @keyframes sp-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .sp-spin { animation: sp-spin 0.8s linear infinite; }
+        @keyframes float-slow {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          50% { transform: translateY(-6px) rotate(1deg); }
+        }
+        @keyframes float-medium {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          50% { transform: translateY(-4px) rotate(-1deg); }
+        }
+        @keyframes wiggle {
+          0%, 100% { transform: rotate(-0.5deg); }
+          50% { transform: rotate(0.5deg); }
+        }
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .float-slow { animation: float-slow 6s ease-in-out infinite; }
+        .float-medium { animation: float-medium 4s ease-in-out infinite; }
+        .wiggle { animation: wiggle 0.4s ease-in-out infinite; }
+        .spin-slow { animation: spin-slow 12s linear infinite; }
+        @keyframes fade-in-slide {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fade-in-slide 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .lp-divider {
+          display: flex; align-items: center; gap: 12px; margin: 20px 0;
+          color: var(--foreground); font-size: 12px; font-weight: bold; text-transform: uppercase;
+          font-family: var(--handwriting-font);
+        }
+        .lp-divider span { flex: 1; height: 1.5px; background: var(--border); }
       `}</style>
 
-      <div className="sp-page">
-        <button onClick={() => router.push("/")} className="sp-back">
-          <ArrowLeft style={{ width: 15, height: 15 }} />
-          Back
-        </button>
+      <div className="sp-container">
+        {/* Left Section - Excalidraw Diagrams */}
+        <div className="sp-left">
+          <button onClick={() => router.push("/")} className="sp-back">
+            <ArrowLeft style={{ width: 15, height: 15 }} />
+            Back
+          </button>
+          <ExcalidrawDiagram />
+        </div>
 
-        {/* Floating Theme Toggle */}
-        <button
-          onClick={toggleTheme}
-          style={{
-            position: "fixed",
-            top: 20,
-            right: 20,
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            border: "1px solid var(--border)",
-            background: "var(--card)",
-            color: "var(--foreground)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            zIndex: 50,
-            transition: "all 0.2s",
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = "var(--input)"; }}
-          onMouseLeave={e => { e.currentTarget.style.background = "var(--card)"; }}
-          aria-label="Toggle theme"
-        >
-          {theme === "light" ? (
-            <Moon style={{ width: 16, height: 16 }} />
-          ) : (
-            <Sun style={{ width: 16, height: 16 }} />
-          )}
-        </button>
+        {/* Right Section - Auth Card */}
+        <div className="sp-right">
+          <button onClick={() => router.push("/")} className="sp-back-mobile">
+            <ArrowLeft style={{ width: 15, height: 15 }} />
+            Back
+          </button>
 
-        <div className={`sp-card ${!isOtp ? "wide" : ""}`}>
-          {/* Brand */}
-          <div className="sp-brand">
-            <div className="sp-logo">
-              <Sparkles style={{ width: 20, height: 20, color: "var(--primary-foreground)" }} />
+          {/* Floating Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            style={{
+              position: "absolute",
+              top: 20,
+              right: 20,
+              width: 36,
+              height: 36,
+              borderRadius: 6,
+              border: "2px solid var(--foreground)",
+              background: "var(--card)",
+              color: "var(--foreground)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              zIndex: 50,
+              boxShadow: "2px 2px 0px 0px var(--foreground)",
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = "var(--input)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "var(--card)"; }}
+            aria-label="Toggle theme"
+          >
+            {theme === "light" ? (
+              <Moon style={{ width: 16, height: 16 }} />
+            ) : (
+              <Sun style={{ width: 16, height: 16 }} />
+            )}
+          </button>
+
+          <div className="sp-card">
+            {/* Brand */}
+            <div className="sp-brand">
+              <div className="sp-logo">
+                <Sparkles style={{ width: 20, height: 20, color: "var(--primary-foreground)" }} />
+              </div>
+              <h1>Prop<span style={{ color: "var(--muted-foreground)" }}>AI</span></h1>
+              <p>
+                {isOtp
+                  ? "Check your inbox"
+                  : authMode === "signup"
+                  ? "Create your account"
+                  : "Welcome back"}
+              </p>
             </div>
-            <h1>Prop<span style={{ color: "var(--muted-foreground)" }}>AI</span></h1>
-            <p>{isOtp ? "Check your inbox" : "Create your account"}</p>
-          </div>
 
-          {/* Error */}
-          {f.error && <div className="sp-error">{f.error}</div>}
+            {/* Error */}
+            {activeError && <div className="sp-error">{activeError}</div>}
 
-          {/* ── SIGNUP FORM ─────────────────────────────────────────────────── */}
-          {!isOtp && (
-            <form onSubmit={f.handleFormSubmit}>
-              <div className="sp-cols">
-                {/* Col 1 */}
-                <div className="sp-col">
-                  <div className="sp-field">
-                    <label>Full Name</label>
-                    <div className="sp-fw">
-                      <User className="sp-fi" />
-                      <input className="sp-input" type="text" required value={f.name}
-                        onChange={e => f.setName(e.target.value)} placeholder="Your full name" />
-                    </div>
+            {/* ── OTP VERIFICATION ────────────────────────────────────────────── */}
+            {isOtp ? (
+              <form onSubmit={signupForm.handleOtpSubmit} className="animate-fade-in">
+                <div style={{ textAlign: "center", marginBottom: 24 }}>
+                  <div style={{ width: 60, height: 60, borderRadius: 8, background: "var(--input)", border: "2px solid var(--foreground)", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 14, boxShadow: "2px 2px 0px 0px var(--foreground)" }}>
+                    <ShieldCheck style={{ width: 28, height: 28, color: "var(--foreground)" }} />
                   </div>
+                  <p style={{ fontSize: 14, color: "var(--muted-foreground)", lineHeight: 1.7, margin: 0, fontFamily: "var(--handwriting-font)", fontWeight: 500 }}>
+                    We emailed a 6-digit code to
+                  </p>
+                  <p style={{ fontSize: 15, fontWeight: "bold", color: "var(--foreground)", margin: "2px 0 0", fontFamily: "var(--handwriting-font)" }}>{signupForm.email}</p>
+                </div>
+
+                <div className="sp-otp-grid">
+                  {signupForm.otp.map((digit, idx) => (
+                    <input
+                      key={idx}
+                      ref={el => { signupForm.otpRefs.current[idx] = el; }}
+                      type="text" inputMode="numeric" maxLength={1}
+                      value={digit} className="sp-otp-box"
+                      onChange={e => signupForm.handleOtpChange(idx, e.target.value)}
+                      onKeyDown={e => { if (e.key === "Backspace" && !signupForm.otp[idx] && idx > 0) signupForm.otpRefs.current[idx - 1]?.focus(); }}
+                      onPaste={idx === 0 ? signupForm.handleOtpPaste : undefined}
+                      style={{ borderColor: digit ? "var(--foreground)" : undefined, background: digit ? "var(--input)" : undefined }}
+                    />
+                  ))}
+                </div>
+
+                <button type="submit" className="sp-btn" disabled={signupForm.otpLoading || signupForm.otp.join("").length < 6}>
+                  {signupForm.otpLoading
+                    ? <><Loader2 className="sp-spin" style={{ width: 15, height: 15 }} /><span>Verifying...</span></>
+                    : <><Check style={{ width: 16, height: 16 }} /><span>Verify & Create Account</span></>}
+                </button>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 18 }}>
+                  <button type="button"
+                    onClick={() => { signupForm.setStep("form"); signupForm.setError(""); }}
+                    style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", color: "var(--muted-foreground)", fontSize: 13, fontWeight: "bold", cursor: "pointer", fontFamily: "var(--handwriting-font)" }}>
+                    <ArrowLeft style={{ width: 13, height: 13 }} /> Edit details
+                  </button>
+                  <button type="button" onClick={signupForm.handleResend} disabled={signupForm.resendCooldown > 0}
+                    style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", color: signupForm.resendCooldown > 0 ? "var(--border)" : "var(--foreground)", fontSize: 13, fontWeight: "bold", cursor: signupForm.resendCooldown > 0 ? "not-allowed" : "pointer", textDecoration: signupForm.resendCooldown > 0 ? "none" : "underline", textUnderlineOffset: 3, fontFamily: "var(--handwriting-font)" }}>
+                    <RotateCcw style={{ width: 12, height: 12 }} />
+                    {signupForm.resendCooldown > 0 ? `Resend in ${signupForm.resendCooldown}s` : "Resend code"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              /* CUSTOM EMAIL FORM (SIGN UP OR SIGN IN) */
+              <form onSubmit={authMode === "signup" ? signupForm.handleFormSubmit : loginForm.handleSubmit} className="animate-fade-in">
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {authMode === "signup" && (
+                    <div className="sp-field">
+                      <label>Full Name</label>
+                      <div className="sp-fw">
+                        <input className="sp-input" type="text" required value={signupForm.name}
+                          onChange={e => signupForm.setName(e.target.value)} placeholder="Your full name" />
+                        <User className="sp-fi" />
+                      </div>
+                    </div>
+                  )}
+
                   <div className="sp-field">
                     <label>Email Address</label>
                     <div className="sp-fw">
+                      <input
+                        className="sp-input"
+                        type="email"
+                        required
+                        value={authMode === "signup" ? signupForm.email : loginForm.email}
+                        onChange={e => authMode === "signup" ? signupForm.setEmail(e.target.value) : loginForm.setEmail(e.target.value)}
+                        placeholder="you@example.com"
+                      />
                       <Mail className="sp-fi" />
-                      <input className="sp-input" type="email" required value={f.email}
-                        onChange={e => f.setEmail(e.target.value)} placeholder="you@example.com" />
                     </div>
                   </div>
+
                   <div className="sp-field">
                     <label>Password</label>
                     <div className="sp-fw">
+                      <input
+                        className="sp-input pr"
+                        type={
+                          authMode === "signup"
+                            ? signupForm.showPassword ? "text" : "password"
+                            : loginForm.showPassword ? "text" : "password"
+                        }
+                        required
+                        value={authMode === "signup" ? signupForm.password : loginForm.password}
+                        onChange={e => authMode === "signup" ? signupForm.setPassword(e.target.value) : loginForm.setPassword(e.target.value)}
+                        placeholder={authMode === "signup" ? "Min. 6 characters" : "••••••••"}
+                      />
                       <Lock className="sp-fi" />
-                      <input className="sp-input pr" type={f.showPassword ? "text" : "password"} required
-                        value={f.password} onChange={e => f.setPassword(e.target.value)} placeholder="Min. 6 characters" />
-                      <button type="button" className="sp-pwtoggle" onClick={() => f.setShowPassword(!f.showPassword)}>
-                        {f.showPassword ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
+                      <button
+                        type="button"
+                        className="sp-pwtoggle"
+                        onClick={() =>
+                          authMode === "signup"
+                            ? signupForm.setShowPassword(!signupForm.showPassword)
+                            : loginForm.setShowPassword(!loginForm.showPassword)
+                        }
+                      >
+                        {authMode === "signup" ? (
+                          signupForm.showPassword ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />
+                        ) : (
+                          loginForm.showPassword ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />
+                        )}
                       </button>
                     </div>
                   </div>
-                  <div className="sp-field">
-                    <label>Professional Role</label>
-                    <div className="sp-fw">
-                      <Briefcase className="sp-fi" />
-                      <input className="sp-input" type="text" value={f.role}
-                        onChange={e => f.setRole(e.target.value)} placeholder="e.g. Frontend Developer" />
-                    </div>
-                  </div>
                 </div>
 
-                {/* Col 2 */}
-                <div className="sp-col">
-                  <div className="sp-field">
-                    <label>GitHub URL</label>
-                    <div className="sp-fw">
-                      <GithubIcon className="sp-fi" />
-                      <input className="sp-input" type="url" value={f.githubUrl}
-                        onChange={e => f.setGithubUrl(e.target.value)} placeholder="https://github.com/username" />
-                    </div>
-                  </div>
-                  <div className="sp-field">
-                    <label>LinkedIn URL</label>
-                    <div className="sp-fw">
-                      <LinkedinIcon className="sp-fi" />
-                      <input className="sp-input" type="url" value={f.linkedinUrl}
-                        onChange={e => f.setLinkedinUrl(e.target.value)} placeholder="https://linkedin.com/in/user" />
-                    </div>
-                  </div>
-                  <div className="sp-field">
-                    <label>Portfolio URL</label>
-                    <div className="sp-fw">
-                      <Globe className="sp-fi" />
-                      <input className="sp-input" type="url" value={f.portfolioUrl}
-                        onChange={e => f.setPortfolioUrl(e.target.value)} placeholder="https://yoursite.com" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Skills Picker ─────────────────────────────────────────── */}
-              <div style={{ marginTop: 20 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted-foreground)" }}>Your IT Skills</span>
-                  {f.selectedIds.size > 0 && (
-                    <span style={{ fontSize: 11, fontWeight: 500, background: "var(--input)", color: "var(--muted-foreground)", border: "1px solid var(--border)", padding: "2px 8px", borderRadius: 20 }}>
-                      {f.selectedIds.size} selected
-                    </span>
-                  )}
-                </div>
-
-                {/* Selected chips */}
-                {f.selectedSkills.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-                    {f.selectedSkills.map(s => {
-                      const c = getCatColor(s.category, isDark);
-                      return (
-                        <span key={s.id} className="sp-chip" style={{ background: c.bg, borderColor: c.border, color: c.text }}>
-                          <span style={{ width: 5, height: 5, borderRadius: "50%", background: c.dot, display: "inline-block" }} />
-                          {s.name}
-                          <button type="button" onClick={() => f.toggleSkill(s.id)}
-                            style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", color: c.text, opacity: 0.5 }}>
-                            <X style={{ width: 11, height: 11 }} />
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Dropdown trigger */}
-                <div ref={f.triggerRef} style={{ position: "relative" }}>
-                  <div
-                    className={`sp-skills-trigger ${f.showDropdown ? "open" : ""}`}
-                    onClick={() => f.showDropdown ? f.setShowDropdown(false) : f.openDropdown()}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <Search style={{ width: 15, height: 15, color: "var(--muted-foreground)", opacity: 0.6, flexShrink: 0 }} />
-                      <span style={{ fontSize: 13, color: "var(--muted-foreground)", opacity: 0.8 }}>
-                        {f.skillsLoading ? "Loading skills..." : f.selectedIds.size > 0 ? "Add more skills..." : "Search and select your skills..."}
-                      </span>
-                    </div>
-                    <ChevronDown style={{ width: 15, height: 15, color: "var(--muted-foreground)", opacity: 0.6, flexShrink: 0, transition: "transform 0.2s", transform: f.showDropdown ? "rotate(180deg)" : "none" }} />
-                  </div>
-
-                  {f.showDropdown && f.triggerRect && (
+                <button type="submit" className="sp-btn" disabled={activeLoading} style={{ marginTop: 22 }}>
+                  {activeLoading ? (
                     <>
-                      {/* Backdrop */}
-                      <div style={{ position: "fixed", inset: 0, zIndex: 99, background: "transparent" }} onClick={() => f.setShowDropdown(false)} />
-                      {/* Dropdown */}
-                      <div
-                        ref={f.dropdownRef}
-                        style={{
-                          position: "fixed", zIndex: 200,
-                          width: f.triggerRect.width, left: f.triggerRect.left,
-                          ...(f.dropUp ? { bottom: window.innerHeight - f.triggerRect.top + 6 } : { top: f.triggerRect.bottom + 6 }),
-                          background: "var(--card)", border: "1.5px solid var(--border)", borderRadius: 14,
-                          boxShadow: "var(--card-shadow)",
-                          display: "flex", flexDirection: "column", maxHeight: 340, overflow: "hidden",
-                        }}
-                        onClick={e => e.stopPropagation()}
-                      >
-                        {/* Search */}
-                        <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid var(--border)" }}>
-                          <div style={{ position: "relative" }}>
-                            <Search style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, color: "var(--muted-foreground)", opacity: 0.6 }} />
-                            <input
-                              autoFocus type="text"
-                              value={f.skillSearch} onChange={e => f.setSkillSearch(e.target.value)}
-                              placeholder="Search skills..."
-                              style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px 9px 34px", border: "1.5px solid var(--border)", borderRadius: 9, fontSize: 13, outline: "none", background: "var(--input)", color: "var(--foreground)", fontFamily: "inherit" }}
-                              onFocus={e => { e.target.style.borderColor = "var(--foreground)"; e.target.style.background = "var(--card)"; }}
-                              onBlur={e => { e.target.style.borderColor = "var(--border)"; e.target.style.background = "var(--input)"; }}
-                            />
-                          </div>
-                        </div>
+                      <Loader2 className="sp-spin" style={{ width: 15, height: 15 }} />
+                      <span>{authMode === "signup" ? "Sending code..." : "Signing in..."}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>{authMode === "signup" ? "Continue — Verify Email" : "Sign In"}</span>
+                      <ArrowRight style={{ width: 15, height: 15 }} />
+                    </>
+                  )}
+                </button>
 
-                        {/* Category pills */}
-                        <div style={{ display: "flex", gap: 6, padding: "8px 12px", borderBottom: "1px solid var(--border)", overflowX: "auto", scrollbarWidth: "none", flexShrink: 0 }}>
-                          {[null, ...f.categories].map(cat => {
-                            const active = f.activeCategory === cat;
-                            return (
-                              <button key={cat ?? "all"} type="button" onClick={() => f.setActiveCategory(cat)}
-                                style={{ flexShrink: 0, padding: "4px 13px", borderRadius: 20, fontSize: 12, fontWeight: 600, border: `1.5px solid ${active ? "var(--foreground)" : "var(--border)"}`, background: active ? "var(--foreground)" : "var(--card)", color: active ? "var(--card)" : "var(--muted-foreground)", cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}>
-                                {cat ?? "All"}
-                              </button>
-                            );
-                          })}
-                        </div>
+                <div className="lp-divider" style={{ margin: "20px 0 16px" }}>
+                  <span></span>
+                  or
+                  <span></span>
+                </div>
 
-                        {/* Skills list */}
-                        <div style={{ overflowY: "auto", flex: 1, padding: 6 }}>
-                          {f.filteredSkills.length === 0 && (
-                            <p style={{ textAlign: "center", color: "var(--muted-foreground)", fontSize: 13, padding: 20, margin: 0 }}>
-                              {f.skillSearch ? `No results for "${f.skillSearch}"` : "All skills selected!"}
-                            </p>
-                          )}
-                          {f.filteredSkills.map(skill => {
-                            const c = getCatColor(skill.category, isDark);
-                            return (
-                              <button key={skill.id} type="button" onClick={() => f.toggleSkill(skill.id)}
-                                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 10px", borderRadius: 9, border: "none", background: "transparent", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}
-                                onMouseEnter={e => { e.currentTarget.style.background = "var(--input)"; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-                              >
-                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: c.dot, flexShrink: 0, display: "inline-block" }} />
-                                  <span style={{ fontSize: 13, color: "var(--foreground)", fontWeight: 500 }}>{skill.name}</span>
-                                </div>
-                                <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 5, textTransform: "uppercase", letterSpacing: "0.3px", flexShrink: 0, background: c.bg, color: c.text, border: `1px solid ${c.border}` }}>
-                                  {skill.category}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = "/api/mail/gmail/connect?flow=auth";
+                  }}
+                  className="sp-google-btn"
+                  style={{ padding: "14px 0" }}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" style={{ marginRight: 8 }}>
+                    <path fill="#EA4335" d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.67 1.53 14.98 1 12 1 7.35 1 3.37 3.68 1.48 7.6l3.86 3C6.27 7.74 8.89 5.04 12 5.04z" />
+                    <path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.44h6.47c-.28 1.48-1.12 2.74-2.38 3.59l3.7 2.87c2.16-1.99 3.4-4.92 3.4-8.56z" />
+                    <path fill="#FBBC05" d="M5.34 14.6c-.24-.72-.38-1.49-.38-2.28s.14-1.56.38-2.28l-3.86-3C.72 8.44 0 10.14 0 12s.72 3.56 1.48 4.96l3.86-3.36z" />
+                    <path fill="#34A853" d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.7-2.87c-1.03.69-2.35 1.1-4.26 1.1-3.11 0-5.73-2.7-6.66-5.56l-3.86 3C3.37 20.32 7.35 23 12 23z" />
+                  </svg>
+                  <span>{authMode === "signup" ? "Sign Up using Google" : "Sign In using Google"}</span>
+                </button>
+
+                <div className="sp-switch" style={{ marginTop: 20 }}>
+                  {authMode === "signup" ? (
+                    <>
+                      Already have an account?{" "}
+                      <button type="button" onClick={() => handleSwitchMode("signin")}>Sign In</button>
+                    </>
+                  ) : (
+                    <>
+                      Don&apos;t have an account?{" "}
+                      <button type="button" onClick={() => handleSwitchMode("signup")}>Sign Up</button>
                     </>
                   )}
                 </div>
-              </div>
-
-              <button type="submit" className="sp-btn" disabled={f.loading} style={{ marginTop: 22 }}>
-                {f.loading
-                  ? <><Loader2 className="sp-spin" style={{ width: 15, height: 15 }} /><span>Sending code...</span></>
-                  : <><span>Continue — Verify Email</span><ArrowRight style={{ width: 15, height: 15 }} /></>}
-              </button>
-
-              <div className="sp-switch">
-                Already have an account?{" "}
-                <button type="button" onClick={() => router.push("/login")}>Sign In</button>
-              </div>
-            </form>
-          )}
-
-          {/* ── OTP VERIFICATION ────────────────────────────────────────────── */}
-          {isOtp && (
-            <form onSubmit={f.handleOtpSubmit}>
-              <div style={{ textAlign: "center", marginBottom: 24 }}>
-                <div style={{ width: 60, height: 60, borderRadius: 16, background: "var(--input)", border: "1px solid var(--border)", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
-                  <ShieldCheck style={{ width: 28, height: 28, color: "var(--foreground)" }} />
-                </div>
-                <p style={{ fontSize: 14, color: "var(--muted-foreground)", lineHeight: 1.7, margin: 0 }}>
-                  We emailed a 6-digit code to
-                </p>
-                <p style={{ fontSize: 14, fontWeight: 700, color: "var(--foreground)", margin: "2px 0 0" }}>{f.email}</p>
-              </div>
-
-              <div className="sp-otp-grid">
-                {f.otp.map((digit, idx) => (
-                  <input
-                    key={idx}
-                    ref={el => { f.otpRefs.current[idx] = el; }}
-                    type="text" inputMode="numeric" maxLength={1}
-                    value={digit} className="sp-otp-box"
-                    onChange={e => f.handleOtpChange(idx, e.target.value)}
-                    onKeyDown={e => { if (e.key === "Backspace" && !f.otp[idx] && idx > 0) f.otpRefs.current[idx - 1]?.focus(); }}
-                    onPaste={idx === 0 ? f.handleOtpPaste : undefined}
-                    style={{ borderColor: digit ? "var(--foreground)" : undefined, background: digit ? "var(--input)" : undefined }}
-                  />
-                ))}
-              </div>
-
-              <button type="submit" className="sp-btn" disabled={f.otpLoading || f.otp.join("").length < 6}>
-                {f.otpLoading
-                  ? <><Loader2 className="sp-spin" style={{ width: 15, height: 15 }} /><span>Verifying...</span></>
-                  : <><Check style={{ width: 16, height: 16 }} /><span>Verify & Create Account</span></>}
-              </button>
-
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 18 }}>
-                <button type="button"
-                  onClick={() => { f.setStep("form"); f.setError(""); }}
-                  style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", color: "var(--muted-foreground)", fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
-                  <ArrowLeft style={{ width: 13, height: 13 }} /> Edit details
-                </button>
-                <button type="button" onClick={f.handleResend} disabled={f.resendCooldown > 0}
-                  style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", color: f.resendCooldown > 0 ? "var(--border)" : "var(--foreground)", fontSize: 12, fontWeight: 600, cursor: f.resendCooldown > 0 ? "not-allowed" : "pointer", textDecoration: f.resendCooldown > 0 ? "none" : "underline", textUnderlineOffset: 3 }}>
-                  <RotateCcw style={{ width: 12, height: 12 }} />
-                  {f.resendCooldown > 0 ? `Resend in ${f.resendCooldown}s` : "Resend code"}
-                </button>
-              </div>
-            </form>
-          )}
+              </form>
+            )}
+          </div>
         </div>
       </div>
     </>

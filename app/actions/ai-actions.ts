@@ -378,6 +378,7 @@ export async function analyzeJobCandidacyAction(
   isDuplicate?: boolean;
   duplicateJobId?: string;
   duplicateReason?: string;
+  suggestAttachResume?: boolean;
   error?: string;
 }> {
   if (!jobText.trim() || jobText.length < 30) {
@@ -475,7 +476,8 @@ Return ONLY this JSON:
   "applyUrl": "<any other application URL or ''>",
   "explanation": "<1-2 honest sentences about fit based on candidate's actual role and skills>",
   "matchedSkills": ["<skills from the candidate's profile that are directly or implicitly relevant>"],
-  "missingSkills": ["<only genuinely absent capabilities not coverable from existing profile — keep empty [] for vague job posts>"]${duplicateFields}
+  "missingSkills": ["<only genuinely absent capabilities not coverable from existing profile — keep empty [] for vague job posts>"],
+  "suggestAttachResume": <true|false based on whether the job description explicitly or implicitly calls for a resume, portfolio, or references, or if it is a major contract/full-time role>${duplicateFields}
 }`;
 
     const raw = await provider.generate({
@@ -558,6 +560,7 @@ Return ONLY this JSON:
       isDuplicate:    hasPrior ? !!p.isDuplicate : undefined,
       duplicateJobId: str(p.duplicateJobId),
       duplicateReason: str(p.duplicateReason),
+      suggestAttachResume: typeof p.suggestAttachResume === "boolean" ? p.suggestAttachResume : false,
     };
   } catch (err: any) {
     console.error("[analyzeJobCandidacyAction] Failed:", err);

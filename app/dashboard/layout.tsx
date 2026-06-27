@@ -1,16 +1,22 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "../components/sidebar";
 import { useAuth } from "../hooks/useAuth";
 import { getUserProfileAction } from "../actions/db-actions";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { userEmail, userName, userRole, isReady, logout } = useAuth({ requiredStatus: "ACTIVE" });
+  const pathname = usePathname();
+  const router = useRouter();
 
   const [profileName, setProfileName] = useState<string | undefined>(undefined);
   const [profileRole, setProfileRole] = useState<string | undefined>(undefined);
   
+  const [hasSkills, setHasSkills] = useState<boolean | null>(null);
+  const [hasProjects, setHasProjects] = useState<boolean | null>(null);
+
   // Notification toast stack state
   const [notifications, setNotifications] = useState<any[]>([]);
   const mountedAt = useRef<string>(new Date().toISOString());
@@ -26,8 +32,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     getUserProfileAction(userEmail).then(profile => {
       if (profile?.name) setProfileName(profile.name);
       if (profile?.role) setProfileRole(profile.role);
+
+      const hasS = !!(profile?.skills && profile.skills.length > 0);
+      const hasP = !!(profile?.projects && profile.projects.length >= 2);
+      setHasSkills(hasS);
+      setHasProjects(hasP);
     });
-  }, [userEmail]);
+  }, [userEmail, pathname]);
 
   // Poll for new synced emails received in the database
   useEffect(() => {
@@ -76,50 +87,203 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!isReady) return null;
 
-  return (
-    <div
-      style={{
-        display: "flex",
-        height: "100vh",
-        background: "var(--background)",
-        padding: 14,
-        gap: 18,
-        boxSizing: "border-box",
-        overflow: "hidden",
-      }}
-    >
-      <Sidebar
-        onLogout={logout}
-        userName={profileName || userName || "Your Profile"}
-        userRole={profileRole}
-        systemRole={userRole}
-      />
+  const isProfilePage = pathname === "/dashboard/profile";
+  const showBlocker = !isProfilePage && (hasSkills === false || hasProjects === false);
 
-      {/* Main scroll container — must be a plain block (not flex) so overflowY works */}
-      <main
+  return (
+    <>
+      <link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Caveat:wght@400;700&display=swap" rel="stylesheet" />
+      <style>{`
+        :root {
+          --handwriting-font: 'Caveat', 'Architects Daughter', cursive;
+        }
+        @keyframes fade-in-slide {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-fade-in {
+          animation: fade-in-slide 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+      `}</style>
+
+      <div
         style={{
-          flex: "1 1 0",
-          minWidth: 0,
-          minHeight: 0,
-          overflowY: "auto",
-          overflowX: "hidden",
-          paddingRight: 4,
-          display: "block",
+          display: "flex",
+          height: "100vh",
+          background: "var(--background)",
+          padding: 14,
+          gap: 18,
+          boxSizing: "border-box",
+          overflow: "hidden",
         }}
       >
-        {/* Inner wrapper adds the vertical spacing between page sections */}
-        <div
+        <Sidebar
+          onLogout={logout}
+          userName={profileName || userName || "Your Profile"}
+          userRole={profileRole}
+          systemRole={userRole}
+        />
+
+        {/* Main scroll container — must be a plain block (not flex) so overflowY works */}
+        <main
           style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 20,
-            minHeight: "100%",
-            paddingBottom: 24,
+            flex: "1 1 0",
+            minWidth: 0,
+            minHeight: 0,
+            overflowY: "auto",
+            overflowX: "hidden",
+            paddingRight: 4,
+            display: "block",
           }}
         >
-          {children}
-        </div>
-      </main>
+          {/* Inner wrapper adds the vertical spacing between page sections */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 20,
+              minHeight: "100%",
+              paddingBottom: 24,
+            }}
+          >
+            {showBlocker ? (
+              <div
+                className="animate-fade-in"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minHeight: "75vh",
+                  padding: 40,
+                  textAlign: "center",
+                }}
+              >
+                <div
+                  style={{
+                    background: "var(--card)",
+                    border: "2.5px solid var(--foreground)",
+                    borderRadius: 12,
+                    boxShadow: "6px 6px 0px 0px var(--foreground)",
+                    padding: "48px 32px",
+                    maxWidth: 520,
+                    width: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 20,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: 12,
+                      background: "rgba(99, 102, 241, 0.1)",
+                      border: "2px dashed #6366f1",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 32,
+                    }}
+                  >
+                    🚀
+                  </div>
+
+                  <h2
+                    style={{
+                      fontSize: 26,
+                      fontWeight: "bold",
+                      color: "var(--foreground)",
+                      margin: 0,
+                      fontFamily: "var(--handwriting-font)",
+                    }}
+                  >
+                    Complete Your Profile Setup
+                  </h2>
+
+                  <p
+                    style={{
+                      fontSize: 16,
+                      color: "var(--muted-foreground)",
+                      lineHeight: 1.6,
+                      margin: 0,
+                      fontFamily: "var(--handwriting-font)",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Before accessing AI proposal tools, inbox match scores, and outreach integrations, please complete your profile checklist:
+                  </p>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      gap: 12,
+                      width: "100%",
+                      padding: "16px 20px",
+                      background: "var(--input)",
+                      border: "2px solid var(--foreground)",
+                      borderRadius: 8,
+                      boxShadow: "3px 3px 0px 0px var(--foreground)",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 16, fontWeight: "bold", fontFamily: "var(--handwriting-font)", color: "var(--foreground)" }}>
+                      <span style={{ fontSize: 18 }}>{hasSkills ? "✅" : "⭕"}</span>
+                      <span style={{ textDecoration: hasSkills ? "line-through" : "none", opacity: hasSkills ? 0.6 : 1 }}>
+                        Add at least one technical skill
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 16, fontWeight: "bold", fontFamily: "var(--handwriting-font)", color: "var(--foreground)" }}>
+                      <span style={{ fontSize: 18 }}>{hasProjects ? "✅" : "⭕"}</span>
+                      <span style={{ textDecoration: hasProjects ? "line-through" : "none", opacity: hasProjects ? 0.6 : 1 }}>
+                        Add at least two featured projects
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => router.push("/dashboard/profile")}
+                    style={{
+                      padding: "12px 28px",
+                      borderRadius: 6,
+                      border: "2.5px solid var(--foreground)",
+                      background: "#6366f1",
+                      color: "#fff",
+                      fontSize: 16,
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                      boxShadow: "3px 3px 0px 0px var(--foreground)",
+                      transition: "all 0.15s ease",
+                      fontFamily: "var(--handwriting-font)",
+                      marginTop: 8,
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.transform = "translate(-1.5px, -1.5px)";
+                      e.currentTarget.style.boxShadow = "4.5px 4.5px 0px 0px var(--foreground)";
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.transform = "none";
+                      e.currentTarget.style.boxShadow = "3px 3px 0px 0px var(--foreground)";
+                    }}
+                  >
+                    Go to Profile 🚀
+                  </button>
+                </div>
+              </div>
+            ) : (
+              children
+            )}
+          </div>
+        </main>
 
       {/* macOS-style Toast Notification Stack */}
       {notifications.length > 0 && (
@@ -247,5 +411,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       )}
     </div>
+    </>
   );
 }

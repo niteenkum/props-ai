@@ -111,7 +111,16 @@ export async function getJobPostsAction(
     search?: string;
     status?: string;
   } | string
-): Promise<{ jobs: JobPost[]; totalCount: number }> {
+): Promise<{
+  jobs: JobPost[];
+  totalCount: number;
+  stats?: {
+    total: number;
+    avgMatch: number;
+    active: number;
+    generated: number;
+  };
+}> {
   try {
     let userEmail: string | undefined;
     let page = 1;

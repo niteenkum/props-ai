@@ -113,6 +113,7 @@ async function main() {
     tags: ["React", "Tailwind"],
     generatedTemplates: {},
     suggestAttachResume: true,
+    matchScore: 0,
   });
 
   console.log(`✅ Job Scanned! Created AdminJob (ID: ${scannedJob.id})`);

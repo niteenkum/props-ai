@@ -113,7 +113,6 @@ export function useSignupForm() {
     if (!name.trim())               { setError("Please enter your full name."); return; }
     if (!email.trim())              { setError("Please enter your email address."); return; }
     if (!password || password.length < 6) { setError("Password must be at least 6 characters."); return; }
-    if (selectedIds.size === 0)     { setError("Please select at least one skill."); return; }
     setLoading(true);
     const res = await sendSignupOtpAction(email, name);
     setLoading(false);
@@ -134,7 +133,7 @@ export function useSignupForm() {
     });
     setOtpLoading(false);
     if (res.success && res.user) {
-      handleLoginSuccess(res.user.email, res.user.status, res.user.name, res.user.role, "/dashboard/profile?tab=integrations");
+      handleLoginSuccess(res.user.email, res.user.status, res.user.name, res.user.role, "/dashboard/profile");
     } else {
       setError(res.error || "Verification failed.");
     }
