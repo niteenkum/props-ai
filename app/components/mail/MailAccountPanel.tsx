@@ -2812,6 +2812,44 @@ export default function MailAccountPanel({ userEmail, isDark, mode = "all" }: Ma
             );
           })}
 
+          {/* Loading state when fetching inbox and no items loaded yet */}
+          {mail.isFetchingInbox && mail.inbox.length === 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "10px 0" }}>
+              {[1, 2, 3, 4].map(idx => (
+                <div
+                  key={idx}
+                  style={{
+                    padding: "16px 20px",
+                    borderRadius: 12,
+                    border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+                    background: isDark ? "rgba(255,255,255,0.015)" : "rgba(0,0,0,0.01)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    animation: "pulse-loader 1.5s ease-in-out infinite",
+                    animationDelay: `${idx * 0.15}s`,
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--primary)", opacity: 0.6 }} />
+                      <div style={{ width: 120, height: 12, borderRadius: 4, background: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)" }} />
+                    </div>
+                    <div style={{ width: 50, height: 10, borderRadius: 4, background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)" }} />
+                  </div>
+                  <div style={{ width: "65%", height: 14, borderRadius: 4, background: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)" }} />
+                  <div style={{ width: "90%", height: 10, borderRadius: 4, background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)" }} />
+                </div>
+              ))}
+              <style>{`
+                @keyframes pulse-loader {
+                  0%, 100% { opacity: 1; transform: scale(1); }
+                  50% { opacity: 0.4; transform: scale(0.995); }
+                }
+              `}</style>
+            </div>
+          )}
+
           {/* Empty state — no inbox loaded */}
           {mail.inbox.length === 0 && !mail.isFetchingInbox && !mail.inboxError && (
             <div style={{ textAlign: "center", padding: "40px 0", color: "var(--muted-foreground)" }}>

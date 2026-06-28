@@ -66,7 +66,7 @@ export default function Sidebar({
       { label: "New Scan", icon: FilePlus2, href: "/dashboard/new" },
       { label: "User Management", icon: Users, href: "/dashboard/users" },
     ] : [
-      { label: "Admin Scans", icon: Search, href: "/dashboard/admin-jobs" },
+      {label: "Curated Job Feed", icon: Search, href: "/dashboard/admin-jobs"},
     ]),
     { label: "Smart Inbox", icon: Mail, href: "/dashboard/mail" },
     { label: "Calls & Followups", icon: CalendarDays, href: "/dashboard/followups" },

@@ -993,3 +993,25 @@ export async function promoteAdminJobToLeadAction(
   }
 }
 
+/**
+ * Fetches all imported job keys for a specific user to prevent duplicate imports
+ * and map them to their corresponding JobPost workspace IDs.
+ */
+export async function getImportedJobKeysAction(userEmail: string): Promise<Record<string, string>> {
+  try {
+    const imported = await prisma.jobPost.findMany({
+      where: { userEmail },
+      select: { id: true, role: true, company: true }
+    });
+    const mapping: Record<string, string> = {};
+    imported.forEach(j => {
+      const key = `${j.company?.toLowerCase() || ""}:${j.role.toLowerCase()}`;
+      mapping[key] = j.id;
+    });
+    return mapping;
+  } catch (error) {
+    console.error("Error in getImportedJobKeysAction:", error);
+    return {};
+  }
+}
+

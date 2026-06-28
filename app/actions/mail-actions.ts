@@ -253,6 +253,17 @@ export async function classifyEmailWithAI(
   snippet: string
 ): Promise<{ type: string; summary: string; sentiment: string }> {
   try {
+    const user = await prisma.user.findUnique({
+      where: { email: userEmail },
+      select: { saveTokens: true }
+    });
+
+    if (user?.saveTokens) {
+      console.log(`[classifyEmailWithAI] Skipping LLM call because Save Tokens is ON for ${userEmail}`);
+      const type = runHeuristicClassification(subject, fromEmail, snippet);
+      return { type, summary: snippet.slice(0, 120), sentiment: "neutral" };
+    }
+
     const { getProvider } = await import("../utils/ai/service");
     const provider = getProvider();
     if (!provider) {

@@ -292,6 +292,7 @@ function ProfilePageContent() {
   const [chatbotGreeting, setChatbotGreeting] = useState<string>("Hi! I'm The Pitchly AI. How can I help you today?");
   const [chatbotTone, setChatbotTone] = useState<string>("Professional");
   const [prefSaveSuccess, setPrefSaveSuccess] = useState(false);
+  const [saveTokens, setSaveTokens] = useState<boolean>(false);
 
   const checkWaStatus = async () => {
     try {
@@ -318,6 +319,27 @@ function ProfilePageContent() {
       const to = localStorage.getItem("chatbot_tone"); if (to) setChatbotTone(to);
     }
   }, []);
+
+  useEffect(() => {
+    if (userEmail) {
+      import("../../actions/token-actions").then(({ getSaveTokensAction }) => {
+        getSaveTokensAction(userEmail).then(res => {
+          if (res.success) setSaveTokens(res.saveTokens);
+        });
+      });
+    }
+  }, [userEmail]);
+
+  const handleToggleSaveTokens = async () => {
+    const nextVal = !saveTokens;
+    setSaveTokens(nextVal);
+    const { updateSaveTokensAction } = await import("../../actions/token-actions");
+    const res = await updateSaveTokensAction(userEmail, nextVal);
+    if (!res.success) {
+      alert("Failed to update token saving preferences: " + res.error);
+      setSaveTokens(saveTokens); // rollback
+    }
+  };
 
   const handleDisconnectWhatsApp = async () => {
     setIsDisconnectingWa(true);
@@ -2440,6 +2462,19 @@ function ProfilePageContent() {
                       position: "relative", background: autoScanWa ? "#22c55e" : "var(--border)", transition: "background 0.25s ease",
                     }}>
                       <div style={{ position: "absolute", top: 2, left: autoScanWa ? 22 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left 0.2s ease", boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }} />
+                    </button>
+                  </div>
+
+                  <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)", display: "block" }}>Save Tokens (Bypass AI Email Category)</span>
+                      <span style={{ fontSize: 11.5, color: "var(--muted-foreground)" }}>Skip LLM-based categorization during email sync to save tokens (falls back to local rules).</span>
+                    </div>
+                    <button onClick={handleToggleSaveTokens} style={{
+                      width: 42, height: 22, borderRadius: 100, border: "none", cursor: "pointer",
+                      position: "relative", background: saveTokens ? "#22c55e" : "var(--border)", transition: "background 0.25s ease",
+                    }}>
+                      <div style={{ position: "absolute", top: 2, left: saveTokens ? 22 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left 0.2s ease", boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }} />
                     </button>
                   </div>
                 </div>

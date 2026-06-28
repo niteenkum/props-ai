@@ -337,3 +337,33 @@ export async function toggleUserStatusAction(adminEmail: string, targetEmail: st
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Get the saveTokens toggle status for a user
+ */
+export async function getSaveTokensAction(userEmail: string) {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email: userEmail },
+      select: { saveTokens: true }
+    });
+    return { success: true, saveTokens: user?.saveTokens ?? false };
+  } catch (error: any) {
+    return { success: false, error: error.message, saveTokens: false };
+  }
+}
+
+/**
+ * Update the saveTokens toggle status for a user
+ */
+export async function updateSaveTokensAction(userEmail: string, value: boolean) {
+  try {
+    await prisma.user.update({
+      where: { email: userEmail },
+      data: { saveTokens: value }
+    });
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

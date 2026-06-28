@@ -165,11 +165,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     });
   }, [userEmail, pathname]);
 
-  // Poll for new synced emails received in the database
+  // Poll for new synced emails received in the database (only when tab is visible)
   useEffect(() => {
     if (!userEmail) return;
 
-    const interval = setInterval(async () => {
+    const runPoll = async () => {
+      if (document.hidden) return; // Skip if tab is minimized or in the background
       try {
         const { getRecentSyncedEmailsAction } = await import("../actions/mail-actions");
         const res = await getRecentSyncedEmailsAction(userEmail, mountedAt.current);
@@ -195,7 +196,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             return [...uniqueNew, ...prev];
           });
 
-          // Auto-dismiss after 15 seconds (longer window for reading)
+          // Auto-dismiss after 15 seconds
           newItems.forEach(item => {
             setTimeout(() => {
               removeNotification(item.id);
@@ -205,7 +206,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       } catch (err) {
         console.error("Failed to fetch recent emails for notifications:", err);
       }
-    }, 8000);
+    };
+
+    // Run once on mount
+    runPoll();
+
+    const interval = setInterval(runPoll, 15000); // Poll every 15 seconds instead of 8
 
     return () => clearInterval(interval);
   }, [userEmail]);
