@@ -585,3 +585,160 @@ Return ONLY this JSON:
     return { success: false, error: err?.message || "AI candidacy analysis failed" };
   }
 }
+
+/**
+ * Retrieves the database persisted chat message thread for a specific job post
+ */
+export async function getJobChatHistoryAction(
+  jobId: string,
+  userEmail: string
+): Promise<any[]> {
+  try {
+    const messages = await prisma.jobChatMessage.findMany({
+      where: { jobId, userEmail },
+      orderBy: { createdAt: "asc" }
+    });
+    return messages.map(msg => ({
+      id: msg.id,
+      role: msg.role,
+      content: msg.content,
+      createdAt: msg.createdAt.toISOString()
+    }));
+  } catch (error) {
+    console.error("Error in getJobChatHistoryAction:", error);
+    return [];
+  }
+}
+
+/**
+ * Sends a chat message to the Job Copilot, grounds it in job and user profile details,
+ * queries Gemini, logs token usage cost transactions, and returns the response message.
+ */
+export async function sendMessageToJobCopilotAction(
+  jobId: string,
+  userEmail: string,
+  messageContent: string
+): Promise<{ success: boolean; responseMessage?: any; error?: string }> {
+  try {
+    // 1. Verify token balance
+    await verifyTokenBalance(userEmail);
+
+    // 2. Fetch Job Details
+    const job = await prisma.jobPost.findUnique({
+      where: { id: jobId }
+    });
+    if (!job) {
+      return { success: false, error: "Job post not found." };
+    }
+
+    // 3. Fetch User Profile
+    const profile = await getUserProfileAction(userEmail);
+    if (!profile) {
+      return { success: false, error: "User profile not found. Set it up first." };
+    }
+
+    // 4. Save User's Message to DB
+    await prisma.jobChatMessage.create({
+      data: {
+        jobId,
+        userEmail,
+        role: "user",
+        content: messageContent
+      }
+    });
+
+    // 5. Fetch recent chat history (last 20 messages)
+    const history = await prisma.jobChatMessage.findMany({
+      where: { jobId, userEmail },
+      orderBy: { createdAt: "asc" },
+      take: 20
+    });
+
+    // 6. Format chat history text
+    const conversationHistoryText = history.map(msg => {
+      const speaker = msg.role === "user" ? "User" : "AI Negotiation Copilot";
+      return `${speaker}: ${msg.content}`;
+    }).join("\n");
+
+    // 7. Get AI Provider
+    const { getProvider } = await import("../utils/ai/service");
+    const provider = getProvider();
+    if (!provider) {
+      return { success: false, error: "No AI provider configured." };
+    }
+
+    // 8. Build System Prompt
+    const systemPrompt = `You are a world-class AI Career Coach, Pitch Advisor, and Negotiation Copilot for ${profile.name}.
+Your job is to help the user draft outreach messages, formulate perfect responses to recruiters (on LinkedIn, Upwork, Zoho, Gmail, etc.), negotiate rates/salaries, and prepare for job interviews.
+
+Context grounding details:
+- User Profile Name: ${profile.name}
+- User Current Role/Title: ${profile.role}
+- User Resume Skills: ${profile.skills.join(", ")}
+- Target Job Title: ${job.role}
+- Target Company: ${job.company}
+- Target Job Description/Text: ${job.originalText}
+
+Rules:
+1. Always suggest actionable next-step response templates that the user can copy-paste.
+2. Ground all answers in Niteen's experience (do not invent experiences not in his profile).
+3. If they paste a recruiter's email, message, or LinkedIn question, analyze it and write the BEST reply suggestion.
+4. Keep replies extremely professional, concise, and focused on securing the project/job.`;
+
+    const userPrompt = `Here is the current conversation thread:\n${conversationHistoryText}\n\nAI Negotiation Copilot:`;
+
+    // 9. Call LLM
+    const responseText = await provider.generate({
+      systemPrompt,
+      userPrompt,
+      temperature: 0.7,
+      maxTokens: 1536,
+      apiType: "content_proposal" // tracks as proposal content cost
+    });
+
+    // 10. Save AI's response to DB
+    const modelMsg = await prisma.jobChatMessage.create({
+      data: {
+        jobId,
+        userEmail,
+        role: "model",
+        content: responseText
+      }
+    });
+
+    // 11. Deduct 1 credit/token from the user (if not Superadmin)
+    const user = await prisma.user.findUnique({
+      where: { email: userEmail },
+      select: { role: true }
+    });
+    if (user && user.role !== "SUPERADMIN") {
+      await prisma.user.update({
+        where: { email: userEmail },
+        data: { tokenBalance: { decrement: 1 } }
+      });
+      // Log usage transaction
+      await prisma.tokenTransaction.create({
+        data: {
+          userEmail,
+          type: "USAGE",
+          amount: -1,
+          description: `Copilot Chat for ${job.role} at ${job.company}`,
+          costUsd: 0.005 // estimated average query cost
+        }
+      });
+    }
+
+    return {
+      success: true,
+      responseMessage: {
+        id: modelMsg.id,
+        role: modelMsg.role,
+        content: modelMsg.content,
+        createdAt: modelMsg.createdAt.toISOString()
+      }
+    };
+  } catch (error: any) {
+    console.error("Error in sendMessageToJobCopilotAction:", error);
+    return { success: false, error: error?.message || "Failed to send message." };
+  }
+}

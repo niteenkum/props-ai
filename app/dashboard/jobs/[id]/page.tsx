@@ -28,6 +28,7 @@ import EmailComposeDrawer from "../../EmailComposeDrawer";
 import JobDrawer from "../../new/JobDrawer";
 import ScheduleCallModal from "../../../components/ScheduleCallModal";
 import { getJobFollowUpsAction, type FollowUpWithJob } from "../../../actions/calendar-actions";
+import JobChatCopilot from "./JobChatCopilot";
 
 // ── Platform tab metadata ─────────────────────────────────────────────────────
 const PLATFORM_META: Record<string, { label: string; icon: string }> = {
@@ -96,7 +97,7 @@ export default function JobDetailPage() {
   const [notFound,  setNotFound]  = useState(false);
 
   // ─ Tabs ──────────────────────────────────────────────────────────────────────
-  const [mainTab,     setMainTab]     = useState<"thread" | "templates" | "details">("thread");
+  const [mainTab,     setMainTab]     = useState<"thread" | "templates" | "details" | "copilot">("thread");
   const [templateTab, setTemplateTab] = useState<string>("coldEmail");
 
   // ─ Email thread (inline tab) ──────────────────────────────────────────────────
@@ -698,6 +699,20 @@ export default function JobDetailPage() {
               {t === "templates" ? "🤖 AI Templates" : "📋 Job Details"}
             </button>
           ))}
+
+          <button
+            onClick={() => setMainTab("copilot")}
+            style={{
+              padding: "10px 24px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              background: "none", border: "none",
+              borderBottom: mainTab === "copilot" ? "2px solid var(--foreground)" : "2px solid transparent",
+              color: mainTab === "copilot" ? "var(--foreground)" : "var(--muted-foreground)",
+              marginBottom: -2,
+              transition: "all 0.18s",
+            }}
+          >
+            💬 AI Copilot Chat
+          </button>
         </div>
 
         {/* ════════════════════════════════════════════════════════════ */}
@@ -1388,6 +1403,14 @@ export default function JobDetailPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {mainTab === "copilot" && (
+          <JobChatCopilot
+            jobId={job.id}
+            userEmail={userEmail}
+            isDark={isDark}
+          />
         )}
       </div>
 

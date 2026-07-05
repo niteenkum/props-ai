@@ -447,3 +447,15 @@ model TokenTransaction {
   @@index([userEmail])
 }
 
+// Persisted AI Copilot chats associated with a JobPost lead
+model JobChatMessage {
+  id        String   @id @default(uuid())
+  jobId     String
+  userEmail String
+  role      String   // "user" | "model"
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([jobId, userEmail])
+}
+
