@@ -1015,3 +1015,32 @@ export async function getImportedJobKeysAction(userEmail: string): Promise<Recor
   }
 }
 
+/**
+ * Add a single new project to the user's profile without overwriting existing ones.
+ */
+export async function addUserProjectAction(
+  userEmail: string,
+  project: { name: string; tech: string[]; description: string; links?: { label: string; url: string }[] }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await prisma.user.findUnique({ where: { email: userEmail } });
+    if (!user) return { success: false, error: "User not found." };
+
+    await prisma.project.create({
+      data: {
+        userId: user.id,
+        name: project.name,
+        tech: project.tech,
+        description: project.description,
+        links: project.links || [],
+      }
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error in addUserProjectAction:", error);
+    return { success: false, error: error?.message || "Failed to save project." };
+  }
+}
+
+

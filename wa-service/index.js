@@ -27,7 +27,7 @@ import fs from "fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const AUTH_DIR  = path.join(__dirname, "sessions");
-const PORT      = process.env.WA_PORT || 3002;
+const PORT      = process.env.PORT || process.env.WA_PORT || 3002;
 
 const logger = pino({ level: "silent" });
 

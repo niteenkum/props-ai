@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   FileText, Users, Award, Terminal, GraduationCap,
   UploadCloud, Plus, Trash2, X, Check, Loader2, Save,
@@ -116,6 +116,7 @@ function ProfilePageContent() {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   // ─── Tab state ───
   const [activeTab, setActiveTab] = useState<"profile" | "integrations" | "preferences">("profile");
@@ -1811,7 +1812,23 @@ function ProfilePageContent() {
                     <Laptop style={{ width: 16, height: 16 }} />,
                     "Featured Projects",
                     countBadge(projectCount, "projects"),
-                    addBtn("Add New Project", openAddProjectModal),
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <button
+                        onClick={() => router.push("/dashboard/profile/project-builder")}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 6,
+                          padding: "6px 14px", borderRadius: 10,
+                          border: "1.5px solid rgba(99,102,241,0.3)",
+                          background: isDark ? "rgba(99,102,241,0.08)" : "rgba(99,102,241,0.04)",
+                          color: "#818cf8", fontSize: 11, fontWeight: 700,
+                          cursor: "pointer", transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                        }}
+                        className="btn-add-action"
+                      >
+                        <Sparkles style={{ width: 13, height: 13 }} /> Build with AI
+                      </button>
+                      {addBtn("Add New Project", openAddProjectModal)}
+                    </div>,
                   )}
 
                   <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>

@@ -742,3 +742,113 @@ Rules:
     return { success: false, error: error?.message || "Failed to send message." };
   }
 }
+
+/**
+ * Chat with the AI Project Builder to help the user craft a new project entry.
+ * The AI is grounded in existing projects so it avoids duplicates and maintains style consistency.
+ * It returns a natural language response AND a structured JSON block for live preview sync.
+ */
+export async function chatWithProjectBuilderAction(
+  userEmail: string,
+  chatHistory: { role: "user" | "model"; content: string }[]
+): Promise<{ success: boolean; response?: string; error?: string }> {
+  try {
+    // 1. Verify token balance
+    await verifyTokenBalance(userEmail);
+
+    // 2. Load user profile & existing projects
+    const profile = await getUserProfileAction(userEmail);
+    if (!profile) {
+      return { success: false, error: "User profile not found. Set it up first." };
+    }
+
+    const existingProjectsSummary = profile.projects.length > 0
+      ? profile.projects.map((p, i) =>
+          `${i + 1}. "${p.name}" — Tech: [${p.tech.join(", ")}] — ${p.description.slice(0, 120)}...`
+        ).join("\n")
+      : "No projects yet.";
+
+    // 3. Get AI Provider
+    const { getProvider } = await import("../utils/ai/service");
+    const provider = getProvider();
+    if (!provider) {
+      return { success: false, error: "No AI provider configured." };
+    }
+
+    // 4. Build System Prompt
+    const systemPrompt = `You are an expert Resume Project Writer and Portfolio Coach for ${profile.name} (${profile.role}).
+
+Your goal is to help the user document a new technical project for their professional profile / resume.
+
+Context — Existing Projects on Profile:
+${existingProjectsSummary}
+
+Context — User Skills:
+${profile.skills.join(", ")}
+
+Instructions:
+1. Ask clarifying questions if the user's description is vague (e.g., what problem it solved, what tech stack was used, any metrics or scale).
+2. Write professional, impact-driven project descriptions highlighting complexity, technical decisions, and results.
+3. Suggest appropriate tech stack tags based on what the user describes.
+4. Avoid duplicating any project that already exists on the profile.
+5. Keep project descriptions between 2-4 concise sentences. Focus on IMPACT and TECHNICAL DEPTH.
+
+CRITICAL FORMAT RULE:
+Whenever you have enough information to define or update the project details, you MUST append a fenced JSON block at the END of your message in this exact format:
+
+\`\`\`json
+{
+  "name": "Project Title Here",
+  "tech": ["React", "Node.js", "PostgreSQL"],
+  "description": "2-4 sentence professional description...",
+  "links": []
+}
+\`\`\`
+
+This JSON block will be automatically parsed by the UI to update the live preview card. Always include it when you have project details to show, even partial ones.`;
+
+    // 5. Format conversation
+    const conversationText = chatHistory.map(msg => {
+      const speaker = msg.role === "user" ? "User" : "AI Project Builder";
+      return `${speaker}: ${msg.content}`;
+    }).join("\n");
+
+    const userPrompt = `Here is the current conversation:\n${conversationText}\n\nAI Project Builder:`;
+
+    // 6. Call LLM
+    const responseText = await provider.generate({
+      systemPrompt,
+      userPrompt,
+      temperature: 0.7,
+      maxTokens: 1536,
+      apiType: "content_proposal"
+    });
+
+    // 7. Deduct 1 credit/token (if not Superadmin)
+    const user = await prisma.user.findUnique({
+      where: { email: userEmail },
+      select: { role: true }
+    });
+    if (user && user.role !== "SUPERADMIN") {
+      await prisma.user.update({
+        where: { email: userEmail },
+        data: { tokenBalance: { decrement: 1 } }
+      });
+      await prisma.tokenTransaction.create({
+        data: {
+          userEmail,
+          type: "USAGE",
+          amount: -1,
+          description: "AI Project Builder Chat",
+          costUsd: 0.005
+        }
+      });
+    }
+
+    return { success: true, response: responseText };
+  } catch (error: any) {
+    console.error("Error in chatWithProjectBuilderAction:", error);
+    return { success: false, error: error?.message || "Failed to generate response." };
+  }
+}
+
