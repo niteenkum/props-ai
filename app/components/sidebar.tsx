@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   LogOut, Sun, Moon, BookOpen, ChevronRight, 
   Plus, Settings, MessageSquare, Mail, 
@@ -28,6 +28,7 @@ export default function Sidebar({
   const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [collapsed, setCollapsed] = useState(false);
   const [credits, setCredits] = useState<number | null>(null);
 
@@ -58,26 +59,52 @@ export default function Sidebar({
     .toUpperCase() || "PA";
 
   const isActive = (href: string) => {
-    if (href === "/dashboard/workspace" || href === "/dashboard/mail") {
-      return pathname === href;
+    const [pathPart, queryPart] = href.split("?");
+    if (pathPart === "/dashboard/workspace" || pathPart === "/dashboard/mail") {
+      if (pathname !== pathPart) return false;
+    } else {
+      if (!pathname.startsWith(pathPart)) return false;
     }
-    return pathname.startsWith(href);
+
+    if (queryPart) {
+      const params = new URLSearchParams(queryPart);
+      for (const [key, value] of params.entries()) {
+        if (searchParams.get(key) !== value) {
+          return false;
+        }
+      }
+      return true;
+    } else {
+      // If the menu item has no query part, but we are on /dashboard/your-bot with ?tab=scan,
+      // it should NOT highlight any items without a query part (like + Pitchly button/other items if any).
+      // Wait, there are no other items for /dashboard/your-bot in MENU_ITEMS, but if we are on /dashboard/your-bot
+      // and searchParams has tab=scan, we must not highlight items that don't match scan.
+      if (pathPart === "/dashboard/your-bot") {
+        return !searchParams.get("tab") || searchParams.get("tab") === "chat";
+      }
+    }
+    return true;
   };
 
-  const MENU_ITEMS = [
+  const workspaceItems = [
     { label: "Workspace Library", icon: BookOpen, href: "/dashboard/workspace" },
-    ...(systemRole === "SUPERADMIN" ? [
-      { label: "WhatsApp Link", icon: MessageSquare, href: "/dashboard/whatsapp" },
-      { label: "LinkedIn Scraper", icon: Link2, href: "/dashboard/linkedin" },
-      { label: "New Scan", icon: FilePlus2, href: "/dashboard/new" },
-      { label: "User Management", icon: Users, href: "/dashboard/users" },
-    ] : [
-      {label: "Curated Job Feed", icon: Search, href: "/dashboard/admin-jobs"},
-    ]),
+    ...(systemRole !== "SUPERADMIN" ? [
+      { label: "Curated Job Feed", icon: Search, href: "/dashboard/admin-jobs" },
+    ] : []),
     { label: "Smart Inbox", icon: Mail, href: "/dashboard/mail" },
     { label: "Calls & Followups", icon: CalendarDays, href: "/dashboard/followups" },
-    { label: systemRole === "SUPERADMIN" ? "Billing & Costs" : "AI Credit Portal", icon: Coins, href: "/dashboard/expense" },
+    ...(systemRole !== "SUPERADMIN" ? [
+      { label: "AI Credit Portal", icon: Coins, href: "/dashboard/expense" },
+    ] : []),
   ];
+
+  const adminItems = systemRole === "SUPERADMIN" ? [
+    { label: "WhatsApp Link", icon: MessageSquare, href: "/dashboard/whatsapp" },
+    { label: "LinkedIn Scraper", icon: Link2, href: "/dashboard/linkedin" },
+    { label: "New Scan", icon: FilePlus2, href: "/dashboard/your-bot?tab=scan" },
+    { label: "User Management", icon: Users, href: "/dashboard/users" },
+    { label: "Billing & Costs", icon: Coins, href: "/dashboard/expense" },
+  ] : [];
 
   const renderSidebarItem = (
     label: string, 
@@ -413,7 +440,7 @@ export default function Sidebar({
 
         {/* Scrollable list of items */}
         <div className="flex-1 overflow-y-auto flex flex-col gap-4 py-2 scrollbar-none">
-          {/* Main Navigation Links */}
+          {/* Workspace Category */}
           <div className="flex flex-col gap-1">
             {!collapsed && (
               <span className="text-[9px] font-black text-muted-foreground/45 tracking-widest uppercase pl-3 mb-1">
@@ -421,15 +448,11 @@ export default function Sidebar({
               </span>
             )}
             
-            {MENU_ITEMS.map((item) => {
+            {workspaceItems.map((item) => {
               const active = isActive(item.href);
               const tourId = item.label === "Workspace Library" ? "tour-sidebar-workspace" : 
-                             item.label === "WhatsApp Link" ? "tour-sidebar-whatsapp" :
-                             item.label === "LinkedIn Scraper" ? "tour-sidebar-linkedin" :
-                             item.label === "New Scan" ? "tour-sidebar-newscan" :
                              item.label === "Smart Inbox" ? "tour-sidebar-inbox" :
-                             item.label === "Calls & Followups" ? "tour-sidebar-followups" :
-                             item.label === "AI Expense Logs" ? "tour-sidebar-expenses" : undefined;
+                             item.label === "Calls & Followups" ? "tour-sidebar-followups" : undefined;
               return renderSidebarItem(
                 item.label,
                 item.icon,
@@ -439,6 +462,36 @@ export default function Sidebar({
               );
             })}
           </div>
+
+          {/* Admin Category */}
+          {adminItems.length > 0 && (
+            <div className="flex flex-col gap-1 mt-2">
+              {!collapsed ? (
+                <div className="flex items-center gap-2 pl-3 mb-1 select-none">
+                  <span className="text-[9px] font-black text-muted-foreground/45 tracking-widest uppercase shrink-0">
+                    Admin
+                  </span>
+                  <div className="flex-1 h-[1.5px] bg-slate-200/40 dark:bg-slate-800/40 mr-3" />
+                </div>
+              ) : (
+                <div className="h-[1.5px] bg-slate-200/40 dark:bg-slate-800/40 mx-3 my-2" />
+              )}
+              
+              {adminItems.map((item) => {
+                const active = isActive(item.href);
+                const tourId = item.label === "WhatsApp Link" ? "tour-sidebar-whatsapp" :
+                               item.label === "LinkedIn Scraper" ? "tour-sidebar-linkedin" :
+                               item.label === "New Scan" ? "tour-sidebar-newscan" : undefined;
+                return renderSidebarItem(
+                  item.label,
+                  item.icon,
+                  active,
+                  item.href,
+                  tourId
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
