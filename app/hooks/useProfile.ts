@@ -41,8 +41,11 @@ export function useProfile(userEmail: string) {
     setProfileSaveSuccess(false);
     try {
       await saveUserProfileAction(profile, userEmail);
+      localStorage.setItem("proposalizer_user_name", profile.name);
+      localStorage.setItem("proposalizer_user_role", profile.role);
       setOriginalProfile(JSON.parse(JSON.stringify(profile)));
       setProfileSaveSuccess(true);
+      window.dispatchEvent(new Event("profile-updated"));
       setTimeout(() => setProfileSaveSuccess(false), 3000);
     } catch (err) {
       console.error("Failed to save profile:", err);

@@ -154,16 +154,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (!userEmail) return;
-    getUserProfileAction(userEmail).then(profile => {
-      if (profile?.name) setProfileName(profile.name);
-      if (profile?.role) setProfileRole(profile.role);
 
-      const hasS = !!(profile?.skills && profile.skills.length > 0);
-      const hasP = !!(profile?.projects && profile.projects.length >= 2);
-      setHasSkills(hasS);
-      setHasProjects(hasP);
-    });
-  }, [userEmail, pathname]);
+    const fetchProfile = () => {
+      getUserProfileAction(userEmail).then(profile => {
+        if (profile?.name) setProfileName(profile.name);
+        if (profile?.role) setProfileRole(profile.role);
+
+        const hasS = !!(profile?.skills && profile.skills.length > 0);
+        const hasP = !!(profile?.projects && profile.projects.length >= 2);
+        setHasSkills(hasS);
+        setHasProjects(hasP);
+      });
+    };
+
+    fetchProfile();
+
+    window.addEventListener("profile-updated", fetchProfile);
+    return () => window.removeEventListener("profile-updated", fetchProfile);
+  }, [userEmail]);
 
   // Poll for new synced emails received in the database (only when tab is visible)
   useEffect(() => {

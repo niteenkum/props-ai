@@ -527,8 +527,11 @@ function ProfilePageContent() {
     try {
       const { saveUserProfileAction } = await import("../../actions/db-actions");
       await saveUserProfileAction(updatedProfile, userEmail);
+      localStorage.setItem("proposalizer_user_name", updatedProfile.name);
+      localStorage.setItem("proposalizer_user_role", updatedProfile.role);
       // Keep hasChanges clean — treat saved state as the new baseline
       p.setOriginalProfile(JSON.parse(JSON.stringify(updatedProfile)));
+      window.dispatchEvent(new Event("profile-updated"));
       console.log(`[Portfolio Scanner] Projects saved to DB (${merged.length} projects, mode=${mode})`);
     } catch (err) {
       console.error("[Portfolio Scanner] Failed to save scanned projects to DB:", err);
@@ -1927,42 +1930,47 @@ function ProfilePageContent() {
                             display: "flex", flexWrap: "wrap", gap: 8,
                             borderTop: "1px solid var(--border)", paddingTop: 12, marginTop: 4
                           }}>
-                            {proj.links.map((link, lIdx) => (
-                              <a
-                                key={lIdx}
-                                href={link.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                  display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none",
-                                  fontSize: 11, padding: "5px 12px", borderRadius: 8,
-                                  background: isDark ? "rgba(255,255,255,0.02)" : "#f3f4f6",
-                                  border: "1px solid var(--border)",
-                                  color: link.label.toLowerCase() === "github" ? "#818cf8"
-                                    : link.label.toLowerCase().includes("store") ? "#4ade80"
-                                      : link.label.toLowerCase() === "web" || link.label.toLowerCase() === "demo" ? "#f472b6"
-                                        : "var(--muted-foreground)",
-                                  fontWeight: 700,
-                                  transition: "all 0.2s ease"
-                                }}
-                                onMouseEnter={e => {
-                                  e.currentTarget.style.transform = "translateY(-1px)";
-                                  e.currentTarget.style.borderColor = "#818cf8";
-                                }}
-                                onMouseLeave={e => {
-                                  e.currentTarget.style.transform = "translateY(0)";
-                                  e.currentTarget.style.borderColor = "var(--border)";
-                                }}
-                              >
-                                <span style={{ fontSize: 9, textTransform: "uppercase", fontWeight: 900 }}>
-                                  {link.label}
-                                </span>
-                                <span style={{ color: "var(--muted-foreground)", fontSize: 11, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 120, whiteSpace: "nowrap" }}>
-                                  {link.url.replace(/^https?:\/\/(www\.)?/, "")}
-                                </span>
-                                <ExternalLink style={{ width: 10, height: 10, opacity: 0.6 }} />
-                              </a>
-                            ))}
+                             {proj.links.map((link: any, lIdx) => {
+                               if (!link || !link.url) return null;
+                               const label = (link.label || "Link").toLowerCase();
+                               const displayLabel = link.label || "Link";
+                               return (
+                                 <a
+                                   key={lIdx}
+                                   href={link.url}
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   style={{
+                                     display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none",
+                                     fontSize: 11, padding: "5px 12px", borderRadius: 8,
+                                     background: isDark ? "rgba(255,255,255,0.02)" : "#f3f4f6",
+                                     border: "1px solid var(--border)",
+                                     color: label === "github" ? "#818cf8"
+                                       : label.includes("store") ? "#4ade80"
+                                         : label === "web" || label === "demo" ? "#f472b6"
+                                           : "var(--muted-foreground)",
+                                     fontWeight: 700,
+                                     transition: "all 0.2s ease"
+                                   }}
+                                   onMouseEnter={e => {
+                                     e.currentTarget.style.transform = "translateY(-1px)";
+                                     e.currentTarget.style.borderColor = "#818cf8";
+                                   }}
+                                   onMouseLeave={e => {
+                                     e.currentTarget.style.transform = "translateY(0)";
+                                     e.currentTarget.style.borderColor = "var(--border)";
+                                   }}
+                                 >
+                                   <span style={{ fontSize: 9, textTransform: "uppercase", fontWeight: 900 }}>
+                                     {displayLabel}
+                                   </span>
+                                   <span style={{ color: "var(--muted-foreground)", fontSize: 11, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 120, whiteSpace: "nowrap" }}>
+                                     {link.url.replace(/^https?:\/\/(www\.)?/, "")}
+                                   </span>
+                                   <ExternalLink style={{ width: 10, height: 10, opacity: 0.6 }} />
+                                 </a>
+                               );
+                             })}
                           </div>
                         )}
                       </div>
@@ -2605,22 +2613,25 @@ function ProfilePageContent() {
                     {/* List of active modal links */}
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6, marginBottom: 12 }}>
                       {modalProjectLinks.length > 0 ? (
-                        modalProjectLinks.map((link, lIdx) => (
-                          <div key={lIdx} style={{
-                            display: "flex", alignItems: "center", gap: 8,
-                            fontSize: 12, padding: "5px 12px", borderRadius: 8,
-                            background: isDark ? "rgba(255,255,255,0.02)" : "#f3f4f6",
-                            border: "1px solid var(--border)",
-                          }}>
-                            <span style={{
-                              fontSize: 10, fontWeight: 900, textTransform: "uppercase",
-                              color: link.label.toLowerCase() === "github" ? "#818cf8"
-                                : link.label.toLowerCase().includes("store") ? "#4ade80"
-                                  : link.label.toLowerCase() === "web" || link.label.toLowerCase() === "demo" ? "#f472b6"
-                                    : "var(--muted-foreground)",
+                        modalProjectLinks.map((link, lIdx) => {
+                          const label = (link?.label || "Link").toLowerCase();
+                          const displayLabel = link?.label || "Link";
+                          return (
+                            <div key={lIdx} style={{
+                              display: "flex", alignItems: "center", gap: 8,
+                              fontSize: 12, padding: "5px 12px", borderRadius: 8,
+                              background: isDark ? "rgba(255,255,255,0.02)" : "#f3f4f6",
+                              border: "1px solid var(--border)",
                             }}>
-                              {link.label}
-                            </span>
+                              <span style={{
+                                fontSize: 10, fontWeight: 900, textTransform: "uppercase",
+                                color: label === "github" ? "#818cf8"
+                                  : label.includes("store") ? "#4ade80"
+                                    : label === "web" || label === "demo" ? "#f472b6"
+                                      : "var(--muted-foreground)",
+                              }}>
+                                {displayLabel}
+                              </span>
                             <span style={{ color: "var(--muted-foreground)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180, whiteSpace: "nowrap" }}>
                               {link.url}
                             </span>
@@ -2637,8 +2648,9 @@ function ProfilePageContent() {
                             >
                               <X style={{ width: 12, height: 12 }} />
                             </button>
-                          </div>
-                        ))
+                            </div>
+                            );
+                          })
                       ) : (
                         <span style={{ fontSize: 12, color: "var(--muted-foreground)", opacity: 0.5, fontStyle: "italic" }}>
                           No project URLs mapped. Add one below.

@@ -31,6 +31,9 @@ export default function UserManagementPage() {
 
   // Role toggle loading state
   const [updatingRoleFor, setUpdatingRoleFor] = useState<string | null>(null);
+  
+  // Handle User Status toggles (Deactivate / Activate)
+  const [updatingStatusFor, setUpdatingStatusFor] = useState<string | null>(null);
 
   const loadUsers = useCallback(async () => {
     if (!userEmail || userRole !== "SUPERADMIN") return;
@@ -98,8 +101,7 @@ export default function UserManagementPage() {
     setIsGranting(false);
   };
 
-  // Handle User Status toggles (Deactivate / Activate)
-  const [updatingStatusFor, setUpdatingStatusFor] = useState<string | null>(null);
+
   const handleToggleStatus = async (targetEmail: string, currentStatus: string) => {
     const actionText = currentStatus === "ACTIVE" ? "Deactivate" : "Activate";
     if (!confirm(`Are you sure you want to ${actionText} the account ${targetEmail}?`)) return;

@@ -32,8 +32,9 @@ export default function Sidebar({
   const [credits, setCredits] = useState<number | null>(null);
 
   React.useEffect(() => {
-    if (userEmail) {
-      // Fetch credits on load and periodically
+    if (!userEmail) return;
+
+    const fetchCredits = () => {
       import("../actions/token-actions").then(({ getUserTokensAction }) => {
         getUserTokensAction(userEmail).then(res => {
           if (res.success) {
@@ -41,8 +42,13 @@ export default function Sidebar({
           }
         });
       });
-    }
-  }, [userEmail, pathname]);
+    };
+
+    fetchCredits();
+
+    window.addEventListener("tokens-updated", fetchCredits);
+    return () => window.removeEventListener("tokens-updated", fetchCredits);
+  }, [userEmail]);
 
   const initials = userName
     .split(" ")
@@ -135,6 +141,7 @@ export default function Sidebar({
       <Link 
         key={href} 
         href={href} 
+        prefetch={false}
         className={classes} 
         id={id}
         title={collapsed ? label : undefined}
@@ -450,11 +457,12 @@ export default function Sidebar({
                 {theme === "light" ? <Moon size={13.5} /> : <Sun size={13.5} />}
               </button>
               
-              <Link 
-                href="/dashboard/settings" 
-                className="p-1.5 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800/40 hover:text-foreground cursor-pointer transition-colors" 
-                title="Settings"
-              >
+            <Link 
+              href="/dashboard/settings" 
+              prefetch={false}
+              className="p-1.5 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800/40 hover:text-foreground cursor-pointer transition-colors" 
+              title="Settings"
+            >
                 <Settings size={13.5} />
               </Link>
               
@@ -500,8 +508,9 @@ export default function Sidebar({
               {theme === "light" ? <Moon size={13.5} /> : <Sun size={13.5} />}
             </button>
             
-            <Link 
+             <Link 
               href="/dashboard/settings" 
+              prefetch={false}
               className="p-1.5 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800/40 hover:text-foreground cursor-pointer transition-colors" 
               title="Settings"
             >

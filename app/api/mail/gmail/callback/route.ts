@@ -147,15 +147,33 @@ export async function GET(req: NextRequest) {
 
     console.log(`[gmail/callback] ✅ Gmail connected for ${userEmail}`);
 
+    // Fetch the actual Gmail address connected from Google profile
+    let gmailAddress = userEmail; // fallback
+    try {
+      const tenant = corsair.withTenant(userEmail);
+      const accessToken = await (tenant.gmail.keys as any).get_access_token();
+      const profileRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (profileRes.ok) {
+        const gUser = await profileRes.json();
+        if (gUser.email) {
+          gmailAddress = gUser.email;
+        }
+      }
+    } catch (err) {
+      console.warn("[gmail/callback] Failed to resolve actual Gmail address, falling back to login email:", err);
+    }
+
     // Sync to our MailAccount table so the UI knows Gmail is connected
     // Corsair stores tokens in its own encrypted tables; we just track the email
     await prisma.mailAccount.upsert({
       where: { userEmail_provider: { userEmail, provider: "gmail" } },
-      update: { accountEmail: userEmail, updatedAt: new Date() },
+      update: { accountEmail: gmailAddress, updatedAt: new Date() },
       create: {
         userEmail,
         provider:     "gmail",
-        accountEmail: userEmail,  // tenantId IS the gmail address
+        accountEmail: gmailAddress,
         accessToken:  "managed-by-corsair",  // Corsair manages tokens encrypted in DB
         refreshToken: "managed-by-corsair",
         expiresAt:    new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // placeholder
