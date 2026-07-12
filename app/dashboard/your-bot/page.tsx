@@ -82,8 +82,8 @@ function PropBotContent() {
   const { theme }              = useTheme();
   const isDark                 = theme === "dark";
 
-  const initialTab = searchParams.get("tab") === "scan" ? "scan" : "chat";
-  const [activeTab, setActiveTab] = useState<"chat" | "scan">(initialTab);
+  // Mode is controlled strictly by URL search parameter tab=scan
+  const activeTab = searchParams.get("tab") === "scan" ? "scan" : "chat";
 
   const [messages, setMessages]   = useState<UIMessage[]>([]);
   const [input, setInput]         = useState("");
@@ -93,16 +93,6 @@ function PropBotContent() {
   const inputRef                   = useRef<HTMLTextAreaElement>(null);
   const textareaRef                = useRef<HTMLTextAreaElement>(null);
   const hasMessages                = messages.length > 0;
-
-  // Synced URL search parameter tab selection
-  useEffect(() => {
-    const tabParam = searchParams.get("tab");
-    if (tabParam === "scan") {
-      setActiveTab("scan");
-    } else {
-      setActiveTab("chat");
-    }
-  }, [searchParams]);
 
   // Auto-resize scan proposal editor textarea height
   useEffect(() => {
@@ -420,8 +410,6 @@ function PropBotContent() {
     return bookCallFromBotAction(userEmail, input);
   }
 
-  const clearChat = () => setMessages([]);
-
   const providerLabel = (scanner.aiProvider || "AI").charAt(0).toUpperCase() + (scanner.aiProvider || "ai").slice(1);
   const step = scanner.drawerStep;
 
@@ -462,45 +450,6 @@ function PropBotContent() {
 
   return (
     <div style={styles.page}>
-      {/* ── Tab Switcher Header ── */}
-      <div style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        padding: "16px 24px 10px 24px",
-        background: "transparent",
-        flexShrink: 0,
-        zIndex: 20,
-      }}>
-        <div className="tab-switcher-container">
-          <button
-            onClick={() => {
-              setActiveTab("chat");
-              const url = new URL(window.location.href);
-              url.searchParams.set("tab", "chat");
-              window.history.replaceState(null, "", url.toString());
-            }}
-            className={`tab-switcher-btn ${activeTab === "chat" ? "active" : ""}`}
-          >
-            <Sparkles size={13} />
-            <span>AI Copilot Chat</span>
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("scan");
-              const url = new URL(window.location.href);
-              url.searchParams.set("tab", "scan");
-              window.history.replaceState(null, "", url.toString());
-            }}
-            className={`tab-switcher-btn ${activeTab === "scan" ? "active" : ""}`}
-          >
-            <Bot size={13} />
-            <span>Deep Job Scan</span>
-          </button>
-        </div>
-      </div>
-
-      {/* ── Chat Tab View ── */}
       {activeTab === "chat" && (
         <>
           {/* ── Chat Content Scroll Area ─────────────────────────────────────── */}
@@ -842,7 +791,7 @@ function PropBotContent() {
               
               {/* EMPTY: no paste */}
               {!scanner.pasteText.trim() && (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, textAlign: "center", gap: 10, padding: "40px 20px" }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyItems: "center", justifyContent: "center", flex: 1, textAlign: "center", gap: 10, padding: "40px 20px" }}>
                   <div style={{ width: 56, height: 56, borderRadius: "50%", background: isDark ? "rgba(99,102,241,0.08)" : "rgba(99,102,241,0.05)", border: "1px solid rgba(99,102,241,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <Sparkles style={{ width: 24, height: 24, color: "rgba(99,102,241,0.5)" }} />
                   </div>
@@ -885,7 +834,7 @@ function PropBotContent() {
 
               {/* ANALYZING spinner */}
               {step === "checking" && (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, gap: 16, padding: "40px 20px" }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyItems: "center", justifyContent: "center", flex: 1, gap: 16, padding: "40px 20px" }}>
                   <div style={{ width: 64, height: 64, borderRadius: "50%", background: isDark ? "rgba(99,102,241,0.12)" : "rgba(99,102,241,0.08)", border: "2px solid rgba(99,102,241,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <Loader2 style={{ width: 28, height: 28, color: "#818cf8", animation: "spin 1s linear infinite" }} />
                   </div>
@@ -937,7 +886,7 @@ function PropBotContent() {
                             strokeLinecap="round" transform="rotate(-90 38 38)"
                             style={{ transition: "stroke-dashoffset 0.8s ease" }} />
                         </svg>
-                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
+                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center", flexDirection: "column" }}>
                           <span style={{ fontSize: 17, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>{score}</span>
                           <span style={{ fontSize: 8, color: "var(--muted-foreground)" }}>/100</span>
                         </div>
@@ -1058,7 +1007,7 @@ function PropBotContent() {
                         background: scanner.selectedPlatforms.size > 0 ? "linear-gradient(135deg, #818cf8, #6366f1)" : "var(--border)",
                         color: scanner.selectedPlatforms.size > 0 ? "#fff" : "var(--muted-foreground)",
                         fontSize: 14, fontWeight: 700, cursor: scanner.selectedPlatforms.size > 0 ? "pointer" : "not-allowed",
-                        display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                        display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center", gap: 8,
                         boxShadow: scanner.selectedPlatforms.size > 0 ? "0 4px 18px rgba(99,102,241,0.35)" : "none",
                         transition: "all 0.2s",
                       }}
@@ -1075,7 +1024,7 @@ function PropBotContent() {
 
               {/* GENERATING spinner */}
               {step === "generating" && (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, gap: 20, padding: "40px 20px" }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyItems: "center", justifyContent: "center", flex: 1, gap: 20, padding: "40px 20px" }}>
                   <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, rgba(99,102,241,0.15), rgba(129,140,248,0.08))", border: "2px solid rgba(99,102,241,0.3)", display: "flex", alignItems: "center", justifyContent: "center", animation: "pulse 2s ease-in-out infinite" }}>
                     <Sparkles style={{ width: 28, height: 28, color: "#818cf8", animation: "spin 3s linear infinite" }} />
                   </div>
@@ -1100,7 +1049,7 @@ function PropBotContent() {
               {/* AI Status bottom bar — only on idle/ready states */}
               {(step === "idle" || (!scanner.pasteText.trim())) && (
                 <div style={{ padding: "16px 20px", marginTop: "auto", display: "flex", flexDirection: "column", gap: 8, borderTop: scanner.pasteText.trim() && step !== "checking" ? `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)"}` : "none" }}>
-                  <div style={{ padding: "8px 12px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "space-between", background: scanner.aiAvailable ? (isDark ? "rgba(34,197,94,0.1)" : "#f0fdf4") : (isDark ? "rgba(245,158,11,0.1)" : "#fffbeb"), border: `1px solid ${scanner.aiAvailable ? (isDark ? "rgba(34,197,94,0.3)" : "#bbf7d0") : (isDark ? "rgba(245,158,11,0.3)" : "#fde68a")}` }}>
+                  <div style={{ padding: "8px 12px", borderRadius: 8, display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "space-between", background: scanner.aiAvailable ? (isDark ? "rgba(34,197,94,0.1)" : "#f0fdf4") : (isDark ? "rgba(245,158,11,0.1)" : "#fffbeb"), border: `1px solid ${scanner.aiAvailable ? (isDark ? "rgba(34,197,94,0.3)" : "#bbf7d0") : (isDark ? "rgba(245,158,11,0.3)" : "#fde68a")}` }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <span style={{ width: 6, height: 6, borderRadius: "50%", background: scanner.aiAvailable ? "#22c55e" : "#f59e0b", display: "inline-block" }} />
                       <span style={{ fontSize: 11, fontWeight: 600, color: scanner.aiAvailable ? (isDark ? "#4ade80" : "#16a34a") : (isDark ? "#fbbf24" : "#b45309") }}>
@@ -1118,9 +1067,9 @@ function PropBotContent() {
 
           {/* RESULTS: full-width proposals below */}
           {hasResults && (
-            <div style={{ ...cardStyle, marginTop: 0 }}>
+            <div style={{ ...cardStyle, marginTop: 20 }}>
               {/* Header */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <CheckCircle2 style={{ width: 16, height: 16, color: "#22c55e" }} />
                   <span style={{ fontSize: 14, fontWeight: 700, color: "var(--foreground)" }}>Proposals Ready</span>
@@ -1163,7 +1112,7 @@ function PropBotContent() {
               {/* Active proposal */}
               {scanner.activeResultTab && scanner.generatedProposals[scanner.activeResultTab] && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "space-between" }}>
                     <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, color: "var(--muted-foreground)", opacity: 0.6 }}>
                       ✏️ Editable — click to modify
                     </span>
@@ -1221,7 +1170,6 @@ function PropBotContent() {
           )}
         </div>
       )}
-
     </div>
   );
 }

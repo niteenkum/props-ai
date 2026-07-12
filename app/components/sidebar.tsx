@@ -88,6 +88,7 @@ export default function Sidebar({
 
   const workspaceItems = [
     { label: "Workspace Library", icon: BookOpen, href: "/dashboard/workspace" },
+    { label: "New Scan", icon: FilePlus2, href: "/dashboard/your-bot?tab=scan" },
     ...(systemRole !== "SUPERADMIN" ? [
       { label: "Curated Job Feed", icon: Search, href: "/dashboard/admin-jobs" },
     ] : []),
@@ -101,7 +102,6 @@ export default function Sidebar({
   const adminItems = systemRole === "SUPERADMIN" ? [
     { label: "WhatsApp Link", icon: MessageSquare, href: "/dashboard/whatsapp" },
     { label: "LinkedIn Scraper", icon: Link2, href: "/dashboard/linkedin" },
-    { label: "New Scan", icon: FilePlus2, href: "/dashboard/your-bot?tab=scan" },
     { label: "User Management", icon: Users, href: "/dashboard/users" },
     { label: "Billing & Costs", icon: Coins, href: "/dashboard/expense" },
   ] : [];
