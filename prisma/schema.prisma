@@ -25,6 +25,7 @@ model User {
   updatedAt    DateTime     @updatedAt
   profile      UserProfile?
   projects     Project[]
+  jobPosts     JobPost[]
 }
 
 enum JobStatus {
@@ -37,7 +38,9 @@ enum JobStatus {
 
 model JobPost {
   id                 String      @id @default(uuid())
-  userEmail          String?                          // Scopes this lead to a specific user
+  userId             String?                          // Foreign key linking lead to User
+  user               User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userEmail          String?                          // Scopes this lead to a specific user (legacy fallback)
   role               String
   company            String
   originalText       String      @db.Text
@@ -64,6 +67,7 @@ model JobPost {
   followUps          FollowUp[]                       // scheduled calls and reminders
   whatsappSource     WhatsAppMessage?                 // reverse link from WA message
 
+  @@index([userId])
   @@index([linkedinJobId])
 }
 
@@ -213,6 +217,8 @@ model SentEmail {
   userEmail   String                        // ThePitchly user who sent
   jobPostId   String?                       // linked job (nullable for non-job sends)
   jobPost     JobPost?  @relation(fields: [jobPostId], references: [id], onDelete: SetNull)
+  adminJobId  String?                       // linked admin job (for superadmin scans)
+  adminJob    AdminJob? @relation(fields: [adminJobId], references: [id], onDelete: SetNull)
   provider    String    @default("zoho")    // "zoho" | "gmail" | "outlook"
   fromEmail   String                        // sender mailbox address
   toEmail     String
@@ -223,6 +229,7 @@ model SentEmail {
 
   @@index([userEmail])
   @@index([jobPostId])
+  @@index([adminJobId])
 }
 
 // ─── WhatsApp Messages Table ────────────────────────────────────────────────────────────
@@ -402,6 +409,7 @@ model AdminJob {
   
   userScores         UserAdminJobScore[]
   whatsappSource     WhatsAppMessage?
+  sentEmails         SentEmail[]
 
   @@index([linkedinJobId])
 }

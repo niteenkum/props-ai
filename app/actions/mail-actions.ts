@@ -31,19 +31,40 @@ async function rawInsertSentEmail(data: {
 }): Promise<{ id: string; sentAt: string }> {
   const pool = rawPool();
   try {
+    let validJobPostId: string | null = null;
+    let validAdminJobId: string | null = null;
+
+    if (data.jobPostId) {
+      const jobRes = await pool.query<{ id: string }>(
+        `SELECT id FROM "JobPost" WHERE id = $1 LIMIT 1`,
+        [data.jobPostId]
+      );
+      if (jobRes.rows.length > 0) {
+        validJobPostId = data.jobPostId;
+      } else {
+        const adminRes = await pool.query<{ id: string }>(
+          `SELECT id FROM "AdminJob" WHERE id = $1 LIMIT 1`,
+          [data.jobPostId]
+        );
+        if (adminRes.rows.length > 0) {
+          validAdminJobId = data.jobPostId;
+        }
+      }
+    }
+
     const res = await pool.query<{ id: string; sent_at: Date }>(
       `INSERT INTO "SentEmail"
-         (id, "userEmail", "jobPostId", provider, "fromEmail", "toEmail", subject, body, "zohoMsgId", "sentAt")
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, NOW())
+         (id, "userEmail", "jobPostId", "adminJobId", provider, "fromEmail", "toEmail", subject, body, "zohoMsgId", "sentAt")
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
        RETURNING id, "sentAt" AS sent_at`,
       [
-        data.userEmail, data.jobPostId, data.provider,
+        data.userEmail, validJobPostId, validAdminJobId, data.provider,
         data.fromEmail, data.toEmail,   data.subject,
         data.body,      data.zohoMsgId,
       ],
     );
     const row = res.rows[0];
-    console.log(`[rawInsertSentEmail] ✅ id=${row.id}`);
+    console.log(`[rawInsertSentEmail] ✅ id=${row.id} (jobPostId=${validJobPostId}, adminJobId=${validAdminJobId})`);
     return { id: row.id, sentAt: row.sent_at.toISOString() };
   } finally {
     await pool.end();
@@ -65,7 +86,7 @@ async function rawSelectSentEmails(jobPostId: string): Promise<SentEmailRecord[]
               "zohoMsgId"  AS zoho_msg_id,
               "sentAt"     AS sent_at
        FROM   "SentEmail"
-       WHERE  "jobPostId" = $1
+       WHERE  "jobPostId" = $1 OR "adminJobId" = $1
        ORDER  BY "sentAt" DESC`,
       [jobPostId],
     );
@@ -76,8 +97,8 @@ async function rawSelectSentEmails(jobPostId: string): Promise<SentEmailRecord[]
       toEmail:   r.to_email,
       subject:   r.subject,
       body:      r.body,
-      zohoMsgId: r.zoho_msg_id ?? undefined,
       sentAt:    r.sent_at.toISOString(),
+      zohoMsgId: r.zoho_msg_id ?? undefined,
     }));
   } finally {
     await pool.end();
@@ -224,18 +245,33 @@ async function getValidAccessToken(
   const account = await prisma.mailAccount.findUnique({
     where: { userEmail_provider: { userEmail, provider: "zoho" } },
   });
-  if (!account) return null;
+  if (!account) {
+    console.warn(`[getValidAccessToken] ⚠️ No MailAccount found for userEmail="${userEmail}"`);
+    return null;
+  }
 
   // Fall back to env region if apiBase was never stored (legacy rows)
   const apiBase = account.apiBase
     ?? `https://mail.zoho.${process.env.ZOHO_REGION || "com"}`;
 
   const isExpired = new Date() >= account.expiresAt;
-  const token     = isExpired
-    ? await refreshZohoTokenAction(userEmail)
-    : account.accessToken;
+  let token: string | null = null;
 
-  if (!token) return null;
+  if (isExpired) {
+    console.log(`[getValidAccessToken] 🔄 Token expired (${account.expiresAt.toISOString()}). Attempting refresh for ${userEmail}...`);
+    token = await refreshZohoTokenAction(userEmail);
+    if (!token) {
+      console.warn(`[getValidAccessToken] ⚠️ Refresh failed. Falling back to existing accessToken.`);
+      token = account.accessToken || null;
+    }
+  } else {
+    token = account.accessToken;
+  }
+
+  if (!token) {
+    console.error(`[getValidAccessToken] ❌ No valid accessToken available for ${userEmail}. Re-authentication required at /api/mail/zoho/connect?email=${encodeURIComponent(userEmail)}`);
+    return null;
+  }
   return { token, accountId: account.zohoAccountId, apiBase, accountEmail: account.accountEmail };
 }
 
@@ -1343,21 +1379,30 @@ export async function sendJobEmailAction(
     select: { contactEmail: true },
   });
 
-  const shouldUpdateEmail =
-    isFirstSend &&
-    to.trim() !== "" &&
-    (currentJob?.contactEmail !== to.trim());
+  if (currentJob) {
+    const shouldUpdateEmail =
+      isFirstSend &&
+      to.trim() !== "" &&
+      (currentJob.contactEmail !== to.trim());
 
-  await prisma.jobPost.update({
-    where: { id: jobPostId },
-    data:  {
-      status: "Sent",
-      ...(shouldUpdateEmail ? { contactEmail: to.trim() } : {}),
-    },
-  });
+    await prisma.jobPost.update({
+      where: { id: jobPostId },
+      data:  {
+        status: "Sent",
+        ...(shouldUpdateEmail ? { contactEmail: to.trim() } : {}),
+      },
+    });
 
-  if (shouldUpdateEmail) {
-    console.log(`[sendJobEmail] 📧 Updated job contactEmail → ${to.trim()}`);
+    if (shouldUpdateEmail) {
+      console.log(`[sendJobEmail] 📧 Updated job contactEmail → ${to.trim()}`);
+    }
+  } else if (jobPostId) {
+    await prisma.adminJob.update({
+      where: { id: jobPostId },
+      data: {
+        contactEmail: to.trim(),
+      },
+    }).catch(() => {});
   }
 
   return { success: true, zohoMsgId: result.zohoMsgId, sentAt: sent.sentAt };
@@ -1393,14 +1438,29 @@ export async function getEmailThreadForJobAction(
   userEmail: string,
   jobPostId: string,
 ): Promise<{ messages: ThreadMessage[]; error?: string }> {
-  // 1. Load local sent emails for this job
+  // 1. Load local sent emails for this job (strictly matching jobPostId OR adminJobId)
   const sentRows = await rawSelectSentEmails(jobPostId);
   if (sentRows.length === 0) {
     return { messages: [] };
   }
 
-  // Convert sent rows → ThreadMessage[]
-  const sentMessages: ThreadMessage[] = sentRows.map(r => ({
+  // Deduplicate local sent rows by zohoMsgId or body content
+  const uniqueSent: SentEmailRecord[] = [];
+  const seenBodies = new Set<string>();
+  const seenMsgIds = new Set<string>();
+
+  for (const r of sentRows) {
+    if (r.zohoMsgId && seenMsgIds.has(r.zohoMsgId)) continue;
+    const bodyKey = (r.body || "").replace(/\s+/g, "").slice(0, 100);
+    if (bodyKey && seenBodies.has(bodyKey)) continue;
+
+    if (r.zohoMsgId) seenMsgIds.add(r.zohoMsgId);
+    if (bodyKey) seenBodies.add(bodyKey);
+    uniqueSent.push(r);
+  }
+
+  // Convert deduplicated sent rows → ThreadMessage[]
+  const sentMessages: ThreadMessage[] = uniqueSent.map(r => ({
     id:        r.id,
     direction: "sent" as const,
     fromEmail: r.fromEmail,
@@ -1414,92 +1474,64 @@ export async function getEmailThreadForJobAction(
   // 2. Try to fetch received replies from Zoho
   const auth = await getValidAccessToken(userEmail);
   if (!auth || !auth.accountId) {
-    // Can't reach Zoho — return only local sent emails
+    // Can't reach Zoho — return deduplicated local sent emails
     return { messages: sentMessages.sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime()) };
   }
 
   const { token, accountId, apiBase, accountEmail } = auth;
 
   try {
-    // Use the subject of the first (oldest) sent email to search for the thread
     const baseSubject = sentRows[sentRows.length - 1].subject
       .replace(/^(Re:\s*)+/i, "")
       .trim();
 
-    // Also extract the recipient email (the person we sent to)
     const recipientEmail = sentRows[sentRows.length - 1].toEmail
-      .split(",")[0]  // handle "to, cc: xyz" format
+      .split(",")[0]
       .replace(/cc:.*|bcc:.*/gi, "")
       .trim();
 
-    console.log(`[getEmailThread] 🔍 Searching Zoho for thread:`);
+    console.log(`[getEmailThread] 🔍 Searching Zoho for live thread:`);
     console.log(`  baseSubject: "${baseSubject}"`);
     console.log(`  recipientEmail: "${recipientEmail}"`);
     console.log(`  accountEmail: "${accountEmail}"`);
     console.log(`  apiBase: "${apiBase}"`);
     console.log(`  accountId: "${accountId}"`);
 
-    // Strategy 1: Search by subject
-    // Strategy 2 (fallback): Search by sender (the person who'd reply)
     let rawMessages: any[] = [];
 
-    // Try subject-based search first
-    const searchKey = `subject:"${baseSubject}"`;
-    const params = new URLSearchParams({
-      searchKey,
-      limit:  "50",
-    });
-
-    console.log(`[getEmailThread] 📡 Zoho search URL: ${apiBase}/api/accounts/${accountId}/messages/search?${params}`);
-
-    const searchRes = await fetch(
-      `${apiBase}/api/accounts/${accountId}/messages/search?${params}`,
-      { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
-    );
-
-    if (searchRes.ok) {
-      const searchData = await searchRes.json();
-      rawMessages = searchData?.data ?? [];
-      console.log(`[getEmailThread] ✅ Subject search returned ${rawMessages.length} messages`);
-      if (rawMessages.length > 0) {
-        rawMessages.forEach((m: any, i: number) => {
-          console.log(`  [${i}] msgId=${m.messageId} from=${m.fromAddress ?? m.sender} subject="${m.subject}" folderId=${m.folderId}`);
-        });
-      }
-    } else {
-      const errText = await searchRes.text();
-      console.warn(`[getEmailThread] ⚠️ Subject search failed: ${searchRes.status} — ${errText}`);
-    }
-
-    // Fallback: if no messages found via subject, search by sender (the person who'd reply to us)
-    if (rawMessages.length === 0 && recipientEmail) {
-      console.log(`[getEmailThread] 🔄 Fallback: searching by sender "${recipientEmail}"`);
-      const fallbackKey = `from:${recipientEmail}`;
-      const fallbackParams = new URLSearchParams({
-        searchKey: fallbackKey,
-        limit: "20",
-      });
-
-      const fallbackRes = await fetch(
-        `${apiBase}/api/accounts/${accountId}/messages/search?${fallbackParams}`,
+    // ONLY fetch messages FROM the recruiter (their replies to us).
+    // We do NOT fetch "to:recipientEmail" or the full mailbox — that pulls unrelated emails.
+    if (recipientEmail) {
+      const fromParams = new URLSearchParams({ searchKey: `from:${recipientEmail}`, limit: "50" });
+      console.log(`[getEmailThread] 📡 Fetching replies from: ${recipientEmail}`);
+      const res = await fetch(
+        `${apiBase}/api/accounts/${accountId}/messages/search?${fromParams}`,
         { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
       );
+      console.log(`[getEmailThread] 📡 Zoho from: search status: ${res.status}`);
+      if (res.ok) {
+        const json = await res.json();
+        const msgs: any[] = json?.data ?? json?.messages ?? [];
+        console.log(`[getEmailThread] 📡 Total from recruiter: ${msgs.length} messages`);
 
-      if (fallbackRes.ok) {
-        const fallbackData = await fallbackRes.json();
-        const fallbackMsgs: any[] = fallbackData?.data ?? [];
-        console.log(`[getEmailThread] ✅ Sender search returned ${fallbackMsgs.length} messages`);
-        // Filter to only messages whose subject matches (contains the base subject)
+        // Strict filter: only keep messages whose subject matches the thread subject
         const subjectLower = baseSubject.toLowerCase();
-        rawMessages = fallbackMsgs.filter((m: any) => {
-          const s = (m.subject ?? "").toLowerCase().replace(/^re:\s*/i, "");
-          return s.includes(subjectLower) || subjectLower.includes(s);
-        });
-        console.log(`[getEmailThread]   After subject filtering: ${rawMessages.length} messages`);
+        for (const m of msgs) {
+          const msgSubject = ((m.subject ?? "").replace(/^(Re:\s*)*/i, "").trim()).toLowerCase();
+          const subjectMatches = msgSubject.includes(subjectLower) || subjectLower.includes(msgSubject);
+          console.log(`[getEmailThread]   subject="${m.subject}" from=${m.fromAddress} → matches=${subjectMatches}`);
+          if (subjectMatches) {
+            rawMessages.push(m);
+          }
+        }
+        console.log(`[getEmailThread] 📦 After subject filter: ${rawMessages.length} messages in thread`);
       } else {
-        console.warn(`[getEmailThread] ⚠️ Sender search also failed: ${fallbackRes.status}`);
+        const errText = await res.text();
+        console.warn(`[getEmailThread] ⚠️ from: search failed (${res.status}):`, errText);
       }
     }
+
+    console.log(`[getEmailThread] 📦 Total received messages from Zoho: ${rawMessages.length}`);
 
     // 3. Build a set of Zoho message IDs we already have as sent records
     const sentZohoIds = new Set(sentRows.filter(r => r.zohoMsgId).map(r => r.zohoMsgId!));
@@ -2056,5 +2088,81 @@ export async function getRecentSyncedEmailsAction(
   } catch (err: any) {
     console.error("[getRecentSyncedEmailsAction] Error:", err);
     return { success: false, error: err?.message ?? "Failed to get recent emails" };
+  }
+}
+
+// ─── 12. Generate AI Reply for a Thread ──────────────────────────────────────
+// Uses thread context + user profile to AI-draft a reply via the configured
+// AI provider (Gemini / OpenAI / Claude / etc.).
+
+export async function generateAIReplyAction(
+  userEmail:      string,
+  jobRole:        string,
+  jobCompany:     string,
+  recipientEmail: string,
+  threadMessages: {
+    direction: "sent" | "received";
+    fromEmail: string;
+    toEmail:   string;
+    body:      string;
+    sentAt:    string;
+  }[],
+  customPrompt?: string,
+  chatHistory?:  { role: "user" | "assistant"; content: string }[],
+  userInstructions?: string[],
+): Promise<{ success: boolean; reply?: string; error?: string }> {
+  try {
+    // 1. Load user profile from DB (UserProfile + Projects)
+    const user = await prisma.user.findUnique({
+      where:   { email: userEmail },
+      include: {
+        profile:  true,
+        projects: true,
+      },
+    });
+
+    if (!user?.profile) {
+      return { success: false, error: "User profile not found. Please complete your profile first." };
+    }
+
+    const { profile, projects } = user;
+
+    // Map to UserProfile interface expected by the AI service
+    const userProfile = {
+      name:         profile.name,
+      role:         profile.role,
+      email:        profile.email,
+      skills:       profile.skills,
+      portfolioUrl: profile.portfolioUrl,
+      githubUrl:    profile.githubUrl,
+      linkedinUrl:  profile.linkedinUrl,
+      resumeText:   profile.resumeText ?? undefined,
+      education:    (profile.education as any[]) ?? [],
+      projects:     projects.map(p => ({
+        name:        p.name,
+        tech:        p.tech,
+        description: p.description,
+        links:       (p.links as any[]) ?? [],
+      })),
+    };
+
+    // 2. Call AI service
+    const { generateEmailReply } = await import("../utils/ai/email-reply");
+    const reply = await generateEmailReply({
+      threadMessages,
+      profile: userProfile,
+      jobRole,
+      jobCompany,
+      recipientEmail,
+      customPrompt,
+      userInstructions,
+      chatHistory,
+    });
+
+    console.log(`[generateAIReplyAction] ✅ Draft generated for ${userEmail} (${reply.length} chars)`);
+    return { success: true, reply };
+  } catch (err: any) {
+    console.error("[generateAIReplyAction] Error:", err);
+    return { success: false, error: err?.message ?? "AI reply generation failed" };
   }
 }

@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { X, Send, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Reply, Plus } from "lucide-react";
+import { X, Send, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Reply, Plus, Sparkles, Loader2 } from "lucide-react";
 import type { SentEmailRecord } from "../actions/mail-actions";
-import { getSentEmailsForJobAction, sendReplyEmailAction } from "../actions/mail-actions";
+import { getSentEmailsForJobAction, sendReplyEmailAction, generateAIReplyAction } from "../actions/mail-actions";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface Props {
@@ -160,6 +160,7 @@ export default function EmailThreadDrawer({
   const [showReply,    setShowReply]   = useState(false);
   const [replyBody,    setReplyBody]   = useState("");
   const [sending,      setSending]     = useState(false);
+  const [aiGenerating, setAiGenerating] = useState(false);
   const [sendState,    setSendState]   = useState<
     null | { status: "success"; sentAt: string } | { status: "error"; message: string }
   >(null);
@@ -196,6 +197,43 @@ export default function EmailThreadDrawer({
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  };
+
+  // ── AI Reply ────────────────────────────────────────────────────────────────
+  const handleAIReply = async () => {
+    if (!thread.length || aiGenerating) return;
+    setAiGenerating(true);
+    setSendState(null);
+    try {
+      // Build thread context (last 10, oldest→newest)
+      const ctx = [...thread].reverse().slice(-10).map(r => ({
+        direction: "sent" as const,
+        fromEmail: r.fromEmail,
+        toEmail:   r.toEmail,
+        body:      r.body,
+        sentAt:    r.sentAt,
+      }));
+
+      const recipientEmail = thread[0]?.toEmail ?? toEmail;
+      const res = await generateAIReplyAction(
+        userEmail,
+        jobRole,
+        jobCompany,
+        recipientEmail,
+        ctx,
+      );
+
+      if (res.success && res.reply) {
+        setReplyBody(res.reply);
+        setShowReply(true);
+      } else {
+        setSendState({ status: "error", message: res.error ?? "AI generation failed" });
+      }
+    } catch (err: any) {
+      setSendState({ status: "error", message: err?.message ?? "AI generation failed" });
+    } finally {
+      setAiGenerating(false);
+    }
   };
 
   // ── Send reply ──────────────────────────────────────────────────────────────
@@ -470,37 +508,70 @@ export default function EmailThreadDrawer({
           <div ref={bottomRef} />
         </div>
 
-        {/* ── Footer — Reply button ── */}
+        {/* ── Footer — Reply buttons ── */}
         {!showReply && (
           <div style={{
             padding: "16px 28px",
             borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.08)"}`,
             display: "flex", justifyContent: "space-between", alignItems: "center",
             background: isDark ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)", flexShrink: 0,
+            gap: 12,
           }}>
-            <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
+            <span style={{ fontSize: 11, color: "var(--muted-foreground)", flexShrink: 0 }}>
               {thread.length > 0 ? `Last sent ${fmtRelative(thread[0].sentAt)}` : "No messages sent yet"}
             </span>
-            <button
-              onClick={() => { setShowReply(true); setSendState(null); }}
-              disabled={thread.length === 0}
-              style={{
-                display: "flex", alignItems: "center", gap: 8, padding: "10px 24px",
-                borderRadius: 9, fontSize: 13, fontWeight: 700, border: "none",
-                cursor: thread.length > 0 ? "pointer" : "not-allowed",
-                background: thread.length > 0
-                  ? "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)"
-                  : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"),
-                color: thread.length > 0 ? "#fff" : "var(--muted-foreground)",
-                boxShadow: thread.length > 0 ? "0 2px 14px rgba(99,102,241,0.4)" : "none",
-                transition: "all 0.2s",
-              }}
-              onMouseEnter={e => { if (thread.length > 0) e.currentTarget.style.opacity = "0.87"; }}
-              onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
-            >
-              <Reply style={{ width: 14, height: 14 }} />
-              Reply in Thread
-            </button>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {/* ── Reply with AI ✨ ── */}
+              <button
+                id="btn-ai-reply"
+                onClick={handleAIReply}
+                disabled={thread.length === 0 || aiGenerating}
+                title="Let AI draft a reply using your profile & thread context"
+                style={{
+                  display: "flex", alignItems: "center", gap: 7, padding: "9px 18px",
+                  borderRadius: 9, fontSize: 12, fontWeight: 700,
+                  border: `1.5px solid ${isDark ? "rgba(168,85,247,0.45)" : "rgba(139,92,246,0.35)"}`,
+                  background: isDark ? "rgba(139,92,246,0.12)" : "rgba(139,92,246,0.07)",
+                  color: isDark ? "#c084fc" : "#7c3aed",
+                  cursor: thread.length > 0 && !aiGenerating ? "pointer" : "not-allowed",
+                  opacity: thread.length === 0 ? 0.5 : 1,
+                  transition: "all 0.2s",
+                  whiteSpace: "nowrap",
+                }}
+                onMouseEnter={e => { if (thread.length > 0 && !aiGenerating) { e.currentTarget.style.background = isDark ? "rgba(139,92,246,0.22)" : "rgba(139,92,246,0.14)"; } }}
+                onMouseLeave={e => { e.currentTarget.style.background = isDark ? "rgba(139,92,246,0.12)" : "rgba(139,92,246,0.07)"; }}
+              >
+                {aiGenerating
+                  ? <Loader2 style={{ width: 13, height: 13, animation: "spin 0.9s linear infinite" }} />
+                  : <Sparkles style={{ width: 13, height: 13 }} />
+                }
+                {aiGenerating ? "Drafting..." : "Reply with AI"}
+              </button>
+
+              {/* ── Reply in Thread ── */}
+              <button
+                id="btn-reply-thread"
+                onClick={() => { setShowReply(true); setSendState(null); }}
+                disabled={thread.length === 0}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8, padding: "10px 22px",
+                  borderRadius: 9, fontSize: 13, fontWeight: 700, border: "none",
+                  cursor: thread.length > 0 ? "pointer" : "not-allowed",
+                  background: thread.length > 0
+                    ? "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)"
+                    : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)"),
+                  color: thread.length > 0 ? "#fff" : "var(--muted-foreground)",
+                  boxShadow: thread.length > 0 ? "0 2px 14px rgba(99,102,241,0.4)" : "none",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={e => { if (thread.length > 0) e.currentTarget.style.opacity = "0.87"; }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+              >
+                <Reply style={{ width: 14, height: 14 }} />
+                Reply in Thread
+              </button>
+            </div>
           </div>
         )}
 
@@ -513,6 +584,10 @@ export default function EmailThreadDrawer({
           @keyframes pulse  {
             0%, 100% { opacity: 0.4; }
             50%       { opacity: 0.7; }
+          }
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
           }
         `}</style>
       </div>

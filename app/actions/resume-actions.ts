@@ -22,13 +22,19 @@ export async function parseResumeWithAIAction(
   pdfBase64: string,
   fileName: string
 ): Promise<ParsedResumeResult> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return { success: false, error: "Gemini API key is not configured." };
+  // Resume PDF parsing: Prefer OpenRouter, fallback to Gemini direct API
+  const openrouterKey = process.env.OPENROUTER_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
+  
+  if (!openrouterKey && !geminiKey) {
+    return { success: false, error: "No AI provider configured. Set OPENROUTER_API_KEY or GEMINI_API_KEY." };
   }
 
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  // OpenRouter supports PDF via base64 content URL in messages
+  const useOpenRouter = !!openrouterKey;
+  const model = useOpenRouter 
+    ? (process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash")
+    : (process.env.GEMINI_MODEL || "gemini-2.5-flash");
 
   const systemPrompt = `You are an expert resume parser. Your job is to extract structured data from a resume PDF and return ONLY a valid JSON object — no markdown, no extra text.
 
@@ -68,68 +74,99 @@ Rules:
   const userPrompt = `Parse this resume PDF file named "${fileName}" and return the structured JSON profile.`;
 
   try {
-    const body = {
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              inlineData: {
-                mimeType: "application/pdf",
-                data: pdfBase64,
-              },
-            },
-            { text: userPrompt },
-          ],
-        },
-      ],
-      systemInstruction: {
-        parts: [{ text: systemPrompt }],
-      },
-      generationConfig: {
-        temperature: 0.1, // low — structured extraction
-        maxOutputTokens: 4096,
-      },
-    };
-
     const callStart = Date.now();
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    let rawText = "";
+    let inputTokens = 0;
+    let outputTokens = 0;
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`[Resume Parser] Gemini error ${response.status}:`, errText);
-      return {
-        success: false,
-        error: `AI parsing failed (${response.status}). Please fill in details manually.`,
+    if (useOpenRouter) {
+      // ── OpenRouter: send PDF as base64 content URL in a multimodal message ──
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${openrouterKey}`,
+          "HTTP-Referer": "https://thepitchly.com",
+          "X-Title": "ThePitchly",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "file",
+                  file: {
+                    filename: fileName,
+                    content: pdfBase64,
+                  },
+                },
+                { type: "text", text: userPrompt },
+              ],
+            },
+          ],
+          temperature: 0.1,
+          max_tokens: 4096,
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error(`[Resume Parser] OpenRouter error ${response.status}:`, errText);
+        return { success: false, error: `AI parsing failed (${response.status}). Please fill in details manually.` };
+      }
+
+      const data = await response.json();
+      inputTokens = data.usage?.prompt_tokens || 0;
+      outputTokens = data.usage?.completion_tokens || 0;
+      rawText = (data.choices?.[0]?.message?.content ?? "").trim();
+    } else {
+      // ── Gemini direct API: native PDF inline data ──
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+      const body = {
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { inlineData: { mimeType: "application/pdf", data: pdfBase64 } },
+              { text: userPrompt },
+            ],
+          },
+        ],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
       };
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error(`[Resume Parser] Gemini error ${response.status}:`, errText);
+        return { success: false, error: `AI parsing failed (${response.status}). Please fill in details manually.` };
+      }
+
+      const data = await response.json();
+      const usageMeta = data.usageMetadata || {};
+      inputTokens = usageMeta.promptTokenCount || 0;
+      outputTokens = usageMeta.candidatesTokenCount || 0;
+      rawText = (data.candidates?.[0]?.content?.parts?.map((p: any) => p.text || "").join("") ?? "").trim();
     }
 
-    const data = await response.json();
-    const usageMeta = data.usageMetadata || {};
-    const inputTokens  = usageMeta.promptTokenCount     || 0;
-    const outputTokens = usageMeta.candidatesTokenCount || 0;
     await logAiUsage({
-      apiType:     "pdf_parse",
-      category:    "pdf_reading",
+      apiType: "pdf_parse",
+      category: "pdf_reading",
       model,
       inputTokens,
       outputTokens,
-      durationMs:  Date.now() - callStart,
-      success:     true,
+      durationMs: Date.now() - callStart,
+      success: true,
     });
-    const candidates = data.candidates;
-    if (!candidates || candidates.length === 0) {
-      return { success: false, error: "AI returned no candidates." };
-    }
-
-    const rawText = candidates[0]?.content?.parts
-      ?.map((p: any) => p.text || "")
-      .join("")
-      .trim();
 
     if (!rawText) {
       return { success: false, error: "AI returned empty response." };

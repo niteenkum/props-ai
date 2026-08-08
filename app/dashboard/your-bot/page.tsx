@@ -1159,7 +1159,7 @@ function PropBotContent() {
                       >
                         {scanner.isSavingJob
                           ? <><Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> Saving...</>
-                          : <><CheckCircle2 style={{ width: 13, height: 13 }} /> Save & Continue</>
+                          : <><ArrowRight style={{ width: 13, height: 13 }} /> Save & View Job Details</>
                         }
                       </button>
                     </div>

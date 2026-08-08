@@ -20,11 +20,13 @@ import { analyzeAndGenerateAction } from "../../../actions/ai-actions";
 import {
   getEmailThreadForJobAction,
   sendReplyEmailAction,
+  generateAIReplyAction,
   type ThreadMessage,
 } from "../../../actions/mail-actions";
 import { cardStyle, inputStyle, labelStyle } from "../../styles";
 import type { JobPost } from "../../../utils/db";
 import EmailComposeDrawer from "../../EmailComposeDrawer";
+import ReplyDrawer from "../../ReplyDrawer";
 import JobDrawer from "../../new/JobDrawer";
 import ScheduleCallModal from "../../../components/ScheduleCallModal";
 import { getJobFollowUpsAction, type FollowUpWithJob } from "../../../actions/calendar-actions";
@@ -107,9 +109,14 @@ export default function JobDetailPage() {
   const [showReply,    setShowReply]   = useState(false);
   const [replyBody,    setReplyBody]   = useState("");
   const [replySending, setReplySending] = useState(false);
+  const [aiGenerating, setAiGenerating] = useState(false);
   const [replyState,   setReplyState]  = useState<
     null | { status: "success"; sentAt: string } | { status: "error"; message: string }
   >(null);
+
+  // ── Reply Drawer ───────────────────────────────────────────────────────────────
+  const [isReplyDrawerOpen, setIsReplyDrawerOpen] = useState(false);
+  const [aiDraft,           setAiDraft]           = useState("");
   const replyRef  = useRef<HTMLTextAreaElement>(null);
   const threadBottomRef = useRef<HTMLDivElement>(null);
 
@@ -140,7 +147,7 @@ export default function JobDetailPage() {
   // ─ Load job ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isReady || !jobId) return;
-    getJobByIdAction(jobId).then(async j => {
+    getJobByIdAction(jobId, userEmail).then(async j => {
       if (!j) { setNotFound(true); setLoading(false); return; }
       setJob(j);
       setNotes(j.notes ?? "");
@@ -225,6 +232,42 @@ export default function JobDetailPage() {
       setReplyState({ status: "error", message: err?.message ?? "Unexpected error" });
     } finally {
       setReplySending(false);
+    }
+  };
+
+  // ── Open reply drawer (manual) ──────────────────────────────────────────────
+  const openReplyDrawer = () => {
+    setAiDraft("");
+    setIsReplyDrawerOpen(true);
+  };
+
+  // ── Open reply drawer with AI draft ────────────────────────────────────────
+  const handleAIReply = async () => {
+    if (!thread.length || !job || aiGenerating) return;
+    setAiGenerating(true);
+    try {
+      const ctx = thread.slice(-10).map(m => ({
+        direction: m.direction,
+        fromEmail: m.fromEmail,
+        toEmail:   m.toEmail,
+        body:      m.body,
+        sentAt:    m.sentAt,
+      }));
+      const lastMsg      = thread[thread.length - 1];
+      const recipientEmail = lastMsg.direction === "received" ? lastMsg.fromEmail : lastMsg.toEmail;
+      const res = await generateAIReplyAction(
+        userEmail,
+        job.role ?? job.originalText.slice(0, 60),
+        job.company ?? "",
+        recipientEmail,
+        ctx,
+      );
+      setAiDraft(res.success && res.reply ? res.reply : "");
+    } catch {
+      setAiDraft("");
+    } finally {
+      setAiGenerating(false);
+      setIsReplyDrawerOpen(true);
     }
   };
 
@@ -1011,80 +1054,41 @@ export default function JobDetailPage() {
                     <div ref={threadBottomRef} />
                   </div>
 
-                  {/* Reply compose or reply bar */}
-                  {showReply ? (
-                    <div style={{
-                      padding: "16px 24px",
-                      borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
-                      background: isDark ? "rgba(99,102,241,0.03)" : "rgba(99,102,241,0.02)",
-                    }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-                        <Reply style={{ width: 12, height: 12, color: isDark ? "#818cf8" : "#6366f1" }} />
-                        <span style={{ fontSize: 11, fontWeight: 700, color: isDark ? "#818cf8" : "#6366f1" }}>
-                          Replying to {(() => {
-                            const lastMsg = thread[thread.length - 1];
-                            return lastMsg?.direction === "received" ? lastMsg.fromEmail : lastMsg?.toEmail ?? "";
-                          })()}
-                        </span>
-                      </div>
-                      <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-                        <textarea
-                          ref={replyRef}
-                          rows={3}
-                          value={replyBody}
-                          onChange={e => setReplyBody(e.target.value)}
-                          placeholder="Write your reply…"
-                          style={{
-                            flex: 1, boxSizing: "border-box" as const,
-                            padding: "10px 14px", borderRadius: 12, fontSize: 13,
-                            border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
-                            background: isDark ? "rgba(255,255,255,0.03)" : "#fff",
-                            color: "var(--foreground)", outline: "none",
-                            fontFamily: "inherit", lineHeight: 1.6, resize: "vertical" as const, minHeight: 80,
-                          }}
-                        />
-                        <div style={{ display: "flex", flexDirection: "column" as const, gap: 6 }}>
-                          <button
-                            onClick={handleSendReply}
-                            disabled={!replyBody.trim() || replySending}
-                            style={{
-                              display: "flex", alignItems: "center", gap: 7, padding: "10px 20px",
-                              borderRadius: 10, fontSize: 12, fontWeight: 700, border: "none",
-                              cursor: replyBody.trim() && !replySending ? "pointer" : "not-allowed",
-                              background: replyBody.trim() && !replySending
-                                ? "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)"
-                                : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"),
-                              color: replyBody.trim() && !replySending ? "#fff" : "var(--muted-foreground)",
-                              boxShadow: replyBody.trim() && !replySending ? "0 2px 12px rgba(99,102,241,0.35)" : "none",
-                              transition: "all 0.2s", whiteSpace: "nowrap" as const,
-                            }}
-                          >
-                            <Send style={{ width: 12, height: 12 }} />
-                            {replySending ? "Sending…" : "Send"}
-                          </button>
-                          <button
-                            onClick={() => { setShowReply(false); setReplyState(null); }}
-                            style={{
-                              padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 600,
-                              border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
-                              background: "none", color: "var(--muted-foreground)", cursor: "pointer",
-                              textAlign: "center" as const,
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
                     <div style={{
                       padding: "12px 24px",
                       borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
                       display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10,
                       background: isDark ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)",
                     }}>
+                      {/* Reply with AI ✨ */}
                       <button
-                        onClick={() => { setShowReply(true); setReplyState(null); }}
+                        id="btn-ai-reply-inline"
+                        onClick={handleAIReply}
+                        disabled={aiGenerating}
+                        title="Let AI draft a reply using your profile & thread context"
+                        style={{
+                          display: "flex", alignItems: "center", gap: 7, padding: "8px 16px",
+                          borderRadius: 9, fontSize: 12, fontWeight: 700,
+                          border: `1.5px solid ${isDark ? "rgba(168,85,247,0.45)" : "rgba(139,92,246,0.35)"}`,
+                          background: isDark ? "rgba(139,92,246,0.12)" : "rgba(139,92,246,0.07)",
+                          color: isDark ? "#c084fc" : "#7c3aed",
+                          cursor: aiGenerating ? "not-allowed" : "pointer",
+                          transition: "all 0.2s",
+                          whiteSpace: "nowrap" as const,
+                        }}
+                        onMouseEnter={e => { if (!aiGenerating) e.currentTarget.style.background = isDark ? "rgba(139,92,246,0.22)" : "rgba(139,92,246,0.14)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = isDark ? "rgba(139,92,246,0.12)" : "rgba(139,92,246,0.07)"; }}
+                      >
+                        {aiGenerating
+                          ? <Loader2 style={{ width: 12, height: 12, animation: "spin 0.9s linear infinite" }} />
+                          : <Sparkles style={{ width: 12, height: 12 }} />
+                        }
+                        {aiGenerating ? "Drafting..." : "Reply with AI"}
+                      </button>
+
+                      {/* Reply in Thread */}
+                      <button
+                        onClick={openReplyDrawer}
                         style={{
                           display: "flex", alignItems: "center", gap: 7, padding: "9px 22px",
                           borderRadius: 9, fontSize: 12, fontWeight: 700, border: "none",
@@ -1101,7 +1105,6 @@ export default function JobDetailPage() {
                         Reply in Thread
                       </button>
                     </div>
-                  )}
                 </div>
               )}
             </div>
@@ -1110,6 +1113,10 @@ export default function JobDetailPage() {
               @keyframes threadPulse {
                 0%, 100% { opacity: 0.4; }
                 50%       { opacity: 0.7; }
+              }
+              @keyframes spin {
+                from { transform: rotate(0deg); }
+                to   { transform: rotate(360deg); }
               }
             `}</style>
           </div>
@@ -1430,6 +1437,26 @@ export default function JobDetailPage() {
         userEmail={userEmail}
         isDark={isDark}
         initialBody={composeBody}
+      />
+
+      {/* ── Reply Drawer (thread reply with optional AI draft) ── */}
+      <ReplyDrawer
+        isOpen={isReplyDrawerOpen}
+        onClose={() => { setIsReplyDrawerOpen(false); setAiDraft(""); }}
+        thread={thread}
+        jobId={job?.id ?? ""}
+        jobRole={job?.role ?? ""}
+        jobCompany={job?.company ?? ""}
+        userEmail={userEmail}
+        isDark={isDark}
+        initialDraft={aiDraft}
+        onReplySent={async () => {
+          if (job) {
+            const { messages } = await getEmailThreadForJobAction(userEmail, job.id);
+            setThread(messages);
+            if (messages.length > 0) setExpandedIds(new Set([messages[messages.length - 1].id]));
+          }
+        }}
       />
 
       {/* ── ThePitchly Generator Drawer (same as New Scan page) ── */}

@@ -225,10 +225,12 @@ export async function scanPortfolioAction(
     return { success: false, error: "No portfolio URL provided." };
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return { success: false, error: "Gemini API key is not configured." };
+  const openrouterKey = process.env.OPENROUTER_API_KEY;
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  if (!openrouterKey && !geminiApiKey) {
+    return { success: false, error: "No AI provider configured. Set OPENROUTER_API_KEY or GEMINI_API_KEY." };
   }
+  const useOpenRouter = !!openrouterKey;
 
   console.log(`\n[Portfolio Scanner] ══ Starting multi-page crawl: ${portfolioUrl}`);
 
@@ -316,9 +318,10 @@ export async function scanPortfolioAction(
 
   const allExternalLinksArr = [...allExternalLinks].slice(0, 60);
 
-  // ─── Step 6: Call Gemini ─────────────────────────────────────────────────
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  // ─── Step 6: Call AI ─────────────────────────────────────────────────
+  const model = useOpenRouter
+    ? (process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash")
+    : (process.env.GEMINI_MODEL || "gemini-2.5-flash");
 
   const systemPrompt = `You are an expert portfolio analyzer. Given the text content scraped from MULTIPLE pages of a developer portfolio website, extract all real projects and return ONLY a valid JSON array — no markdown, no explanation.
 
@@ -355,56 +358,87 @@ ${allExternalLinksArr.join("\n")}
 Extract all projects across all pages and return the JSON array.`;
 
   try {
-    console.log(`[Portfolio Scanner] Sending to Gemini (${combinedContent.length} chars content, ${allExternalLinksArr.length} links)...`);
+    console.log(`[Portfolio Scanner] Sending to AI (${combinedContent.length} chars content, ${allExternalLinksArr.length} links)...`);
 
     const callStart = Date.now();
-    const response = await fetch(geminiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 8192,  // Bumped — large portfolios produce long JSON
+    let rawText = "";
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let providerName = "";
+
+    if (useOpenRouter) {
+      providerName = "openrouter";
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${openrouterKey}`,
+          "HTTP-Referer": "https://thepitchly.com",
+          "X-Title": "ThePitchly",
         },
-      }),
-      signal: AbortSignal.timeout(40000),
-    });
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature: 0.2,
+          max_tokens: 8192,
+        }),
+        signal: AbortSignal.timeout(40000),
+      });
+
+      const durationMs = Date.now() - callStart;
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error(`[Portfolio Scanner] OpenRouter error ${response.status}:`, errText.slice(0, 300));
+        return { success: false, error: `AI analysis failed (HTTP ${response.status}).` };
+      }
+      const data = await response.json();
+      inputTokens = data.usage?.prompt_tokens || 0;
+      outputTokens = data.usage?.completion_tokens || 0;
+      rawText = (data.choices?.[0]?.message?.content ?? "").trim();
+    } else {
+      providerName = "gemini";
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
+      const response = await fetch(geminiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
+        }),
+        signal: AbortSignal.timeout(40000),
+      });
+
+      const durationMs = Date.now() - callStart;
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error(`[Portfolio Scanner] Gemini error ${response.status}:`, errText.slice(0, 300));
+        return { success: false, error: `AI analysis failed (HTTP ${response.status}).` };
+      }
+      const data = await response.json();
+      const usageMeta = data.usageMetadata || {};
+      inputTokens = usageMeta.promptTokenCount || 0;
+      outputTokens = usageMeta.candidatesTokenCount || 0;
+      rawText = (data.candidates?.[0]?.content?.parts?.map((p: any) => p.text || "").join("") ?? "").trim();
+    }
 
     const durationMs = Date.now() - callStart;
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`[Portfolio Scanner] Gemini error ${response.status}:`, errText.slice(0, 300));
-      return { success: false, error: `AI analysis failed (HTTP ${response.status}).` };
-    }
-
-    const data = await response.json();
-
     // Log token usage
-    const usageMeta = data.usageMetadata || {};
     await logAiUsage({
       apiType:      "job_analysis",
       category:     "job_analysis",
       model,
-      provider:     "gemini",
+      provider:     providerName,
       userEmail,
-      inputTokens:  usageMeta.promptTokenCount     || 0,
-      outputTokens: usageMeta.candidatesTokenCount || 0,
+      inputTokens,
+      outputTokens,
       durationMs,
       success:      true,
     }).catch(() => {/* ignore logging errors */});
-
-    const candidates = data.candidates;
-    if (!candidates?.length) {
-      return { success: false, error: "AI returned no results." };
-    }
-
-    const rawText = candidates[0]?.content?.parts
-      ?.map((p: any) => p.text || "")
-      .join("")
-      .trim();
 
     if (!rawText) {
       return { success: false, error: "AI returned empty response." };

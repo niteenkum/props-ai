@@ -1,7 +1,7 @@
 // ─── AI Provider Types ─────────────────────────────────────────────────────
 // Shared interface for all AI providers (Gemini, OpenAI, Claude, Ollama)
 
-export type AIProviderName = "gemini" | "openai" | "claude" | "ollama";
+export type AIProviderName = "gemini" | "openai" | "claude" | "ollama" | "openrouter";
 
 export interface GenerateOptions {
   systemPrompt: string;

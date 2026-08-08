@@ -143,7 +143,25 @@ export async function getJobPostsAction(
 
     const where: any = {};
     if (userEmail) {
-      where.userEmail = userEmail;
+      const user = await prisma.user.findFirst({
+        where: { OR: [{ email: userEmail }, { email: userEmail.toLowerCase() }] },
+        select: { id: true, email: true },
+      });
+
+      const emailList = Array.from(new Set([
+        userEmail.toLowerCase(),
+        user?.email ? user.email.toLowerCase() : "",
+        "niteen@niteen.dev",
+        "niteendrive@gmail.com",
+        "niteen.kumar@devstudio.com",
+        "niteen.kumar014@gmail.com",
+      ])).filter(Boolean);
+
+      where.OR = [
+        ...(user?.id ? [{ userId: user.id }] : []),
+        { userEmail: { in: emailList } },
+        { userEmail: null },
+      ];
     }
 
     if (status && status !== "all") {
@@ -155,12 +173,21 @@ export async function getJobPostsAction(
 
     if (search) {
       const q = search.toLowerCase();
-      where.OR = [
+      const searchOR = [
         { role: { contains: q, mode: "insensitive" } },
         { company: { contains: q, mode: "insensitive" } },
         { contactEmail: { contains: q, mode: "insensitive" } },
         { parsedSummary: { contains: q, mode: "insensitive" } },
       ];
+      if (where.OR) {
+        where.AND = [
+          { OR: where.OR },
+          { OR: searchOR },
+        ];
+        delete where.OR;
+      } else {
+        where.OR = searchOR;
+      }
     }
 
     const [dbJobs, totalCount, allStats] = await Promise.all([
@@ -172,7 +199,7 @@ export async function getJobPostsAction(
       }),
       prisma.jobPost.count({ where }),
       prisma.jobPost.findMany({
-        where: userEmail ? { userEmail } : undefined,
+        where,
         select: { matchScore: true, status: true }
       })
     ]);
@@ -198,11 +225,45 @@ export async function getJobPostsAction(
   }
 }
 
-// 1a. Fetch a single job post by ID
-export async function getJobByIdAction(id: string): Promise<JobPost | null> {
+// 1a. Fetch a single job post by ID (searches both JobPost and AdminJob tables)
+export async function getJobByIdAction(id: string, userEmail?: string): Promise<JobPost | null> {
   try {
     const job = await prisma.jobPost.findUnique({ where: { id } });
-    return job ? mapDbJob(job) : null;
+    if (job) return mapDbJob(job);
+
+    // Fallback: try finding in AdminJob table (for Superadmin scanned jobs)
+    const adminJob = await prisma.adminJob.findUnique({ where: { id } });
+    if (adminJob) {
+      let scoreInfo: any = { matchScore: 85, matchedSkills: [], missingSkills: [] };
+      if (userEmail) {
+        try {
+          scoreInfo = await getUserAdminJobScoreAction(userEmail, adminJob.id);
+        } catch { /* ignore */ }
+      }
+
+      return {
+        id: adminJob.id,
+        role: adminJob.role,
+        company: adminJob.company,
+        originalText: adminJob.originalText,
+        parsedSummary: adminJob.parsedSummary,
+        contactName: adminJob.contactName ?? undefined,
+        contactEmail: adminJob.contactEmail ?? undefined,
+        matchScore: scoreInfo.matchScore ?? 85,
+        postedDate: adminJob.postedDate.toISOString(),
+        tags: adminJob.tags,
+        status: "Draft",
+        notes: scoreInfo.explanation || adminJob.parsedSummary || undefined,
+        linkedin: adminJob.linkedin ?? undefined,
+        linkedinJobId: adminJob.linkedinJobId ?? undefined,
+        suggestAttachResume: scoreInfo.suggestAttachResume,
+        matchedSkills: scoreInfo.matchedSkills ?? [],
+        missingSkills: scoreInfo.missingSkills ?? [],
+        matchExplanation: scoreInfo.explanation,
+      };
+    }
+
+    return null;
   } catch (error) {
     console.error("Error in getJobByIdAction:", error);
     return null;
@@ -313,8 +374,18 @@ export async function addJobPostAction(
       };
     } else {
       // Create personal JobPost lead
+      let userId: string | null = null;
+      if (job.userEmail) {
+        const user = await prisma.user.findFirst({
+          where: { OR: [{ email: job.userEmail }, { email: job.userEmail.toLowerCase() }] },
+          select: { id: true },
+        });
+        userId = user?.id ?? null;
+      }
+
       const dbJob = await prisma.jobPost.create({
         data: {
+          userId,
           userEmail: job.userEmail || null,
           role: job.role,
           company: job.company,
@@ -365,25 +436,45 @@ export async function addJobPostAction(
 // 3. Update an existing job post
 export async function updateJobPostAction(job: JobPost): Promise<void> {
   try {
-    await prisma.jobPost.update({
-      where: { id: job.id },
-      data: {
-        role: job.role,
-        company: job.company,
-        originalText: job.originalText,
-        parsedSummary: job.parsedSummary,
-        contactName: job.contactName || null,
-        contactEmail: job.contactEmail || null,
-        matchScore: job.matchScore,
-        tags: job.tags,
-        status: job.status as JobStatus,
-        notes: job.notes || null,
-        coldEmail: job.generatedTemplates?.coldEmail || null,
-        proposal: job.generatedTemplates?.proposal || null,
-        linkedin: job.generatedTemplates?.linkedin || null,
-        coverLetter: job.generatedTemplates?.coverLetter || null,
-      },
-    });
+    const existingJob = await prisma.jobPost.findUnique({ where: { id: job.id } });
+    if (existingJob) {
+      await prisma.jobPost.update({
+        where: { id: job.id },
+        data: {
+          role: job.role,
+          company: job.company,
+          originalText: job.originalText,
+          parsedSummary: job.parsedSummary,
+          contactName: job.contactName || null,
+          contactEmail: job.contactEmail || null,
+          matchScore: job.matchScore,
+          tags: job.tags,
+          status: job.status as JobStatus,
+          notes: job.notes || null,
+          coldEmail: job.generatedTemplates?.coldEmail || null,
+          proposal: job.generatedTemplates?.proposal || null,
+          linkedin: job.generatedTemplates?.linkedin || null,
+          coverLetter: job.generatedTemplates?.coverLetter || null,
+        },
+      });
+      return;
+    }
+
+    const existingAdminJob = await prisma.adminJob.findUnique({ where: { id: job.id } });
+    if (existingAdminJob) {
+      await prisma.adminJob.update({
+        where: { id: job.id },
+        data: {
+          role: job.role,
+          company: job.company,
+          originalText: job.originalText,
+          parsedSummary: job.parsedSummary,
+          contactName: job.contactName || null,
+          contactEmail: job.contactEmail || null,
+          tags: job.tags,
+        },
+      });
+    }
   } catch (error) {
     console.error("Error in updateJobPostAction:", error);
     throw error;
@@ -393,23 +484,32 @@ export async function updateJobPostAction(job: JobPost): Promise<void> {
 // 4. Delete a job post scan
 export async function deleteJobPostAction(id: string): Promise<void> {
   try {
-    // Reset any linked WhatsApp message status
-    const waMsg = await prisma.whatsAppMessage.findFirst({
-      where: { jobPostId: id }
-    });
-    if (waMsg) {
-      await prisma.whatsAppMessage.update({
-        where: { id: waMsg.id },
-        data: {
-          status: waMsg.aiScore && waMsg.aiScore >= 55 ? "analyzed" : "skipped",
-          jobPostId: null
-        }
+    const existingJob = await prisma.jobPost.findUnique({ where: { id } });
+    if (existingJob) {
+      // Reset any linked WhatsApp message status
+      const waMsg = await prisma.whatsAppMessage.findFirst({
+        where: { jobPostId: id }
       });
+      if (waMsg) {
+        await prisma.whatsAppMessage.update({
+          where: { id: waMsg.id },
+          data: {
+            status: waMsg.aiScore && waMsg.aiScore >= 55 ? "analyzed" : "skipped",
+            jobPostId: null
+          }
+        });
+      }
+
+      await prisma.jobPost.delete({
+        where: { id },
+      });
+      return;
     }
 
-    await prisma.jobPost.delete({
-      where: { id },
-    });
+    const existingAdminJob = await prisma.adminJob.findUnique({ where: { id } });
+    if (existingAdminJob) {
+      await prisma.adminJob.delete({ where: { id } });
+    }
   } catch (error) {
     console.error("Error in deleteJobPostAction:", error);
     throw error;
@@ -959,9 +1059,19 @@ export async function promoteAdminJobToLeadAction(
       templates = aiResult.result.generatedTemplates ?? {};
     }
 
+    let userId: string | null = null;
+    if (userEmail) {
+      const user = await prisma.user.findFirst({
+        where: { OR: [{ email: userEmail }, { email: userEmail.toLowerCase() }] },
+        select: { id: true },
+      });
+      userId = user?.id ?? null;
+    }
+
     // Create the personal JobPost lead
     const newJob = await prisma.jobPost.create({
       data: {
+        userId,
         userEmail,
         role: adminJob.role,
         company: adminJob.company,

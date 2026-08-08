@@ -7,6 +7,7 @@ import { GeminiProvider } from "./providers/gemini";
 import { OpenAIProvider } from "./providers/openai";
 import { ClaudeProvider } from "./providers/claude";
 import { OllamaProvider } from "./providers/ollama";
+import { OpenRouterProvider } from "./providers/openrouter";
 import { buildPromptForTemplate, buildJobAnalysisPrompt } from "./prompts";
 import { UserProfile } from "../db";
 
@@ -41,10 +42,17 @@ function createProvider(): AIProviderAdapter | null {
       const model = process.env.OLLAMA_MODEL || undefined;
       return new OllamaProvider(host, model);
     }
+    case "openrouter": {
+      const key = process.env.OPENROUTER_API_KEY;
+      if (!key) { console.warn("[AI Service] AI_PROVIDER=openrouter but OPENROUTER_API_KEY is not set"); return null; }
+      const model = process.env.OPENROUTER_MODEL || undefined;
+      return new OpenRouterProvider(key, model);
+    }
   }
 
   // Auto-detect: try to find any configured key
   if (process.env.GEMINI_API_KEY) return new GeminiProvider(process.env.GEMINI_API_KEY);
+  if (process.env.OPENROUTER_API_KEY) return new OpenRouterProvider(process.env.OPENROUTER_API_KEY);
   if (process.env.OPENAI_API_KEY) return new OpenAIProvider(process.env.OPENAI_API_KEY);
   if (process.env.ANTHROPIC_API_KEY) return new ClaudeProvider(process.env.ANTHROPIC_API_KEY);
 
@@ -90,9 +98,10 @@ export function getActiveProviderName(): AIProviderName | null {
  */
 export function getAvailableProviders(): AIProviderName[] {
   const available: AIProviderName[] = [];
-  if (process.env.GEMINI_API_KEY)    available.push("gemini");
-  if (process.env.OPENAI_API_KEY)    available.push("openai");
-  if (process.env.ANTHROPIC_API_KEY) available.push("claude");
+  if (process.env.GEMINI_API_KEY)      available.push("gemini");
+  if (process.env.OPENROUTER_API_KEY)  available.push("openrouter");
+  if (process.env.OPENAI_API_KEY)      available.push("openai");
+  if (process.env.ANTHROPIC_API_KEY)   available.push("claude");
   return available;
 }
 
@@ -116,6 +125,11 @@ function createProviderByName(name: AIProviderName): AIProviderAdapter | null {
       const key = process.env.ANTHROPIC_API_KEY;
       if (!key) return null;
       return new ClaudeProvider(key, process.env.ANTHROPIC_MODEL || undefined);
+    }
+    case "openrouter": {
+      const key = process.env.OPENROUTER_API_KEY;
+      if (!key) return null;
+      return new OpenRouterProvider(key, process.env.OPENROUTER_MODEL || undefined);
     }
     default:
       return null;

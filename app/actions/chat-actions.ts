@@ -145,140 +145,181 @@ export async function executeCorsairOp(
   }
 }
 
-// ─── Gemini Function-Call Agent Loop ──────────────────────────────────────
+// ─── AI Function-Call Agent Loop (OpenRouter / Gemini fallback) ───────────
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? "";
+// Resolve chat AI config: prefer OpenRouter, fallback to Gemini direct API
+function getChatAIConfig(): { provider: "openrouter" | "gemini"; apiKey: string; model: string; baseUrl: string } | null {
+  const orKey = process.env.OPENROUTER_API_KEY;
+  if (orKey) {
+    return {
+      provider: "openrouter",
+      apiKey: orKey,
+      model: process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash",
+      baseUrl: "https://openrouter.ai/api/v1",
+    };
+  }
+  const gKey = process.env.GEMINI_API_KEY;
+  if (gKey) {
+    return {
+      provider: "gemini",
+      apiKey: gKey,
+      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+    };
+  }
+  return null;
+}
 
-/** Tool declarations Gemini can call */
-const FUNCTION_DECLARATIONS = [
+/** Tool declarations in OpenAI tools format (works with OpenRouter + any OpenAI-compatible API) */
+const TOOLS = [
   {
-    name: "corsair_list_operations",
-    description: "List all available Corsair API operations for a plugin (gmail or googlecalendar). Returns newline-separated operation paths.",
-    parameters: {
-      type: "object",
-      properties: {
-        plugin: {
-          type: "string",
-          description: "The plugin name: 'gmail' or 'googlecalendar'",
-          enum: ["gmail", "googlecalendar"],
+    type: "function" as const,
+    function: {
+      name: "corsair_list_operations",
+      description: "List all available Corsair API operations for a plugin (gmail or googlecalendar). Returns newline-separated operation paths.",
+      parameters: {
+        type: "object",
+        properties: {
+          plugin: {
+            type: "string",
+            description: "The plugin name: 'gmail' or 'googlecalendar'",
+            enum: ["gmail", "googlecalendar"],
+          },
         },
+        required: [] as string[],
       },
-      required: [],
     },
   },
   {
-    name: "corsair_get_schema",
-    description: "Get the TypeScript input/output schema for a specific Corsair operation path.",
-    parameters: {
-      type: "object",
-      properties: {
-        path: {
-          type: "string",
-          description: "The full Corsair operation path, e.g. 'gmail.api.messages.list'",
+    type: "function" as const,
+    function: {
+      name: "corsair_get_schema",
+      description: "Get the TypeScript input/output schema for a specific Corsair operation path.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "The full Corsair operation path, e.g. 'gmail.api.messages.list'",
+          },
         },
+        required: ["path"],
       },
-      required: ["path"],
     },
   },
   {
-    name: "corsair_run",
-    description: "Execute a Corsair API operation for the user. Use this to fetch emails, send emails, search inbox, get threads, list calendar events, etc. Always use this for any Gmail or Google Calendar operation.",
-    parameters: {
-      type: "object",
-      properties: {
-        path: {
-          type: "string",
-          description: "The full Corsair operation path, e.g. 'gmail.api.messages.list', 'gmail.api.messages.send', 'googlecalendar.api.events.getMany'",
-        },
-        args: {
-          type: "object",
-          description: `The arguments to pass to the API operation.
+    type: "function" as const,
+    function: {
+      name: "corsair_run",
+      description: "Execute a Corsair API operation for the user. Use this to fetch emails, send emails, search inbox, get threads, list calendar events, etc. Always use this for any Gmail or Google Calendar operation.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "The full Corsair operation path, e.g. 'gmail.api.messages.list', 'gmail.api.messages.send', 'googlecalendar.api.events.getMany'",
+          },
+          args: {
+            type: "object",
+            description: `The arguments to pass to the API operation.
 - gmail.api.messages.list → { q: 'search query', maxResults: 20 }
 - gmail.api.messages.send → { raw: '<base64-encoded RFC 822 email>' }
 - googlecalendar.api.events.getMany → { calendarId: 'primary', timeMin: '2026-06-16T00:00:00Z', singleEvents: true, conferenceDataVersion: 1 }
 - googlecalendar.api.events.create → { calendarId: 'primary', conferenceDataVersion: 1, sendUpdates: 'all', event: { summary: 'Title', description: 'Notes', start: { dateTime: '2026-06-20T15:00:00+05:30', timeZone: 'Asia/Kolkata' }, end: { dateTime: '2026-06-20T16:00:00+05:30', timeZone: 'Asia/Kolkata' }, attendees: [{ email: 'someone@example.com' }] } }
   IMPORTANT: For googlecalendar.api.events.create, the event body MUST be nested under the key "event" (not "resource").
   IMPORTANT: For googlecalendar.api.events.getMany or get, you MUST pass "conferenceDataVersion": 1 to receive Google Meet video conference links.`,
+          },
         },
+        required: ["path", "args"],
       },
-      required: ["path", "args"],
     },
   },
   {
-    name: "db_query",
-    description: "Query the local ThePitchly database for job posts, sent emails, outreach statistics, and scheduled calls/follow-ups.",
-    parameters: {
-      type: "object",
-      properties: {
-        type: {
-          type: "string",
-          enum: ["job_stats", "job_list", "pending_jobs", "sent_emails", "synced_emails", "calls"],
-          description: "What to query. 'job_stats' = aggregate counts, 'job_list' = all jobs, 'pending_jobs' = unapplied job posts (status is Draft or Generated), 'sent_emails' = outreach emails sent to companies (from SentEmail table), 'synced_emails' = received inbox emails (from SyncedEmail table), 'calls' = upcoming scheduled interview calls.",
+    type: "function" as const,
+    function: {
+      name: "db_query",
+      description: "Query the local ThePitchly database for job posts, sent emails, outreach statistics, and scheduled calls/follow-ups.",
+      parameters: {
+        type: "object",
+        properties: {
+          type: {
+            type: "string",
+            enum: ["job_stats", "job_list", "pending_jobs", "sent_emails", "synced_emails", "calls"],
+            description: "What to query. 'job_stats' = aggregate counts, 'job_list' = all jobs, 'pending_jobs' = unapplied job posts (status is Draft or Generated), 'sent_emails' = outreach emails sent to companies (from SentEmail table), 'synced_emails' = received inbox emails (from SyncedEmail table), 'calls' = upcoming scheduled interview calls.",
+          },
+          filter: {
+            type: "string",
+            description: "Optional search filter (e.g. company name, email address)",
+          },
         },
-        filter: {
-          type: "string",
-          description: "Optional search filter (e.g. company name, email address)",
-        },
+        required: ["type"],
       },
-      required: ["type"],
     },
   },
   {
-    name: "draft_email",
-    description: "Create a draft email to show to the user for review before sending. Returns a compose card in the UI.",
-    parameters: {
-      type: "object",
-      properties: {
-        to: { type: "string", description: "Recipient email address" },
-        subject: { type: "string", description: "Email subject line" },
-        body: { type: "string", description: "Email body text" },
-        cc: { type: "string", description: "Optional CC email address" },
+    type: "function" as const,
+    function: {
+      name: "draft_email",
+      description: "Create a draft email to show to the user for review before sending. Returns a compose card in the UI.",
+      parameters: {
+        type: "object",
+        properties: {
+          to: { type: "string", description: "Recipient email address" },
+          subject: { type: "string", description: "Email subject line" },
+          body: { type: "string", description: "Email body text" },
+          cc: { type: "string", description: "Optional CC email address" },
+        },
+        required: ["to", "subject", "body"],
       },
-      required: ["to", "subject", "body"],
     },
   },
   // schedule_call is intentionally REMOVED from AI tools.
   // The UI's ScheduleJobSelectPanel handles booking via bookCallFromBotAction directly.
   // AI only triggers db_query({type:'job_list'}) → schedule_job_select card → client books.
   {
-    name: "analyze_job_candidacy",
-    description: `Analyze a job posting's compatibility and match score for the user before saving it. Returns match score, matched and missing skills, explanation, role, and company. The UI will render a decision card for the user to save or skip.`,
-    parameters: {
-      type: "object",
-      properties: {
-        jobText: {
-          type: "string",
-          description: "The raw job description text provided by the user. Include everything: role, company, requirements, contact details, apply URL, etc.",
+    type: "function" as const,
+    function: {
+      name: "analyze_job_candidacy",
+      description: `Analyze a job posting's compatibility and match score for the user before saving it. Returns match score, matched and missing skills, explanation, role, and company. The UI will render a decision card for the user to save or skip.`,
+      parameters: {
+        type: "object",
+        properties: {
+          jobText: {
+            type: "string",
+            description: "The raw job description text provided by the user. Include everything: role, company, requirements, contact details, apply URL, etc.",
+          },
+          role: {
+            type: "string",
+            description: "Job title / role name, e.g. 'Senior React Developer'. Extract from jobText if possible.",
+          },
+          company: {
+            type: "string",
+            description: "Company name. Use 'Not specified' if not mentioned.",
+          },
         },
-        role: {
-          type: "string",
-          description: "Job title / role name, e.g. 'Senior React Developer'. Extract from jobText if possible.",
-        },
-        company: {
-          type: "string",
-          description: "Company name. Use 'Not specified' if not mentioned.",
-        },
+        required: ["jobText"],
       },
-      required: ["jobText"],
     },
   },
   {
-    name: "local_semantic_search",
-    description: "Search user's synced emails and scheduled calendar calls locally using semantic vector search. Extremely fast (under 1s) and handles concepts, context, and meanings (not just exact keywords). Always use this first if the user asks to search, find, or scan their emails/calendar.",
-    parameters: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description: "The search query (e.g. 'Stripe follow up', 'recruiter interview invitation', 'proposal replies').",
+    type: "function" as const,
+    function: {
+      name: "local_semantic_search",
+      description: "Search user's synced emails and scheduled calendar calls locally using semantic vector search. Extremely fast (under 1s) and handles concepts, context, and meanings (not just exact keywords). Always use this first if the user asks to search, find, or scan their emails/calendar.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "The search query (e.g. 'Stripe follow up', 'recruiter interview invitation', 'proposal replies').",
+          },
+          limit: {
+            type: "number",
+            description: "Optional. Maximum number of results to return (default is 8).",
+          },
         },
-        limit: {
-          type: "number",
-          description: "Optional. Maximum number of results to return (default is 8).",
-        },
+        required: ["query"],
       },
-      required: ["query"],
     },
   },
 ];
@@ -674,57 +715,104 @@ async function executeFunctionCall(
   }
 }
 
-/** Call Gemini with function-calling support */
-async function callGemini(
+/** Call AI (OpenRouter or Gemini fallback) with function-calling support */
+async function callChatAI(
   systemPrompt: string,
-  contents: any[],
+  messages: Array<{ role: string; content?: string; tool_calls?: any[]; tool_call_id?: string; name?: string }>,
   withTools = true
-): Promise<{ text?: string; functionCall?: { name: string; args: Record<string, unknown> } }> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+): Promise<{ text?: string; toolCalls?: Array<{ id: string; name: string; args: Record<string, unknown> }> }> {
+  const config = getChatAIConfig();
+  if (!config) throw new Error("No AI provider configured");
 
-  const body: any = {
-    systemInstruction: { parts: [{ text: systemPrompt }] },
-    contents,
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 2048,
-    },
-  };
+  if (config.provider === "gemini") {
+    // ── Gemini direct API (legacy fallback) ──
+    const geminiContents = messages
+      .filter(m => m.role !== "system")
+      .map(m => ({
+        role: m.role === "assistant" ? "model" : m.role === "tool" ? "user" : "user",
+        parts: m.tool_call_id
+          ? [{ functionResponse: { name: m.name, response: { result: m.content } } }]
+          : m.tool_calls
+            ? m.tool_calls.map((tc: any) => ({ functionCall: { name: tc.function.name, args: JSON.parse(tc.function.arguments) } }))
+            : [{ text: m.content || "" }],
+      }));
 
-  if (withTools) {
-    body.tools = [{ functionDeclarations: FUNCTION_DECLARATIONS }];
-    body.toolConfig = { functionCallingConfig: { mode: "AUTO" } };
+    const geminiBody: any = {
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: geminiContents,
+      generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
+    };
+    if (withTools) {
+      geminiBody.tools = [{ functionDeclarations: TOOLS.map(t => t.function) }];
+      geminiBody.toolConfig = { functionCallingConfig: { mode: "AUTO" } };
+    }
+
+    const res = await fetch(
+      `${config.baseUrl}/models/${config.model}:generateContent?key=${config.apiKey}`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(geminiBody) }
+    );
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Gemini API error (${res.status}): ${err.slice(0, 300)}`);
+    }
+    const data = await res.json();
+    const parts = data?.candidates?.[0]?.content?.parts ?? [];
+    const funcPart = parts.find((p: any) => p.functionCall);
+    if (funcPart) {
+      return { toolCalls: [{ id: `call_${Date.now()}`, name: funcPart.functionCall.name, args: funcPart.functionCall.args ?? {} }] };
+    }
+    return { text: parts.map((p: any) => p.text ?? "").join("").trim() };
   }
 
-  const res = await fetch(url, {
+  // ── OpenRouter (OpenAI-compatible) ──
+  const openaiMessages: any[] = [
+    { role: "system", content: systemPrompt },
+    ...messages,
+  ];
+
+  const body: any = {
+    model: config.model,
+    messages: openaiMessages,
+    temperature: 0.7,
+    max_tokens: 2048,
+  };
+  if (withTools) {
+    body.tools = TOOLS;
+    body.tool_choice = "auto";
+  }
+
+  const res = await fetch(`${config.baseUrl}/chat/completions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${config.apiKey}`,
+      "HTTP-Referer": "https://thepitchly.com",
+      "X-Title": "ThePitchly",
+    },
     body: JSON.stringify(body),
   });
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Gemini API error (${res.status}): ${err.slice(0, 300)}`);
+    throw new Error(`OpenRouter API error (${res.status}): ${err.slice(0, 300)}`);
   }
 
   const data = await res.json();
-  const candidate = data?.candidates?.[0];
-  const parts = candidate?.content?.parts ?? [];
+  const choice = data?.choices?.[0];
+  const message = choice?.message;
 
-  // Check for function call
-  const funcPart = parts.find((p: any) => p.functionCall);
-  if (funcPart) {
+  // Check for tool calls
+  if (message?.tool_calls && message.tool_calls.length > 0) {
     return {
-      functionCall: {
-        name: funcPart.functionCall.name,
-        args: funcPart.functionCall.args ?? {},
-      },
+      toolCalls: message.tool_calls.map((tc: any) => ({
+        id: tc.id,
+        name: tc.function.name,
+        args: JSON.parse(tc.function.arguments || "{}"),
+      })),
     };
   }
 
-  // Text response
-  const text = parts.map((p: any) => p.text ?? "").join("").trim();
-  return { text };
+  return { text: (message?.content ?? "").trim() };
 }
 
 // ─── Main Chat Action ──────────────────────────────────────────────────────
@@ -737,9 +825,9 @@ export async function processDashboardChatAction(
   userEmail: string,
   history: ChatMessage[]
 ): Promise<ChatResponse> {
-  if (!GEMINI_API_KEY) {
+  if (!getChatAIConfig()) {
     return {
-      reply: "AI is not configured. Please set GEMINI_API_KEY in your environment.",
+      reply: "AI is not configured. Please set OPENROUTER_API_KEY (or GEMINI_API_KEY) in your environment.",
       actionType: "error",
     };
   }
@@ -847,10 +935,10 @@ NEVER use corsair_run for calendar event creation.
 ${gmailConnected ? `Gmail: gmail.api.messages.list, gmail.api.messages.get, gmail.api.messages.send, gmail.api.threads.get, gmail.api.drafts.create` : "Gmail: not connected"}
 Calendar: googlecalendar.api.events.getMany, googlecalendar.api.events.create`;
 
-    // 3. Build conversation history for Gemini (multi-turn)
-    const contents: any[] = history.map((msg) => ({
-      role: msg.role === "assistant" ? "model" : "user",
-      parts: [{ text: msg.content }],
+    // 3. Build conversation history (OpenAI messages format)
+    const messages: Array<{ role: string; content?: string; tool_calls?: any[]; tool_call_id?: string; name?: string }> = history.map((msg) => ({
+      role: msg.role === "assistant" ? "assistant" : "user",
+      content: msg.content,
     }));
 
     // 4. Agent loop (up to 4 turns for function calling)
@@ -858,40 +946,45 @@ Calendar: googlecalendar.api.events.getMany, googlecalendar.api.events.create`;
     let finalText = "";
 
     for (let turn = 0; turn < 4; turn++) {
-      const geminiResponse = await callGemini(systemPrompt, contents, true);
+      const aiResponse = await callChatAI(systemPrompt, messages, true);
 
-      if (geminiResponse.text) {
-        finalText = geminiResponse.text;
+      if (aiResponse.text) {
+        finalText = aiResponse.text;
         break;
       }
 
-      if (geminiResponse.functionCall) {
-        const { name, args } = geminiResponse.functionCall;
-        console.log(`[ChatAction] Gemini function_call: ${name}`, args);
-
-        // Add the model's function call to history
-        contents.push({
-          role: "model",
-          parts: [{ functionCall: { name, args } }],
+      if (aiResponse.toolCalls && aiResponse.toolCalls.length > 0) {
+        // Add the assistant's tool call message to history
+        messages.push({
+          role: "assistant",
+          tool_calls: aiResponse.toolCalls.map(tc => ({
+            id: tc.id,
+            type: "function",
+            function: { name: tc.name, arguments: JSON.stringify(tc.args) },
+          })),
         });
 
-        // Execute the function
-        const { toolResult, specialAction: sa } = await executeFunctionCall(name, args, userEmail);
-        if (sa && !specialAction) {
-          specialAction = sa;
+        // Execute each tool call and add results
+        for (const tc of aiResponse.toolCalls) {
+          console.log(`[ChatAction] AI tool_call: ${tc.name}`, tc.args);
+          const { toolResult, specialAction: sa } = await executeFunctionCall(tc.name, tc.args, userEmail);
+          if (sa && !specialAction) {
+            specialAction = sa;
+          }
+
+          // Add tool result to messages
+          messages.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: JSON.stringify(toolResult),
+          });
         }
 
-        // Add function result to history
-        contents.push({
-          role: "user",
-          parts: [{ functionResponse: { name, response: { result: toolResult } } }],
-        });
-
-        // Continue loop — Gemini will now summarize the result
+        // Continue loop — AI will now summarize the result
         continue;
       }
 
-      // Neither text nor function call — shouldn't happen
+      // Neither text nor tool calls — shouldn't happen
       finalText = "I encountered an unexpected response. Please try again.";
       break;
     }

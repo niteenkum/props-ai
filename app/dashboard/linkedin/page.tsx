@@ -646,11 +646,22 @@ export default function LinkedInScraperPage() {
                   <tbody>
                     {allResults.jobs.map((job, idx) => {
                       const scoreColor = job.score >= 85 ? "#22c55e" : job.score >= 55 ? "#818cf8" : "#f59e0b";
+                      const itemUrl = job.url || (job.title ? `https://www.linkedin.com/search/results/content/?keywords=${encodeURIComponent(job.title.slice(0, 60))}` : "");
                       return (
                         <tr key={idx} style={{ borderBottom: "1px solid var(--border)" }}>
                           <td style={{ padding: "11px 4px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                              <p style={{ fontWeight: 600, color: "var(--foreground)", fontSize: 12.5, margin: 0 }}>{job.title}</p>
+                              {itemUrl ? (
+                                <a href={itemUrl} target="_blank" rel="noreferrer" style={{ textDecoration: "none", color: "inherit" }}>
+                                  <p style={{ fontWeight: 600, color: "var(--foreground)", fontSize: 12.5, margin: 0, textDecoration: "underline", textDecorationColor: "transparent", transition: "all 0.15s ease" }}
+                                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--primary)")}
+                                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--foreground)")}>
+                                    {job.title}
+                                  </p>
+                                </a>
+                              ) : (
+                                <p style={{ fontWeight: 600, color: "var(--foreground)", fontSize: 12.5, margin: 0 }}>{job.title}</p>
+                              )}
                               <span style={{
                                 fontSize: 9,
                                 fontWeight: 700,
@@ -697,14 +708,14 @@ export default function LinkedInScraperPage() {
                           </td>
                           <td style={{ padding: "11px 4px", textAlign: "right" }}>
                             <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                              {job.url && (
-                                <a href={job.url} target="_blank" rel="noreferrer" title="View on LinkedIn"
+                              {itemUrl && (
+                                <a href={itemUrl} target="_blank" rel="noreferrer" title={job.url ? "View on LinkedIn" : "Search post on LinkedIn"}
                                   style={{ padding: "5px 7px", borderRadius: 6, background: "var(--input)", border: "1px solid var(--border)", color: "var(--foreground)", display: "inline-flex", cursor: "pointer" }}>
                                   <ExternalLink style={{ width: 11, height: 11 }} />
                                 </a>
                               )}
                               {job.imported && (
-                                <Link href={job.dbId ? `/dashboard/workspace?job=${job.dbId}` : "/dashboard/workspace"}
+                                <Link href={job.dbId ? `/dashboard/jobs/${job.dbId}` : "/dashboard/workspace"}
                                   style={{ padding: "5px 10px", borderRadius: 6, background: "var(--primary)", color: "#fff", fontWeight: 700, fontSize: 11, display: "inline-flex", alignItems: "center", gap: 4 }}>
                                   Pitch <ArrowRight style={{ width: 10, height: 10 }} />
                                 </Link>

@@ -291,7 +291,61 @@ export async function fetchAndProcessJobsAction(
       const title = item.title || item.position || ((item as any).text ? ((item as any).text.replace(/\r?\n/g, " ").slice(0, 50) + "...") : "Unknown Freelance Role");
       const company = item.company || item.companyName || (item as any).authorName || (item as any).postedBy || (item as any).author?.name || "Not Specified";
       const rawText = item.description || item.jobDescription || item.descriptionHtml || (item as any).text || "";
-      const jobUrl = item.url || item.jobUrl || item.link || (item as any).postUrl || "";
+      // Comprehensive URL resolution for both LinkedIn Jobs and Feed Posts
+      const itemAny = item as any;
+      let jobUrl =
+        item.url ||
+        item.jobUrl ||
+        item.link ||
+        itemAny.postUrl ||
+        itemAny.post_url ||
+        itemAny.linkedinUrl ||
+        itemAny.linkedin_url ||
+        itemAny.shareUrl ||
+        itemAny.desktopUrl ||
+        itemAny.mobileUrl ||
+        itemAny.postLink ||
+        itemAny.navigationUrl ||
+        itemAny.actionUrl ||
+        itemAny.originalUrl ||
+        itemAny.canonicalUrl ||
+        itemAny.webUrl ||
+        "";
+
+      if (!jobUrl || !jobUrl.startsWith("http")) {
+        const urn = itemAny.urn || itemAny.activityUrn || itemAny.activity_urn || itemAny.postUrn || itemAny.post_urn;
+        const activityId = itemAny.activityId || itemAny.activity_id || itemAny.postId || itemAny.post_id || itemAny.id;
+
+        if (urn && typeof urn === "string") {
+          if (urn.startsWith("http")) {
+            jobUrl = urn;
+          } else if (urn.startsWith("urn:li:")) {
+            jobUrl = `https://www.linkedin.com/feed/update/${urn}`;
+          } else {
+            jobUrl = `https://www.linkedin.com/feed/update/urn:li:activity:${urn}`;
+          }
+        } else if (activityId) {
+          const cleanId = String(activityId).trim();
+          if (cleanId.startsWith("http")) {
+            jobUrl = cleanId;
+          } else if (cleanId.startsWith("urn:li:")) {
+            jobUrl = `https://www.linkedin.com/feed/update/${cleanId}`;
+          } else if (/^\d+$/.test(cleanId)) {
+            if (source === "posts") {
+              jobUrl = `https://www.linkedin.com/feed/update/urn:li:activity:${cleanId}`;
+            } else {
+              jobUrl = `https://www.linkedin.com/jobs/view/${cleanId}`;
+            }
+          }
+        }
+
+        if (!jobUrl) {
+          const authorUrl = itemAny.authorUrl || itemAny.authorProfileUrl || itemAny.author_url || itemAny.author?.profileUrl || itemAny.author?.url || itemAny.postedByUrl;
+          if (authorUrl && typeof authorUrl === "string" && authorUrl.startsWith("http")) {
+            jobUrl = authorUrl;
+          }
+        }
+      }
 
       if (!rawText || rawText.trim().length < 40) {
         console.log(`[Apify Scraper] Skipping job "${title}" at "${company}" due to empty description`);

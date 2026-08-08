@@ -1,12 +1,13 @@
 /**
  * Gemini Text Embeddings Utility
  * Powered by gemini-embedding-2
+ * NOTE: Embeddings require GEMINI_API_KEY directly — OpenRouter does not proxy embedding models.
  */
 
 export async function getEmbedding(text: string): Promise<number[]> {
   const rawApiKey = process.env.GEMINI_API_KEY;
   if (!rawApiKey) {
-    throw new Error("GEMINI_API_KEY is not defined in the environment.");
+    throw new Error("GEMINI_API_KEY is required for embeddings (OpenRouter does not support embedding models).");
   }
   
   // Sanitize the API key by removing outer quotes if present

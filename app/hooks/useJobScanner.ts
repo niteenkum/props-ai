@@ -370,7 +370,7 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
     const jobId = duplicateState.existingJob.id;
     setIsDrawerOpen(false);
     setDuplicateState(null);
-    router.push(`/dashboard?job=${jobId}`);
+    router.push(`/dashboard/jobs/${jobId}`);
   };
 
   // ─── Generate proposals ────────────────────────────────────────────────────
@@ -443,7 +443,7 @@ export function useJobScanner(userEmail: string, profile: UserProfile | null) {
       setJobSavedId(newJob.id);
       setPasteText("");
       setIsDrawerOpen(false);
-      router.push(`/dashboard?job=${newJob.id}`);
+      router.push(`/dashboard/jobs/${newJob.id}`);
     } catch (err: any) {
       console.error("[useJobScanner] Failed to save job:", err);
       setGenerationError(err?.message || "Failed to save job post.");

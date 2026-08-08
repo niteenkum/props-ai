@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
     scope:         ZOHO_SCOPES,
     redirect_uri:  redirectUri,
     access_type:   "offline", // we need a refresh_token
+    prompt:        "consent", // force consent screen to guarantee refresh_token
     state,
   });
 

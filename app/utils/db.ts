@@ -14,6 +14,11 @@ export interface JobPost {
   generatedTemplates?: Record<string, string | undefined>;
   sentEmails?: import("../actions/mail-actions").SentEmailRecord[];
   suggestAttachResume?: boolean;   // AI hint: should resume be attached?
+  linkedin?: string;
+  linkedinJobId?: string;
+  matchedSkills?: string[];
+  missingSkills?: string[];
+  matchExplanation?: string;
 }
 
 export interface UserProfile {
