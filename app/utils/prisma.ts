@@ -6,7 +6,7 @@ import { PrismaClient } from "@prisma/client";
 // Bump this version whenever the Prisma schema adds new models.
 // It ensures the dev server always creates a fresh client rather than
 // reusing a stale global singleton that is missing the new models.
-const PRISMA_SCHEMA_VERSION = "v3"; // bumped: added WhatsAppMessage model
+const PRISMA_SCHEMA_VERSION = "v4"; // bumped: added userId to JobPost model
 
 const GLOBAL_KEY = `prisma_${PRISMA_SCHEMA_VERSION}` as const;
 

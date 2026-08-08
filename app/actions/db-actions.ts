@@ -292,141 +292,98 @@ export async function addJobPostAction(
   job: Omit<JobPost, "id" | "postedDate" | "status"> & { waMessageId?: string; userEmail?: string }
 ): Promise<JobPost> {
   try {
-    // Check if the user is a SUPERADMIN
-    let isSuperAdmin = false;
+    // 1. Resolve userId for foreign key
+    let userId: string | null = null;
+    if (job.userEmail) {
+      const user = await prisma.user.findFirst({
+        where: { OR: [{ email: job.userEmail }, { email: job.userEmail.toLowerCase() }] },
+        select: { id: true, role: true },
+      });
+      userId = user?.id ?? null;
+    }
+
+    // 2. ALWAYS create personal JobPost lead in JobPost table
+    const dbJob = await prisma.jobPost.create({
+      data: {
+        userId,
+        userEmail: job.userEmail || null,
+        role: job.role,
+        company: job.company,
+        originalText: job.originalText,
+        parsedSummary: job.parsedSummary,
+        contactName: job.contactName || null,
+        contactEmail: job.contactEmail || null,
+        contactPhone: (job as any).contactPhone || null,
+        matchScore: job.matchScore,
+        tags: job.tags,
+        status: JobStatus.Draft,
+        notes: job.notes || null,
+        coldEmail: job.generatedTemplates?.coldEmail || null,
+        proposal: job.generatedTemplates?.proposal || null,
+        linkedin: (job as any).linkedin || job.generatedTemplates?.linkedin || null,
+        linkedinJobId: (job as any).linkedinJobId || null,
+        coverLetter: job.generatedTemplates?.coverLetter || null,
+        suggestAttachResume: typeof job.suggestAttachResume === "boolean" ? job.suggestAttachResume : null,
+        matchedSkills: (job as any).matchedSkills || [],
+        missingSkills: (job as any).missingSkills || [],
+        matchExplanation: (job as any).matchExplanation || job.notes || null,
+        ...(job.waMessageId ? {
+          whatsappSource: {
+            connect: { whatsappMessageId: job.waMessageId }
+          }
+        } : {})
+      },
+    });
+
+    if (job.waMessageId) {
+      await prisma.whatsAppMessage.update({
+        where: { whatsappMessageId: job.waMessageId },
+        data: {
+          status: "lead",
+          jobPostId: dbJob.id,
+        }
+      });
+    }
+
+    // 3. Optional: If user is SUPERADMIN, also add to AdminJob catalog pool for global sharing
     if (job.userEmail) {
       const user = await prisma.user.findUnique({ where: { email: job.userEmail } });
       if (user && user.role === "SUPERADMIN") {
-        isSuperAdmin = true;
+        try {
+          const dbAdminJob = await prisma.adminJob.create({
+            data: {
+              id: dbJob.id, // keep IDs aligned
+              role: job.role,
+              company: job.company,
+              originalText: job.originalText,
+              parsedSummary: job.parsedSummary || "",
+              contactName: job.contactName || null,
+              contactEmail: job.contactEmail || null,
+              contactPhone: (job as any).contactPhone || null,
+              tags: job.tags,
+              linkedin: (job as any).linkedin || job.generatedTemplates?.linkedin || null,
+              linkedinJobId: (job as any).linkedinJobId || null,
+            }
+          });
+
+          await prisma.userAdminJobScore.create({
+            data: {
+              userEmail: job.userEmail,
+              adminJobId: dbAdminJob.id,
+              matchScore: job.matchScore,
+              matchedSkills: (job as any).matchedSkills || [],
+              missingSkills: (job as any).missingSkills || [],
+              explanation: job.notes || "",
+              suggestAttachResume: typeof job.suggestAttachResume === "boolean" ? job.suggestAttachResume : false,
+            }
+          });
+        } catch (adminErr) {
+          console.warn("[addJobPostAction] Non-fatal admin job sync notice:", adminErr);
+        }
       }
     }
 
-    if (isSuperAdmin && job.userEmail) {
-      // 1. Create in AdminJob table
-      const dbAdminJob = await prisma.adminJob.create({
-        data: {
-          role: job.role,
-          company: job.company,
-          originalText: job.originalText,
-          parsedSummary: job.parsedSummary || "",
-          contactName: job.contactName || null,
-          contactEmail: job.contactEmail || null,
-          contactPhone: (job as any).contactPhone || null,
-          tags: job.tags,
-          linkedin: (job as any).linkedin || job.generatedTemplates?.linkedin || null,
-          linkedinJobId: (job as any).linkedinJobId || null,
-          ...(job.waMessageId ? {
-            whatsappSource: {
-              connect: { whatsappMessageId: job.waMessageId }
-            }
-          } : {})
-        }
-      });
-
-      // 2. Immediately calculate candidacy score for the Superadmin and cache it
-      const { analyzeJobCandidacyAction } = await import("./ai-actions");
-      const analysis = await analyzeJobCandidacyAction(job.originalText, job.userEmail);
-
-      const matchScore = analysis.success ? (analysis.score ?? 50) : 50;
-      const matchedSkills = analysis.success ? (analysis.matchedSkills ?? []) : [];
-      const missingSkills = analysis.success ? (analysis.missingSkills ?? []) : [];
-      const explanation = analysis.success ? (analysis.explanation ?? "") : "";
-      const suggestAttachResume = analysis.success ? (analysis.suggestAttachResume ?? false) : false;
-
-      await prisma.userAdminJobScore.create({
-        data: {
-          userEmail: job.userEmail,
-          adminJobId: dbAdminJob.id,
-          matchScore,
-          matchedSkills,
-          missingSkills,
-          explanation,
-          suggestAttachResume,
-        }
-      });
-
-      // 3. Update WhatsApp Message link if applicable
-      if (job.waMessageId) {
-        await prisma.whatsAppMessage.update({
-          where: { whatsappMessageId: job.waMessageId },
-          data: {
-            status: "lead",
-            adminJobId: dbAdminJob.id,
-          }
-        });
-      }
-
-      // Return mapped JobPost so type compatibility is preserved
-      return {
-        id: dbAdminJob.id,
-        role: dbAdminJob.role,
-        company: dbAdminJob.company,
-        originalText: dbAdminJob.originalText,
-        parsedSummary: dbAdminJob.parsedSummary,
-        contactName: dbAdminJob.contactName ?? undefined,
-        contactEmail: dbAdminJob.contactEmail ?? undefined,
-        matchScore,
-        postedDate: dbAdminJob.postedDate.toISOString(),
-        tags: dbAdminJob.tags,
-        status: "Draft",
-        notes: explanation || undefined,
-        suggestAttachResume,
-      };
-    } else {
-      // Create personal JobPost lead
-      let userId: string | null = null;
-      if (job.userEmail) {
-        const user = await prisma.user.findFirst({
-          where: { OR: [{ email: job.userEmail }, { email: job.userEmail.toLowerCase() }] },
-          select: { id: true },
-        });
-        userId = user?.id ?? null;
-      }
-
-      const dbJob = await prisma.jobPost.create({
-        data: {
-          userId,
-          userEmail: job.userEmail || null,
-          role: job.role,
-          company: job.company,
-          originalText: job.originalText,
-          parsedSummary: job.parsedSummary,
-          contactName: job.contactName || null,
-          contactEmail: job.contactEmail || null,
-          contactPhone: (job as any).contactPhone || null,
-          matchScore: job.matchScore,
-          tags: job.tags,
-          status: JobStatus.Draft,
-          notes: job.notes || null,
-          coldEmail: job.generatedTemplates?.coldEmail || null,
-          proposal: job.generatedTemplates?.proposal || null,
-          linkedin: (job as any).linkedin || job.generatedTemplates?.linkedin || null,
-          linkedinJobId: (job as any).linkedinJobId || null,
-          coverLetter: job.generatedTemplates?.coverLetter || null,
-          suggestAttachResume: typeof job.suggestAttachResume === "boolean" ? job.suggestAttachResume : null,
-          matchedSkills: (job as any).matchedSkills || [],
-          missingSkills: (job as any).missingSkills || [],
-          matchExplanation: (job as any).matchExplanation || job.notes || null,
-          ...(job.waMessageId ? {
-            whatsappSource: {
-              connect: { whatsappMessageId: job.waMessageId }
-            }
-          } : {})
-        },
-      });
-
-      if (job.waMessageId) {
-        await prisma.whatsAppMessage.update({
-          where: { whatsappMessageId: job.waMessageId },
-          data: {
-            status: "lead",
-            jobPostId: dbJob.id,
-          }
-        });
-      }
-
-      return mapDbJob(dbJob);
-    }
+    return mapDbJob(dbJob);
   } catch (error) {
     console.error("Error in addJobPostAction:", error);
     throw error;
