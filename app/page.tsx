@@ -925,7 +925,7 @@ export default function LandingPage() {
               </div>
               Pitchly
             </div>
-            <p className="text-muted-foreground">© 2026 Pitchly AI Technologies. Precision outreach for elite professionals.</p>
+            <p className="text-muted-foreground">© 2026 Pitchly AI Technologies. AI-powered precision outreach for elite professionals.</p>
           </div>
 
           <div className="flex flex-wrap gap-4 text-muted-foreground justify-center sm:justify-end">
